@@ -344,6 +344,6 @@ CREATE INDEX idx_users_role ON users(role);
 -- =====================================================
 -- 初始管理員用戶（密碼需要使用 SHA-256 或 bcrypt）
 -- =====================================================
-INSERT INTO users (username, password, email, full_name, role, status)
+INSERT INTO users (username, password, email, full_name, `role`, status)
 VALUES ('admin', SHA2('admin123', 256), 'admin@foodbank.local', '系統管理員', 'admin', 'active')
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
