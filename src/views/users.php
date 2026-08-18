@@ -28,7 +28,7 @@ if ($result) {
         $users[] = $user;
     }
 }
-$roleLabels = ['admin' => '系統管理者', 'manager' => '食物銀行管理者', 'staff' => '工作人員', 'volunteer' => '平台志工'];
+$roleLabels = ['admin' => '系統管理者', 'foodbank_staff' => '食物銀行官方人員', 'volunteer' => '平台志工／外送員', 'donor' => '捐贈剩食店家'];
 $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended' => '已停用'];
 ?>
 

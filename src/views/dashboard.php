@@ -13,12 +13,12 @@ $donationModel = new DonationModel();
 
 $recentDonations = array_slice($donationModel->getAllDonations(null), 0, 5);
 $lowStockItems = array_slice($inventoryModel->getLowStockItems(), 0, 5);
-$dashboardRole = $currentUser['role'] ?? 'staff';
+$dashboardRole = $currentUser['role'] ?? 'foodbank_staff';
 $dashboardRoleLabels = [
     'admin' => '系統管理總覽',
-    'manager' => '食物銀行營運總覽',
-    'staff' => '日常服務工作台',
-    'volunteer' => '志工任務工作台',
+    'foodbank_staff' => '食物銀行官方工作台',
+    'volunteer' => '志工／外送員工作台',
+    'donor' => '店家捐贈工作台',
 ];
 ?>
 
@@ -37,9 +37,12 @@ $dashboardRoleLabels = [
         <?php if ($dashboardRole === 'volunteer'): ?>
             <h2>你的公益任務</h2><p>前往配送任務接單，或認領公益活動；完成配送後會記錄公益點數。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
-        <?php elseif ($dashboardRole === 'staff'): ?>
-            <h2>服務工作台</h2><p>處理捐贈、庫存與受益者服務，確保物資正確入庫並完成分配。</p>
+        <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
+            <h2>官方人員工作台</h2><p>處理捐贈評估、庫存、受益者服務與配送任務，確保物資完成媒合。</p>
             <a href="?page=donations" class="btn btn-primary btn-sm">處理待評估捐贈</a>
+        <?php elseif ($dashboardRole === 'donor'): ?>
+            <h2>店家捐贈工作台</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
+            <a href="?page=donations" class="btn btn-primary btn-sm">上架剩食物資</a>
         <?php elseif ($dashboardRole === 'manager'): ?>
             <h2>營運管理</h2><p>掌握物資媒合、配送任務、庫存與公益活動的整體進度。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看配送進度</a>

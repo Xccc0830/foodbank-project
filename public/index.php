@@ -56,7 +56,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $requestedRole = $_POST['role'] ?? 'volunteer';
-    $allowedRegistrationRoles = ['manager', 'staff', 'volunteer'];
+    $allowedRegistrationRoles = ['foodbank_staff', 'volunteer', 'donor'];
 
     if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8 || !in_array($requestedRole, $allowedRegistrationRoles, true)) {
         $registrationError = '請完整填寫資料，密碼至少需要 8 個字元。';
@@ -98,15 +98,15 @@ $currentUser = $_SESSION['user'];
 $role = $currentUser['role'];
 $roleLabels = [
     'admin' => '系統管理者',
-    'manager' => '食物銀行管理者',
-    'staff' => '食物銀行工作人員',
-    'volunteer' => '平台志工',
+    'foodbank_staff' => '食物銀行官方人員',
+    'volunteer' => '平台志工／外送員',
+    'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
     'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'settings', 'users'],
-    'manager' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases'],
-    'staff' => ['dashboard', 'donations', 'inventory', 'beneficiaries'],
+    'foodbank_staff' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases'],
     'volunteer' => ['dashboard', 'deliveries', 'activities'],
+    'donor' => ['dashboard', 'donations'],
 ];
 
 // 簡單的路由系統

@@ -381,7 +381,7 @@ CREATE TABLE `users` (
   `email` varchar(100) NOT NULL,
   `full_name` varchar(100) NOT NULL,
   `phone` varchar(20) DEFAULT NULL,
-  `role` enum('admin','manager','staff','volunteer') NOT NULL DEFAULT 'staff',
+  `role` enum('admin','foodbank_staff','volunteer','donor') NOT NULL DEFAULT 'foodbank_staff',
   `department` varchar(50) DEFAULT NULL,
   `status` enum('active','inactive','suspended') DEFAULT 'active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -782,9 +782,9 @@ ALTER TABLE `warehouses`
 
 -- 開發環境示範角色帳號，正式環境請立即修改密碼
 INSERT IGNORE INTO `users` (`username`, `password`, `email`, `full_name`, `role`, `status`) VALUES
-  ('manager', SHA2('manager123', 256), 'manager@foodbank.local', '營運管理者', 'manager', 'active'),
-  ('staff', SHA2('staff123', 256), 'staff@foodbank.local', '服務工作人員', 'staff', 'active'),
-  ('volunteer', SHA2('volunteer123', 256), 'volunteer@foodbank.local', '平台志工', 'volunteer', 'active');
+  ('official', SHA2('official123', 256), 'official@foodbank.local', '食物銀行官方人員', 'foodbank_staff', 'active'),
+  ('volunteer', SHA2('volunteer123', 256), 'volunteer@foodbank.local', '平台志工外送員', 'volunteer', 'active'),
+  ('donor', SHA2('donor123', 256), 'donor@foodbank.local', '捐贈剩食店家', 'donor', 'active');
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
