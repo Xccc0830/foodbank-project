@@ -47,7 +47,7 @@
 ## 📁 項目結構
 
 ```
-shinig-yi-food-bank/
+foodbank-project/
 ├── config/                    # 配置文件
 │   └── database.php          # 數據庫連接配置
 ├── public/                    # 公開文件夾
@@ -76,21 +76,18 @@ shinig-yi-food-bank/
 
 ### 前置條件
 
-- PHP 7.4 或更高版本
-- MySQL 5.7 或更高版本
-- XAMPP（包含 Apache 和 MySQL）
 
 ### 安裝步驟
 
 1. **複製項目**
    ```bash
    git clone <repository-url>
-   cd shinig-yi-food-bank
+   cd foodbank-project
    ```
 
 2. **創建數據庫**
    - 打開 phpMyAdmin（http://localhost/phpmyadmin）
-   - 創建新數據庫：`shinig_yi_food_bank`
+   - 創建新數據庫：`shinigyi_foodbank`
    - 導入 `database/schema.sql` 文件
 
 3. **配置數據庫連接**
@@ -99,7 +96,7 @@ shinig-yi-food-bank/
 
 4. **啟動應用**
    - 確保 Apache 和 MySQL 服務運行
-   - 訪問 http://localhost/shinig-yi-food-bank/public
+   - 訪問 http://localhost/foodbank-project/foodbank-project/public
 
 ### 默認登錄憑證
 

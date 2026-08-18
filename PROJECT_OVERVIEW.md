@@ -24,7 +24,7 @@
 ## 🗂️ 項目結構一覽
 
 ```
-shinig-yi-food-bank/
+foodbank-project/
 │
 ├── 📄 README.md                    # 項目文檔
 ├── 📄 INSTALL.md                   # 安裝指南
@@ -35,7 +35,8 @@ shinig-yi-food-bank/
 │   └── database.php               # ⭐ 數據庫連接配置
 │
 ├── 📁 database/                    # 數據庫文件夾
-│   └── schema.sql                 # ⭐ 完整的數據庫架構（17 張表）
+│   ├── schema.sql                 # ⭐ 完整的數據庫架構
+│   └── migrations/                # ⭐ 平台模組資料庫更新
 │
 ├── 📁 public/                      # 公開文件夾（Web 根目錄）
 │   ├── index.php                  # ⭐ 主入口文件
@@ -157,19 +158,19 @@ shinig-yi-food-bank/
 ```bash
 # 使用 phpMyAdmin 或命令行：
 mysql -u root -p
-CREATE DATABASE shinig_yi_food_bank CHARACTER SET utf8mb4;
+CREATE DATABASE shinigyi_foodbank CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 ```
 
 ### Step 3: 導入數據庫架構
 ```bash
 # 方法 1：phpMyAdmin - 導入 database/schema.sql
 # 方法 2：命令行
-mysql -u root shinig_yi_food_bank < database/schema.sql
+mysql -u root shinigyi_foodbank < database/schema.sql
 ```
 
 ### Step 4: 訪問應用
 ```
-http://localhost/shinig-yi-food-bank/public
+http://localhost/foodbank-project/foodbank-project/public
 ```
 
 ### Step 5: 登錄

@@ -13,7 +13,7 @@
 
 本項目應已位於以下位置：
 ```
-C:\xampp\htdocs\shinig-yi-food-bank
+C:\xampp\htdocs\foodbank-project
 ```
 
 ### 第 2 步：啟動 XAMPP 服務
@@ -29,7 +29,7 @@ C:\xampp\htdocs\shinig-yi-food-bank
 1. 打開瀏覽器訪問 http://localhost/phpmyadmin
 2. 登錄（默認用戶名：root，無密碼）
 3. 點擊左側菜單的 **新建**
-4. 輸入數據庫名稱：`shinig_yi_food_bank`
+4. 輸入數據庫名稱：`shinigyi_foodbank`
 5. 選擇字符集：`utf8mb4_unicode_ci`
 6. 點擊 **建立**
 
@@ -41,12 +41,12 @@ mysql -u root -p
 
 然後執行：
 ```sql
-CREATE DATABASE shinig_yi_food_bank CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE shinigyi_foodbank CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 ```
 
 ### 第 4 步：導入數據庫架構
 
-1. 在 phpMyAdmin 中，選擇 `shinig_yi_food_bank` 數據庫
+1. 在 phpMyAdmin 中，選擇 `shinigyi_foodbank` 數據庫
 2. 點擊 **導入** 選項卡
 3. 選擇文件：`database/schema.sql`
 4. 點擊 **執行**
@@ -54,14 +54,14 @@ CREATE DATABASE shinig_yi_food_bank CHARACTER SET utf8mb4 COLLATE utf8mb4_unicod
 **或者** 使用命令行：
 
 ```bash
-mysql -u root shinig_yi_food_bank < C:\xampp\htdocs\shinig-yi-food-bank\database\schema.sql
+mysql -u root shinigyi_foodbank < C:\xampp\htdocs\foodbank-project\database\schema.sql
 ```
 
 ### 第 5 步：驗證安裝
 
 在瀏覽器中訪問：
 ```
-http://localhost/shinig-yi-food-bank/public
+http://localhost/foodbank-project/foodbank-project/public
 ```
 
 ### 第 6 步：登錄應用
@@ -91,7 +91,7 @@ http://localhost/shinig-yi-food-bank/public
 ## 📁 文件結構說明
 
 ```
-shinig-yi-food-bank/
+foodbank-project/
 ├── config/
 │   └── database.php           # 數據庫連接配置
 ├── src/
