@@ -33,18 +33,9 @@ cache/
 
 # Composer
 vendor/
-composer.lock
 
 # NPM
 node_modules/
-package-lock.json
-npm-debug.log
-
-# 備份文件
-*.bak
-*.backup
-
-# OS
 .AppleDouble
 .LSOverride
 .TemporaryItems
