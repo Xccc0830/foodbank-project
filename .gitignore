@@ -1,0 +1,55 @@
+# 系統文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.sublime-project
+.sublime-workspace
+
+# 配置文件（包含敏感信息）
+config/database.php
+.env
+.env.local
+
+# 日誌
+logs/
+*.log
+
+# 臨時文件
+tmp/
+temp/
+cache/
+*.tmp
+
+# Composer
+vendor/
+composer.lock
+
+# NPM
+node_modules/
+package-lock.json
+npm-debug.log
+
+# 備份文件
+*.bak
+*.backup
+
+# OS
+.AppleDouble
+.LSOverride
+.TemporaryItems
+.VolumeIcon.icns
+
+# 項目特定
+uploads/
+data/backup/
