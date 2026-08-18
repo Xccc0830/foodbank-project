@@ -1092,6 +1092,13 @@ form {
 .login-roles { display: flex; gap: 8px; flex-wrap: wrap; }
 .login-roles span { padding: 7px 10px; border: 1px solid #dbe8df; border-radius: 99px; color: #527268; font-size: 11px; }
 .login-hint { margin: 28px 0 0; color: #9aa9a2; font-size: 11px; }
+.login-register-link { margin: 20px 0 0; color: #73817b; font-size: 12px; text-align: center; }
+.login-register-link a, .register-back a { color: var(--login-green); font-weight: 700; text-decoration: none; }
+.login-register-link a:hover, .register-back a:hover { text-decoration: underline; }
+.register-back { text-align: center; }
+.register-shell .showcase-copy { padding-bottom: 40px; }
+.register-shell .login-panel-heading { margin-bottom: 24px; }
+.register-shell .login-panel .form-group { margin-bottom: 16px; }
 .login-panel .alert-error { padding: 12px 14px; margin-bottom: 22px; border: 1px solid #f2caca; border-left: 3px solid #d85b5b; border-radius: 10px; background: #fff4f2; color: #9d3d3d; }
 
 @media (max-width: 820px) {

@@ -50,8 +50,46 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $loginError = '帳號、密碼錯誤，或帳號尚未啟用。';
 }
 
+if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $fullName = trim($_POST['full_name'] ?? '');
+    $username = trim($_POST['username'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $requestedRole = $_POST['role'] ?? 'volunteer';
+    $allowedRegistrationRoles = ['manager', 'staff', 'volunteer'];
+
+    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8 || !in_array($requestedRole, $allowedRegistrationRoles, true)) {
+        $registrationError = '請完整填寫資料，密碼至少需要 8 個字元。';
+    } else {
+        $fullNameEscaped = $connection->real_escape_string($fullName);
+        $usernameEscaped = $connection->real_escape_string($username);
+        $emailEscaped = $connection->real_escape_string($email);
+        $roleEscaped = $connection->real_escape_string($requestedRole);
+        $passwordHash = hash('sha256', $password);
+        $exists = $connection->query("SELECT user_id FROM users WHERE username = '{$usernameEscaped}' OR email = '{$emailEscaped}' LIMIT 1");
+
+        if ($exists && $exists->num_rows > 0) {
+            $registrationError = '帳號或電子郵件已經被使用。';
+        } else {
+            $created = $connection->query("INSERT INTO users (username, password, email, full_name, role, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$roleEscaped}', 'inactive')");
+            if ($created) {
+                header('Location: ?action=login&registered=1');
+                exit;
+            }
+            $registrationError = '註冊失敗，請稍後再試。';
+        }
+    }
+}
+
+if ($action === 'register') {
+    $error = $registrationError ?? null;
+    include BASE_PATH . '/src/views/register.php';
+    exit;
+}
+
 if ($action === 'login' || empty($_SESSION['user'])) {
     $error = $loginError ?? null;
+    $registered = isset($_GET['registered']);
     include BASE_PATH . '/src/views/login.php';
     exit;
 }
@@ -65,7 +103,7 @@ $roleLabels = [
     'volunteer' => '平台志工',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'settings'],
+    'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'settings', 'users'],
     'manager' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases'],
     'staff' => ['dashboard', 'donations', 'inventory', 'beneficiaries'],
     'volunteer' => ['dashboard', 'deliveries', 'activities'],
@@ -87,6 +125,7 @@ $menu_items = [
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'purchases' => ['label' => '採購管理', 'icon' => 'fa-solid fa-cart-shopping'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
+    'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
 ];
 $allowedPages = $rolePages[$role] ?? ['dashboard'];
 if (!in_array($page, $allowedPages, true)) {

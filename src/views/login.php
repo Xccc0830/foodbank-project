@@ -1,5 +1,7 @@
 <?php
 $error = $error ?? null;
+$loginCssPath = BASE_PATH . '/public/assets/css/style.css';
+$loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time();
 ?>
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -11,7 +13,7 @@ $error = $error ?? null;
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="<?php echo htmlspecialchars(APP_URL . '/assets/css/style.css?v=' . $loginCssVersion); ?>">
 </head>
 <body class="login-page">
     <main class="login-shell">
@@ -31,6 +33,7 @@ $error = $error ?? null;
         </section>
         <section class="login-panel">
             <div class="login-panel-heading"><p class="eyebrow">SECURE ACCESS</p><h2>登入工作平台</h2><p class="login-subtitle">使用你的帳號進入專屬工作頁面。</p></div>
+            <?php if (!empty($registered)): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>申請已送出，請等待管理者審核開通。</span></div><?php endif; ?>
             <?php if ($error): ?><div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><span><?php echo htmlspecialchars($error); ?></span></div><?php endif; ?>
             <form method="post" action="?action=login">
                 <div class="form-group"><label for="username">帳號</label><div class="input-with-icon"><i class="fa-regular fa-user"></i><input id="username" name="username" autocomplete="username" placeholder="輸入你的帳號" required></div></div>
@@ -39,6 +42,7 @@ $error = $error ?? null;
             </form>
             <div class="login-divider"><span>角色入口</span></div>
             <div class="login-roles"><span>管理者</span><span>工作人員</span><span>志工</span></div>
+            <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
             <p class="login-hint">開發測試帳號：admin / admin123</p>
         </section>
     </main>
