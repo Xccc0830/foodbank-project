@@ -42,6 +42,20 @@ class DonationModel extends BaseModel {
     }
 
     /**
+     * 更新食物銀行評估結果
+     */
+    public function updateEvaluation($donation_id, $status, $evaluation_notes = '') {
+        $donation_id = intval($donation_id);
+        $status = $this->db->real_escape_string($status);
+        $evaluation_notes = $this->db->real_escape_string($evaluation_notes);
+
+        $sql = "UPDATE {$this->table}
+                SET status = '{$status}', evaluation_notes = '{$evaluation_notes}'
+                WHERE donation_id = {$donation_id}";
+        return $this->db->query($sql);
+    }
+
+    /**
      * 取得特定日期範圍的捐贈
      */
     public function getDonationsByDateRange($start_date, $end_date) {

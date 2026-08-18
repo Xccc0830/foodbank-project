@@ -128,14 +128,19 @@
 
     function openAddDonationModal() {
         showModal('新增捐贈', `
-            <form onsubmit="event.preventDefault(); closeModal(); showNotification('捐贈資料已暫存', 'success');">
+            <form method="post" action="?page=donations">
+                <input type="hidden" name="action" value="add_donation" />
                 <div class="form-group">
-                    <label>捐獻者名稱*</label>
-                    <input type="text" required />
+                    <label>商家名稱*</label>
+                    <input type="text" name="donor_name" required />
+                </div>
+                <div class="form-group">
+                    <label>物資名稱*</label>
+                    <input type="text" name="item_name" required />
                 </div>
                 <div class="form-group">
                     <label>捐贈類型*</label>
-                    <select required>
+                    <select name="donation_type" required>
                         <option value="">--請選擇--</option>
                         <option value="food">食物</option>
                         <option value="supplies">用品</option>
@@ -145,15 +150,47 @@
                 </div>
                 <div class="form-group">
                     <label>數量*</label>
-                    <input type="number" step="0.01" required />
+                    <input type="number" name="quantity" step="0.01" min="0.01" required />
                 </div>
                 <div class="form-group">
                     <label>單位*</label>
-                    <input type="text" value="件" required />
+                    <input type="text" name="unit" value="件" required />
+                </div>
+                <div class="form-group">
+                    <label>重量（公斤）</label>
+                    <input type="number" name="weight_kg" step="0.01" min="0" />
+                </div>
+                <div class="form-group">
+                    <label>物資大小</label>
+                    <input type="text" name="size_description" placeholder="例如：2 箱、中型紙箱" />
+                </div>
+                <div class="form-group">
+                    <label>有效期限</label>
+                    <input type="date" name="expiry_date" />
+                </div>
+                <div class="form-group">
+                    <label>最後領取期限</label>
+                    <input type="datetime-local" name="pickup_deadline" />
+                </div>
+                <div class="form-group">
+                    <label>配送方式*</label>
+                    <select name="delivery_option" required>
+                        <option value="volunteer_delivery">志工配送</option>
+                        <option value="donor_delivery">商家自行運送</option>
+                        <option value="food_bank_pickup">食物銀行派車</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>建議交通工具</label>
+                    <select name="vehicle_type">
+                        <option value="none">未指定</option>
+                        <option value="car">汽車</option>
+                        <option value="motorcycle">機車</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>備註</label>
-                    <textarea></textarea>
+                    <textarea name="notes"></textarea>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
