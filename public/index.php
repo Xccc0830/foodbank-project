@@ -17,6 +17,60 @@ require_once BASE_PATH . '/config/database.php';
 // 啟用會話
 session_start();
 
+// 登入與登出流程
+$connection = $db->getConnection();
+$action = $_GET['action'] ?? '';
+
+if ($action === 'logout') {
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+    }
+    session_destroy();
+    header('Location: ?action=login');
+    exit;
+}
+
+if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $usernameEscaped = $connection->real_escape_string($username);
+    $passwordHash = hash('sha256', $password);
+    $result = $connection->query("SELECT user_id, username, full_name, role, status FROM users WHERE username = '{$usernameEscaped}' AND password = '{$passwordHash}' LIMIT 1");
+    $user = $result ? $result->fetch_assoc() : null;
+
+    if ($user && $user['status'] === 'active') {
+        session_regenerate_id(true);
+        $_SESSION['user'] = $user;
+        header('Location: ?page=dashboard');
+        exit;
+    }
+
+    $loginError = '帳號、密碼錯誤，或帳號尚未啟用。';
+}
+
+if ($action === 'login' || empty($_SESSION['user'])) {
+    $error = $loginError ?? null;
+    include BASE_PATH . '/src/views/login.php';
+    exit;
+}
+
+$currentUser = $_SESSION['user'];
+$role = $currentUser['role'];
+$roleLabels = [
+    'admin' => '系統管理者',
+    'manager' => '食物銀行管理者',
+    'staff' => '食物銀行工作人員',
+    'volunteer' => '平台志工',
+];
+$rolePages = [
+    'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'settings'],
+    'manager' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases'],
+    'staff' => ['dashboard', 'donations', 'inventory', 'beneficiaries'],
+    'volunteer' => ['dashboard', 'deliveries', 'activities'],
+];
+
 // 簡單的路由系統
 $page = isset($_GET['page']) ? trim($_GET['page']) : 'dashboard';
 
@@ -34,6 +88,10 @@ $menu_items = [
     'purchases' => ['label' => '採購管理', 'icon' => 'fa-solid fa-cart-shopping'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
 ];
+$allowedPages = $rolePages[$role] ?? ['dashboard'];
+if (!in_array($page, $allowedPages, true)) {
+    $page = 'dashboard';
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -59,7 +117,10 @@ $menu_items = [
             </div>
 
             <nav class="sidebar-nav">
-                <?php foreach ($menu_items as $key => $item): 
+                <?php foreach ($menu_items as $key => $item):
+                    if (!in_array($key, $allowedPages, true)) {
+                        continue;
+                    }
                     $is_active = ($page === $key) ? 'active' : '';
                     $icon = $item['icon'];
                     $label = $item['label'];
@@ -73,13 +134,13 @@ $menu_items = [
 
             <div class="sidebar-footer">
                 <div class="user-profile">
-                    <div class="avatar">AD</div>
+                    <div class="avatar"><?php echo htmlspecialchars(strtoupper(substr($currentUser['full_name'], 0, 2))); ?></div>
                     <div class="user-info">
-                        <div class="user-name">管理員</div>
-                        <div class="user-role">Admin</div>
+                        <div class="user-name"><?php echo htmlspecialchars($currentUser['full_name']); ?></div>
+                        <div class="user-role"><?php echo htmlspecialchars($roleLabels[$role] ?? $role); ?></div>
                     </div>
                 </div>
-                <a href="#" class="logout-btn">登出</a>
+                <a href="?action=logout" class="logout-btn">登出</a>
             </div>
         </aside>
 

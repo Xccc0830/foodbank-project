@@ -779,6 +779,12 @@ ALTER TABLE `sale_items`
 --
 ALTER TABLE `warehouses`
   ADD CONSTRAINT `warehouses_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
+
+-- 開發環境示範角色帳號，正式環境請立即修改密碼
+INSERT IGNORE INTO `users` (`username`, `password`, `email`, `full_name`, `role`, `status`) VALUES
+  ('manager', SHA2('manager123', 256), 'manager@foodbank.local', '營運管理者', 'manager', 'active'),
+  ('staff', SHA2('staff123', 256), 'staff@foodbank.local', '服務工作人員', 'staff', 'active'),
+  ('volunteer', SHA2('volunteer123', 256), 'volunteer@foodbank.local', '平台志工', 'volunteer', 'active');
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
