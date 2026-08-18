@@ -134,11 +134,7 @@ CREATE TABLE `donations` (
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- --------------------------------------------------------
 
---
--- 資料表結構 `donors`
---
 
 CREATE TABLE `donors` (
   `donor_id` int(11) NOT NULL,
@@ -149,14 +145,79 @@ CREATE TABLE `donors` (
   `phone` varchar(20) DEFAULT NULL,
   `address` text DEFAULT NULL,
   `contact_person` varchar(100) DEFAULT NULL,
-  `status` enum('active','inactive') DEFAULT 'active',
+  `status` enum('received','pending','assessed','approved','rejected','archived') DEFAULT 'pending',
   `total_donations` decimal(12,2) DEFAULT 0.00,
+  `item_name` varchar(100) DEFAULT NULL,
+  `weight_kg` decimal(10,2) DEFAULT NULL,
+  `size_description` varchar(100) DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `pickup_deadline` datetime DEFAULT NULL,
+  `delivery_option` enum('donor_delivery','volunteer_delivery','food_bank_pickup') DEFAULT 'volunteer_delivery',
+  `vehicle_type` enum('car','motorcycle','none') DEFAULT 'none',
+  `photo_path` varchar(255) DEFAULT NULL,
+  `evaluation_notes` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
+
+--
+-- 系統規劃書新增模組：配送、公益點數、活動認領
+--
+CREATE TABLE `deliveries` (
+  `delivery_id` int(11) NOT NULL AUTO_INCREMENT,
+  `donation_id` int(11) DEFAULT NULL,
+  `volunteer_id` int(11) DEFAULT NULL,
+  `vehicle_type` enum('car','motorcycle') NOT NULL,
+  `total_distance_km` decimal(8,2) NOT NULL DEFAULT 0.00,
+  `weight_kg` decimal(8,2) NOT NULL DEFAULT 0.00,
+  `urgency` enum('normal','priority','urgent') NOT NULL DEFAULT 'normal',
+  `points` int(11) NOT NULL DEFAULT 0,
+  `pickup_address` varchar(255) NOT NULL,
+  `delivery_address` varchar(255) NOT NULL,
+  `status` enum('open','claimed','picked_up','delivered','exception','cancelled') NOT NULL DEFAULT 'open',
+  `exception_notes` text DEFAULT NULL,
+  `delivered_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`delivery_id`), KEY `idx_deliveries_status` (`status`), KEY `idx_deliveries_volunteer` (`volunteer_id`), KEY `idx_deliveries_donation` (`donation_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `point_transactions` (
+  `transaction_id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `delivery_id` int(11) DEFAULT NULL,
+  `points` int(11) NOT NULL,
+  `transaction_type` enum('earned','redeemed','adjusted') NOT NULL DEFAULT 'earned',
+  `description` varchar(255) NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`transaction_id`), KEY `idx_points_user` (`user_id`), KEY `idx_points_delivery` (`delivery_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `activities` (
+  `activity_id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(150) NOT NULL,
+  `activity_type` enum('donation_drive','briefing','cleanup','promotion','other') NOT NULL DEFAULT 'other',
+  `description` text DEFAULT NULL,
+  `start_at` datetime NOT NULL,
+  `end_at` datetime DEFAULT NULL,
+  `capacity` int(11) DEFAULT NULL,
+  `status` enum('planned','ongoing','completed','cancelled') NOT NULL DEFAULT 'planned',
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`activity_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `activity_assignments` (
+  `assignment_id` int(11) NOT NULL AUTO_INCREMENT,
+  `activity_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `status` enum('registered','attended','cancelled') NOT NULL DEFAULT 'registered',
+  `points` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`assignment_id`), UNIQUE KEY `unique_activity_user` (`activity_id`,`user_id`), KEY `idx_activity_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 --
 -- 資料表結構 `inventory`
 --

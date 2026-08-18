@@ -27,6 +27,8 @@ $page = basename($page);
 $menu_items = [
     'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
     'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
+    'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
+    'activities' => ['label' => '活動認領', 'icon' => 'fa-solid fa-calendar-check'],
     'inventory' => ['label' => '庫存管理', 'icon' => 'fa-solid fa-boxes-stacked'],
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'purchases' => ['label' => '採購管理', 'icon' => 'fa-solid fa-cart-shopping'],
