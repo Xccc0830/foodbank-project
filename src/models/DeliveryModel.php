@@ -30,12 +30,45 @@ class DeliveryModel extends BaseModel {
     public function claimDelivery($deliveryId, $volunteerId) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;
-        return $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed' WHERE delivery_id = {$deliveryId} AND status = 'open'");
+        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed' WHERE delivery_id = {$deliveryId} AND status = 'open'");
+        if ($updated && $this->db->affected_rows > 0) {
+            $this->notifyUsersByRole('foodbank_staff', '配送任務已接單', "配送任務 #{$deliveryId} 已由志工接單。", 'info');
+        }
+        return $updated;
+    }
+
+    public function confirmPickup($deliveryId, $volunteerId, $sealIntact, $itemCountConfirmed) {
+        $deliveryId = (int) $deliveryId;
+        $volunteerId = (int) $volunteerId;
+        $sealIntact = $sealIntact ? 1 : 0;
+        $itemCountConfirmed = $itemCountConfirmed ? 1 : 0;
+
+        if (!$sealIntact || !$itemCountConfirmed) {
+            return false;
+        }
+
+        return $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), seal_intact = {$sealIntact}, item_count_confirmed = {$itemCountConfirmed} WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'claimed'");
+    }
+
+    public function reportException($deliveryId, $volunteerId, $notes) {
+        $deliveryId = (int) $deliveryId;
+        $volunteerId = (int) $volunteerId;
+        $notes = $this->db->real_escape_string(trim($notes));
+
+        if ($notes === '') {
+            return false;
+        }
+
+        $updated = $this->db->query("UPDATE deliveries SET status = 'exception', exception_notes = '{$notes}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status IN ('claimed', 'picked_up')");
+        if ($updated && $this->db->affected_rows > 0) {
+            $this->notifyUsersByRole('foodbank_staff', '配送異常回報', "配送任務 #{$deliveryId}：{$notes}", 'warning');
+        }
+        return $updated;
     }
 
     public function completeDelivery($deliveryId) {
         $deliveryId = (int) $deliveryId;
-        $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId} AND status = 'claimed' LIMIT 1");
+        $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up') LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
 
         if (!$delivery || !$delivery['volunteer_id']) {
@@ -44,15 +77,31 @@ class DeliveryModel extends BaseModel {
 
         $this->db->begin_transaction();
         try {
-            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId} AND status = 'claimed'");
+            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up')");
             $volunteerId = (int) $delivery['volunteer_id'];
             $points = (int) $delivery['points'];
             $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
             $this->db->commit();
+            $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 點公益點數。", 'success');
             return true;
         } catch (Throwable $exception) {
             $this->db->rollback();
             return false;
+        }
+    }
+
+    private function notifyUser($userId, $title, $message, $type) {
+        require_once __DIR__ . '/NotificationModel.php';
+        (new NotificationModel())->notify((int) $userId, $title, $message, $type);
+    }
+
+    private function notifyUsersByRole($role, $title, $message, $type) {
+        $role = $this->db->real_escape_string($role);
+        $result = $this->db->query("SELECT user_id FROM users WHERE role = '{$role}' AND status = 'active'");
+        if ($result) {
+            while ($user = $result->fetch_assoc()) {
+                $this->notifyUser((int) $user['user_id'], $title, $message, $type);
+            }
         }
     }
 

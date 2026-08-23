@@ -7,6 +7,10 @@ require_once BASE_PATH . '/src/models/DeliveryModel.php';
 
 $deliveryModel = new DeliveryModel();
 $message = null;
+$currentRole = $currentUser['role'] ?? 'volunteer';
+$currentUserId = (int) ($currentUser['user_id'] ?? 0);
+$isOfficial = in_array($currentRole, ['admin', 'foodbank_staff'], true);
+$isVolunteer = $currentRole === 'volunteer';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -24,11 +28,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '配送任務已發布，志工可自主接單。']
             : ['type' => 'error', 'text' => '配送任務發布失敗。'];
     } elseif ($action === 'claim_delivery') {
-        $message = $deliveryModel->claimDelivery((int) $_POST['delivery_id'], 1)
+        $message = $isVolunteer && $deliveryModel->claimDelivery((int) $_POST['delivery_id'], $currentUserId)
             ? ['type' => 'success', 'text' => '任務已由目前志工接單。']
             : ['type' => 'error', 'text' => '接單失敗，任務可能已被其他志工接取。'];
+    } elseif ($action === 'confirm_pickup') {
+        $message = $isVolunteer && $deliveryModel->confirmPickup((int) $_POST['delivery_id'], $currentUserId, isset($_POST['seal_intact']), isset($_POST['item_count_confirmed']))
+            ? ['type' => 'success', 'text' => '取貨已確認，請將物資送往食物銀行。']
+            : ['type' => 'error', 'text' => '取貨確認失敗，請確認防拆貼紙與物資數量。'];
+    } elseif ($action === 'report_exception') {
+        $message = $isVolunteer && $deliveryModel->reportException((int) $_POST['delivery_id'], $currentUserId, $_POST['exception_notes'] ?? '')
+            ? ['type' => 'success', 'text' => '異常已回報，食物銀行官方人員會進行處理。']
+            : ['type' => 'error', 'text' => '請填寫異常原因後再送出。'];
     } elseif ($action === 'complete_delivery') {
-        $message = $deliveryModel->completeDelivery((int) $_POST['delivery_id'])
+        $message = $isOfficial && $deliveryModel->completeDelivery((int) $_POST['delivery_id'])
             ? ['type' => 'success', 'text' => '已確認送達，公益點數已記錄。']
             : ['type' => 'error', 'text' => '送達確認失敗。'];
     }
@@ -96,10 +108,11 @@ $deliveries = $deliveryModel->getAllDeliveries();
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
                     <td><?php echo ['normal' => '一般', 'priority' => '優先', 'urgent' => '急件'][$delivery['urgency']] ?? '一般'; ?></td>
                     <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
-                    <td><span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ['open' => '待接單', 'claimed' => '配送中', 'delivered' => '已配達'][$delivery['status']] ?? $delivery['status']; ?></span></td>
+                    <td><span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ['open' => '待接單', 'claimed' => '已接單', 'picked_up' => '已取貨', 'delivered' => '已配達', 'exception' => '異常待處理'][$delivery['status']] ?? $delivery['status']; ?></span></td>
                     <td>
-                        <?php if ($delivery['status'] === 'open'): ?><form method="post"><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm">接單</button></form><?php endif; ?>
-                        <?php if ($delivery['status'] === 'claimed'): ?><form method="post"><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm">確認送達</button></form><?php endif; ?>
+                        <?php if ($isVolunteer && $delivery['status'] === 'open'): ?><form method="post"><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm">接單</button></form><?php endif; ?>
+                        <?php if ($isVolunteer && $delivery['status'] === 'claimed' && (int) $delivery['volunteer_id'] === $currentUserId): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="confirm_pickup"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><label><input type="checkbox" name="seal_intact" required> 防拆貼紙完整</label><label><input type="checkbox" name="item_count_confirmed" required> 已清點物資</label><button class="btn btn-primary btn-sm">確認取貨</button></form><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="report_exception"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><input name="exception_notes" placeholder="異常原因" required><button class="btn btn-danger btn-sm">回報異常</button></form><?php endif; ?>
+                        <?php if ($isOfficial && in_array($delivery['status'], ['claimed', 'picked_up'], true)): ?><form method="post"><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm">確認收貨</button></form><?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>

@@ -12,12 +12,21 @@ class DonationModel extends BaseModel {
     /**
      * 取得所有捐贈記錄
      */
-    public function getAllDonations($status = null) {
+    public function getAllDonations($status = null, $donorId = null) {
         $sql = "SELECT * FROM {$this->table}";
+        $conditions = [];
         
         if ($status) {
             $status = $this->db->real_escape_string($status);
-            $sql .= " WHERE status = '{$status}'";
+            $conditions[] = "status = '{$status}'";
+        }
+
+        if ($donorId !== null) {
+            $conditions[] = 'donor_id = ' . (int) $donorId;
+        }
+
+        if ($conditions) {
+            $sql .= ' WHERE ' . implode(' AND ', $conditions);
         }
         
         $sql .= " ORDER BY donation_date DESC";
@@ -53,6 +62,28 @@ class DonationModel extends BaseModel {
                 SET status = '{$status}', evaluation_notes = '{$evaluation_notes}'
                 WHERE donation_id = {$donation_id}";
         return $this->db->query($sql);
+    }
+
+    /**
+     * 取得單筆捐贈記錄
+     */
+    public function getDonationById($donation_id) {
+        $donation_id = intval($donation_id);
+        $sql = "SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} LIMIT 1";
+        $result = $this->db->query($sql);
+        return $result ? $result->fetch_assoc() : null;
+    }
+
+    /**
+     * 批准物資時產生防拆貼紙編號（若尚未產生）
+     */
+    public function assignSealCodeIfMissing($donation_id) {
+        $donation_id = intval($donation_id);
+        $sealCode = 'FB-' . strtoupper(bin2hex(random_bytes(4)));
+        $sealCodeEscaped = $this->db->real_escape_string($sealCode);
+
+        $this->db->query("UPDATE {$this->table} SET seal_code = '{$sealCodeEscaped}' WHERE donation_id = {$donation_id} AND (seal_code IS NULL OR seal_code = '')");
+        return $sealCode;
     }
 
     /**

@@ -1111,6 +1111,17 @@ form {
     .login-panel { padding: 44px 24px 56px; }
 }
 
+.login-shell.single-panel {
+    grid-template-columns: 1fr;
+    place-items: center;
+}
+
+.login-shell.single-panel .login-panel {
+    width: 100%;
+    max-width: 460px;
+}
+
+
 /* ============================================
    頁腳
    ============================================ */
@@ -1195,6 +1206,120 @@ form {
 .mb-32 { margin-bottom: 32px; }
 .pt-10 { padding-top: 10px; }
 .pb-10 { padding-bottom: 10px; }
+
+/* ============================================
+   擴充模組：照片、憑證、兌換、同意書
+   ============================================ */
+
+.donation-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--gray-200);
+}
+
+.delivery-action-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.delivery-action-form input[type="text"] {
+    min-width: 140px;
+}
+
+.certificate-shell {
+    max-width: 780px;
+    margin: 24px auto;
+    padding: 48px;
+    background: #fffdf7;
+    border: 2px solid #cba135;
+    border-radius: 12px;
+}
+
+.certificate-shell h1 {
+    text-align: center;
+    font-family: "Space Grotesk", sans-serif;
+    color: #7a5b12;
+    margin-bottom: 8px;
+}
+
+.certificate-meta {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+}
+
+.certificate-body {
+    line-height: 2;
+    font-size: 15px;
+}
+
+.certificate-signature {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 48px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.reward-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.reward-card {
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    background: var(--bg-primary);
+}
+
+.reward-card h3 {
+    margin-bottom: 6px;
+}
+
+.reward-cost {
+    display: inline-block;
+    margin: 8px 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(99, 91, 255, 0.12);
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.consent-checklist label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 14px;
+}
+
+.consent-video {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-200);
+    margin-bottom: 20px;
+}
+
+@media print {
+    .app-wrapper .sidebar,
+    .app-wrapper .topbar,
+    .app-wrapper .app-footer,
+    .no-print {
+        display: none !important;
+    }
+}
+
 .px-16 { padding-left: 16px; padding-right: 16px; }
 .text-center { text-align: center; }
 .text-muted { color: var(--text-secondary); }

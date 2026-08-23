@@ -24,13 +24,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ['type' => 'error', 'text' => '請填寫活動名稱，或活動發布失敗。'];
     }
     if (($_POST['action'] ?? '') === 'register_activity') {
-        $message = $activityModel->register((int) $_POST['activity_id'])
-            ? ['type' => 'success', 'text' => '已完成活動認領，預計可獲得 5 點榮譽點數。']
-            : ['type' => 'error', 'text' => '認領失敗，可能已經報名過。'];
+        $assignmentType = ($_POST['assignment_type'] ?? 'individual') === 'company' ? 'company' : 'individual';
+        $organizationName = $assignmentType === 'company' ? trim($_POST['organization_name'] ?? '') : null;
+
+        if ($assignmentType === 'company' && $organizationName === '') {
+            $message = ['type' => 'error', 'text' => '企業認領請填寫企業／組織名稱。'];
+        } else {
+            $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName)
+                ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業認領已送出，活動結束後可下載永續認證證書。' : '已完成活動認領，預計可獲得 5 點榮譽點數。']
+                : ['type' => 'error', 'text' => '認領失敗，可能已經報名過。'];
+        }
     }
 }
 
 $activities = $activityModel->getAllActivities();
+$myAssignments = $activityModel->getUserAssignments((int) $currentUser['user_id']);
 ?>
 
 <div class="view-header"><div><h1 class="view-title">活動認領</h1><p class="view-subtitle">發布公益活動，讓企業與志工參與在地行動</p></div></div>
@@ -51,5 +59,25 @@ $activities = $activityModel->getAllActivities();
 
 <div class="card mt-32"><div class="card-header"><h2>活動列表</h2></div><div class="card-body">
 <?php if ($activities): ?><table class="data-table"><thead><tr><th>活動名稱</th><th>類型</th><th>時間</th><th>參與人數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
-<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><br><small><?php echo htmlspecialchars($activity['description'] ?? ''); ?></small></td><td><?php echo htmlspecialchars($activity['activity_type']); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activity['status']); ?></span></td><td><form method="post"><input type="hidden" name="action" value="register_activity"><input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>"><button class="btn btn-primary btn-sm">認領活動</button></form></td></tr><?php endforeach; ?></tbody></table>
+<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><br><small><?php echo htmlspecialchars($activity['description'] ?? ''); ?></small></td><td><?php echo htmlspecialchars($activity['activity_type']); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activity['status']); ?></span></td><td>
+    <form method="post" class="delivery-action-form">
+        <input type="hidden" name="action" value="register_activity">
+        <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
+        <select name="assignment_type" aria-label="認領身分"><option value="individual">個人／志工</option><option value="company">企業認領</option></select>
+        <input type="text" name="organization_name" placeholder="企業／組織名稱（企業認領填寫）">
+        <button class="btn btn-primary btn-sm" type="submit">認領活動</button>
+    </form>
+</td></tr><?php endforeach; ?></tbody></table>
 <?php else: ?><div class="empty-state"><i class="fas fa-calendar"></i><p>目前沒有公開活動</p></div><?php endif; ?></div></div>
+
+<div class="card mt-32"><div class="card-header"><h2>我的認領紀錄</h2><p>活動結束後可下載企業永續認證證書</p></div><div class="card-body">
+<?php if ($myAssignments): ?><table class="data-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
+<?php foreach ($myAssignments as $assignment): ?><tr>
+    <td><?php echo htmlspecialchars($assignment['title']); ?></td>
+    <td><?php echo $assignment['assignment_type'] === 'company' ? '企業認領' : '個人／志工'; ?></td>
+    <td><?php echo htmlspecialchars($assignment['organization_name'] ?? '-'); ?></td>
+    <td><span class="status status-<?php echo htmlspecialchars($assignment['activity_status']); ?>"><?php echo htmlspecialchars($assignment['activity_status']); ?></span></td>
+    <td><?php if ($assignment['activity_status'] === 'completed'): ?><a class="btn btn-secondary btn-sm" href="?page=activity_certificate&assignment_id=<?php echo (int) $assignment['assignment_id']; ?>" target="_blank">查看證書</a><?php else: ?>活動完成後開放<?php endif; ?></td>
+</tr><?php endforeach; ?></tbody></table>
+<?php else: ?><div class="empty-state"><i class="fas fa-clipboard-list"></i><p>尚未認領任何活動</p></div><?php endif; ?>
+</div></div>

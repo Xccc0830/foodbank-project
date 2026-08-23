@@ -5,13 +5,17 @@
 
 require_once BASE_PATH . '/src/models/DonationModel.php';
 require_once BASE_PATH . '/src/models/DonorModel.php';
+require_once BASE_PATH . '/src/helpers/UploadHelper.php';
 
 $donationModel = new DonationModel();
 $formMessage = null;
+$currentRole = $currentUser['role'] ?? 'foodbank_staff';
+$isDonor = $currentRole === 'donor';
+$canEvaluate = in_array($currentRole, ['admin', 'foodbank_staff'], true);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_donation') {
     $donation = [
-        'donor_name' => trim($_POST['donor_name'] ?? ''),
+        'donor_name' => $isDonor ? $currentUser['full_name'] : trim($_POST['donor_name'] ?? ''),
         'donation_type' => $_POST['donation_type'] ?? 'food',
         'quantity' => (float) ($_POST['quantity'] ?? 0),
         'unit' => trim($_POST['unit'] ?? '件'),
@@ -26,11 +30,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_d
         'status' => 'pending',
     ];
 
+    if ($isDonor) {
+        $donation['donor_id'] = (int) $currentUser['user_id'];
+    }
+
+    $photoError = null;
+    if (!empty($_FILES['photo']['name'])) {
+        $photoPath = uploadDonationPhoto($_FILES['photo']);
+        if ($photoPath === false) {
+            $photoError = '照片上傳失敗，請確認格式為 JPG/PNG，且大小在 5MB 以內。';
+        } else {
+            $donation['photo_path'] = $photoPath;
+        }
+    }
+
     if ($donation['donor_name'] === '' || $donation['item_name'] === '' || $donation['quantity'] <= 0) {
         $formMessage = ['type' => 'error', 'text' => '請填寫商家、物資名稱與有效數量。'];
+    } elseif ($photoError) {
+        $formMessage = ['type' => 'error', 'text' => $photoError];
     } else {
         $formMessage = $donationModel->addDonation($donation)
-            ? ['type' => 'success', 'text' => '惜食物資已上架，等待食物銀行評估。']
+            ? ['type' => 'success', 'text' => '惜食物資已上架（含包裝前合照），等待食物銀行評估。']
             : ['type' => 'error', 'text' => '物資上架失敗，請稍後再試。'];
     }
 }
@@ -39,12 +59,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'evalu
     $status = $_POST['evaluation_status'] ?? 'assessed';
     $allowedStatuses = ['assessed', 'approved', 'rejected'];
 
-    if (in_array($status, $allowedStatuses, true)) {
+    if (!$canEvaluate) {
+        $formMessage = ['type' => 'error', 'text' => '只有食物銀行官方人員可以進行物資評估。'];
+    } elseif (in_array($status, $allowedStatuses, true)) {
+        $donationId = (int) ($_POST['donation_id'] ?? 0);
         $updated = $donationModel->updateEvaluation(
-            (int) ($_POST['donation_id'] ?? 0),
+            $donationId,
             $status,
             trim($_POST['evaluation_notes'] ?? '')
         );
+        if ($updated && $status === 'approved') {
+            $donationModel->assignSealCodeIfMissing($donationId);
+        }
         $formMessage = $updated
             ? ['type' => 'success', 'text' => '食物銀行評估結果已更新。']
             : ['type' => 'error', 'text' => '評估更新失敗，請稍後再試。'];
@@ -53,7 +79,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'evalu
     }
 }
 
-$donations = $donationModel->getAllDonations();
+$donations = $isDonor
+    ? $donationModel->getAllDonations(null, (int) $currentUser['user_id'])
+    : $donationModel->getAllDonations();
 
 $pending = array_filter($donations, function ($d) {
     return strtolower((string) $d['status']) === 'pending';
@@ -68,8 +96,8 @@ $rejected = array_filter($donations, function ($d) {
 
 <div class="view-header">
     <div>
-        <h1 class="view-title">捐贈管理</h1>
-        <p class="view-subtitle">管理與追蹤所有捐贈記錄</p>
+        <h1 class="view-title"><?php echo $isDonor ? '我的剩食上架' : '捐贈管理'; ?></h1>
+        <p class="view-subtitle"><?php echo $isDonor ? '上架剩食並查看自己的評估狀態' : '管理與評估平台上的捐贈物資'; ?></p>
     </div>
     <button class="btn btn-primary" onclick="openAddDonationModal()">
         <i class="fas fa-plus"></i> 新增捐贈
@@ -111,6 +139,7 @@ $rejected = array_filter($donations, function ($d) {
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th>照片</th>
                         <th>捐贈者</th>
                         <th>物資</th>
                         <th>捐贈類型</th>
@@ -119,6 +148,7 @@ $rejected = array_filter($donations, function ($d) {
                         <th>數量</th>
                         <th>日期</th>
                         <th>接收人員</th>
+                        <th>防拆貼紙</th>
                         <th>狀態</th>
                         <th>操作</th>
                     </tr>
@@ -138,6 +168,7 @@ $rejected = array_filter($donations, function ($d) {
                         ];
                         ?>
                         <tr>
+                            <td><?php if (!empty($donation['photo_path'])): ?><a href="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" target="_blank" rel="noopener"><img src="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" alt="包裝前合照" class="donation-thumb"></a><?php else: ?>－<?php endif; ?></td>
                             <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
                             <td><?php echo htmlspecialchars($donation['item_name'] ?? '-'); ?></td>
                             <td><?php echo htmlspecialchars($donation['donation_type']); ?></td>
@@ -146,11 +177,16 @@ $rejected = array_filter($donations, function ($d) {
                             <td><?php echo htmlspecialchars($donation['quantity']); ?> <?php echo htmlspecialchars($donation['unit']); ?></td>
                             <td><?php echo date('Y-m-d H:i', strtotime($donation['donation_date'])); ?></td>
                             <td><?php echo $donation['received_by'] ? 'User #' . (int) $donation['received_by'] : '-'; ?></td>
+                            <td><?php echo !empty($donation['seal_code']) ? '<code>' . htmlspecialchars($donation['seal_code']) . '</code>' : '尚未產生'; ?></td>
                             <td><span class="status status-<?php echo $statusClass; ?>"><?php echo htmlspecialchars($statusLabels[$status] ?? $status); ?></span></td>
                             <td>
                                 <div class="btn-group">
-                                    <a href="#" class="btn btn-secondary btn-sm">查看</a>
-                                    <?php if (in_array($status, ['pending', 'assessed'], true)): ?>
+                                    <?php if (in_array($status, ['approved', 'received'], true)): ?>
+                                        <a href="?page=certificate&donation_id=<?php echo (int) $donation['donation_id']; ?>" class="btn btn-secondary btn-sm" target="_blank">捐贈證明</a>
+                                    <?php else: ?>
+                                        <a href="#" class="btn btn-secondary btn-sm" aria-disabled="true">查看</a>
+                                    <?php endif; ?>
+                                    <?php if ($canEvaluate && in_array($status, ['pending', 'assessed'], true)): ?>
                                         <form method="post" class="inline-form">
                                             <input type="hidden" name="action" value="evaluate_donation">
                                             <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">

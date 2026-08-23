@@ -32,6 +32,19 @@
     }
 
     function initializeEventListeners() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        if (csrfToken) {
+            document.querySelectorAll('form').forEach(function (form) {
+                if (!form.querySelector('input[name="csrf_token"]')) {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrfToken.content;
+                    form.appendChild(input);
+                }
+            });
+        }
+
         const searchInputs = document.querySelectorAll('.search-input');
         searchInputs.forEach(function (input) {
             input.addEventListener('input', function () {
@@ -128,7 +141,7 @@
 
     function openAddDonationModal() {
         showModal('新增捐贈', `
-            <form method="post" action="?page=donations">
+            <form method="post" action="?page=donations" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="add_donation" />
                 <div class="form-group">
                     <label>商家名稱*</label>
@@ -187,6 +200,10 @@
                         <option value="car">汽車</option>
                         <option value="motorcycle">機車</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label>包裝前合照（需附上防拆貼紙）</label>
+                    <input type="file" name="photo" accept="image/png,image/jpeg,image/webp" />
                 </div>
                 <div class="form-group">
                     <label>備註</label>
@@ -376,6 +393,17 @@
         const modal = document.getElementById('app-modal');
         if (!modal) {
             return;
+        }
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        if (csrfToken) {
+            modal.querySelectorAll('form').forEach(function (form) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = csrfToken.content;
+                form.appendChild(input);
+            });
         }
 
         modal.addEventListener('click', function (event) {

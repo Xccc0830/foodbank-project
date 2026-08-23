@@ -33,9 +33,11 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
         </section>
         <section class="login-panel">
             <div class="login-panel-heading"><p class="eyebrow">SECURE ACCESS</p><h2>登入工作平台</h2><p class="login-subtitle">使用你的帳號進入專屬工作頁面。</p></div>
-            <?php if (!empty($registered)): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>申請已送出，請等待管理者審核開通。</span></div><?php endif; ?>
+            <?php if (!empty($registered)): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>電話驗證完成，申請已送出，請等待管理者審核開通。</span></div><?php endif; ?>
+            <?php if (!empty($_GET['password_reset'])): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>密碼已重設完成，請使用新密碼登入。</span></div><?php endif; ?>
             <?php if ($error): ?><div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><span><?php echo htmlspecialchars($error); ?></span></div><?php endif; ?>
             <form method="post" action="?action=login">
+                <?php echo csrfField(); ?>
                 <div class="form-group"><label for="username">帳號</label><div class="input-with-icon"><i class="fa-regular fa-user"></i><input id="username" name="username" autocomplete="username" placeholder="輸入你的帳號" required></div></div>
                 <div class="form-group"><label for="password">密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" autocomplete="current-password" placeholder="輸入你的密碼" required></div></div>
                 <button class="btn btn-primary login-submit" type="submit">登入系統 <i class="fa-solid fa-arrow-right"></i></button>
@@ -43,6 +45,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="login-divider"><span>角色入口</span></div>
             <div class="login-roles"><span>管理者</span><span>工作人員</span><span>志工</span></div>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
+            <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>
             <p class="login-hint">開發測試帳號：admin / admin123</p>
         </section>
     </main>
