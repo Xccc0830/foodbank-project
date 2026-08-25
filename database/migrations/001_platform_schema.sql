@@ -4,6 +4,7 @@ USE shinigyi_foodbank;
 CREATE TABLE IF NOT EXISTS deliveries (
     delivery_id INT PRIMARY KEY AUTO_INCREMENT,
     donation_id INT NULL,
+    created_by INT NULL,
     volunteer_id INT NULL,
     vehicle_type ENUM('car','motorcycle') NOT NULL,
     total_distance_km DECIMAL(8,2) NOT NULL DEFAULT 0,

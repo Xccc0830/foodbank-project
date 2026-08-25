@@ -236,6 +236,12 @@ if ($action === 'login' || empty($_SESSION['user'])) {
 }
 
 $currentUser = $_SESSION['user'];
+require_once BASE_PATH . '/src/models/NotificationModel.php';
+$notificationModel = new NotificationModel();
+$unreadNotificationCount = 0;
+if (isset($currentUser['user_id'])) {
+    $unreadNotificationCount = (int) $notificationModel->getUnreadCount((int) $currentUser['user_id']);
+}
 $role = $currentUser['role'];
 $roleLabels = [
     'admin' => '系統管理者',
@@ -349,13 +355,15 @@ if (!in_array($page, $allowedPages, true)) {
                         <input type="text" placeholder="搜尋紀錄、名稱、編號" class="search-input">
                         <i class="fas fa-search"></i>
                     </div>
-                    <button class="icon-btn" title="通知">
+                    <a href="?page=notifications" class="icon-btn" title="通知" aria-label="查看通知中心">
                         <i class="fas fa-bell"></i>
-                        <span class="notification-badge">3</span>
-                    </button>
-                    <button class="icon-btn" title="設置">
+                        <?php if ($unreadNotificationCount > 0): ?>
+                            <span class="notification-badge"><?php echo (int) $unreadNotificationCount; ?></span>
+                        <?php endif; ?>
+                    </a>
+                    <a href="?page=settings" class="icon-btn" title="設置" aria-label="前往設置">
                         <i class="fas fa-cog"></i>
-                    </button>
+                    </a>
                 </div>
             </header>
 

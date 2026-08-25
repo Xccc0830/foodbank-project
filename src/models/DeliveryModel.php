@@ -27,6 +27,63 @@ class DeliveryModel extends BaseModel {
         return $this->insert($data);
     }
 
+    public function getDeliveryById($deliveryId) {
+        $deliveryId = (int) $deliveryId;
+        $result = $this->db->query("SELECT * FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
+        return $result ? $result->fetch_assoc() : null;
+    }
+
+    public function canManageDelivery($deliveryId, $userId, $userRole) {
+        $deliveryId = (int) $deliveryId;
+        $userId = (int) $userId;
+        $result = $this->db->query("SELECT created_by FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
+        if (!$result || $result->num_rows === 0) {
+            return false;
+        }
+
+        $delivery = $result->fetch_assoc();
+        if ((int) ($delivery['created_by'] ?? 0) === $userId) {
+            return true;
+        }
+
+        return in_array($userRole, ['admin', 'foodbank_staff'], true);
+    }
+
+    public function canDeleteDelivery($deliveryId, $userId, $userRole) {
+        return $this->canManageDelivery($deliveryId, $userId, $userRole);
+    }
+
+    public function updateDelivery($deliveryId, $userId, $userRole, $data) {
+        if (!$this->canManageDelivery($deliveryId, $userId, $userRole)) {
+            return false;
+        }
+
+        $deliveryId = (int) $deliveryId;
+        $vehicleType = in_array(($data['vehicle_type'] ?? 'motorcycle'), ['car', 'motorcycle'], true) ? $data['vehicle_type'] : 'motorcycle';
+        $distance = (float) ($data['total_distance_km'] ?? 0);
+        $weight = (float) ($data['weight_kg'] ?? 0);
+        $urgency = in_array(($data['urgency'] ?? 'normal'), ['normal', 'priority', 'urgent'], true) ? $data['urgency'] : 'normal';
+        $pickupAddress = $this->db->real_escape_string(trim((string) ($data['pickup_address'] ?? '')));
+        $deliveryAddress = $this->db->real_escape_string(trim((string) ($data['delivery_address'] ?? '忠信食物銀行')));
+        $donationId = (int) ($data['donation_id'] ?? 0);
+        $points = $this->calculatePoints($vehicleType, $distance, $weight, $urgency);
+
+        if ($pickupAddress === '' || $deliveryAddress === '') {
+            return false;
+        }
+
+        $sql = "UPDATE deliveries SET donation_id = {$donationId}, vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, weight_kg = {$weight}, urgency = '{$urgency}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
+        return $this->db->query($sql);
+    }
+
+    public function deleteDelivery($deliveryId, $userId, $userRole) {
+        if (!$this->canDeleteDelivery($deliveryId, $userId, $userRole)) {
+            return false;
+        }
+
+        return $this->db->query("DELETE FROM deliveries WHERE delivery_id = " . (int) $deliveryId . " LIMIT 1");
+    }
+
     public function claimDelivery($deliveryId, $volunteerId) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;

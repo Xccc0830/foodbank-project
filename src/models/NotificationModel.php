@@ -21,6 +21,17 @@ class NotificationModel extends BaseModel {
         return $this->query("SELECT * FROM notifications WHERE user_id = {$userId} ORDER BY created_at DESC LIMIT 30");
     }
 
+    public function getUnreadCount($userId) {
+        $userId = (int) $userId;
+        $result = $this->db->query("SELECT COUNT(*) AS unread_count FROM notifications WHERE user_id = {$userId} AND read_at IS NULL");
+        if (!$result) {
+            return 0;
+        }
+
+        $row = $result->fetch_assoc();
+        return (int) ($row['unread_count'] ?? 0);
+    }
+
     public function markRead($notificationId, $userId) {
         return $this->db->query("UPDATE notifications SET read_at = NOW() WHERE notification_id = " . (int) $notificationId . " AND user_id = " . (int) $userId);
     }

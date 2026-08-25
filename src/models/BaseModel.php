@@ -51,15 +51,24 @@ abstract class BaseModel {
      * 插入新記錄
      */
     public function insert($data) {
-        $columns = implode(',', array_keys($data));
-        $values = implode("','", array_map([$this->db, 'real_escape_string'], array_values($data)));
-        
-        $sql = "INSERT INTO {$this->table} ({$columns}) VALUES ('{$values}')";
-        
+        $columns = array_keys($data);
+        $values = [];
+
+        foreach ($data as $value) {
+            if ($value === null) {
+                $values[] = 'NULL';
+                continue;
+            }
+
+            $values[] = "'" . $this->db->real_escape_string((string) $value) . "'";
+        }
+
+        $sql = "INSERT INTO {$this->table} (" . implode(',', $columns) . ") VALUES (" . implode(',', $values) . ")";
+
         if ($this->db->query($sql)) {
             return $this->db->insert_id;
         }
-        
+
         return false;
     }
 
@@ -69,15 +78,19 @@ abstract class BaseModel {
     public function update($id, $data) {
         $id = intval($id);
         $set = [];
-        
+
         foreach ($data as $key => $value) {
-            $value = $this->db->real_escape_string($value);
-            $set[] = "{$key} = '{$value}'";
+            if ($value === null) {
+                $set[] = "{$key} = NULL";
+                continue;
+            }
+
+            $set[] = "{$key} = '" . $this->db->real_escape_string((string) $value) . "'";
         }
-        
+
         $setString = implode(',', $set);
         $sql = "UPDATE {$this->table} SET {$setString} WHERE id = {$id}";
-        
+
         return $this->db->query($sql);
     }
 

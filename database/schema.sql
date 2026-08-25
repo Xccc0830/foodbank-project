@@ -58,13 +58,15 @@ CREATE TABLE `activity_assignments` (
   `activity_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
   `status` enum('registered','attended','cancelled') NOT NULL DEFAULT 'registered',
+  `cancelled_at` datetime DEFAULT NULL,
   `points` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `assignment_type` enum('individual','company') NOT NULL DEFAULT 'individual',
   `organization_name` varchar(150) DEFAULT NULL,
   PRIMARY KEY (`assignment_id`),
   UNIQUE KEY `unique_activity_user` (`activity_id`,`user_id`),
-  KEY `user_id` (`user_id`)
+  KEY `user_id` (`user_id`),
+  KEY `activity_status_cancelled_at` (`activity_id`,`user_id`,`status`,`cancelled_at`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -201,6 +203,7 @@ DROP TABLE IF EXISTS `deliveries`;
 CREATE TABLE `deliveries` (
   `delivery_id` int(11) NOT NULL AUTO_INCREMENT,
   `donation_id` int(11) DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
   `volunteer_id` int(11) DEFAULT NULL,
   `vehicle_type` enum('car','motorcycle') NOT NULL,
   `total_distance_km` decimal(8,2) NOT NULL DEFAULT 0.00,
