@@ -112,5 +112,19 @@ class BeneficiaryModel extends BaseModel {
                 ORDER BY registration_date DESC";
         return $this->query($sql);
     }
+
+    /**
+     * 刪除受益者（軟刪或硬刪依需求）
+     * 目前實作為硬刪除：直接從資料表移除資料
+     */
+    public function deleteBeneficiary($beneficiary_id) {
+        $id = intval($beneficiary_id);
+        if ($id <= 0) {
+            return false;
+        }
+
+        $sql = "DELETE FROM {$this->table} WHERE beneficiary_id = {$id} LIMIT 1";
+        return $this->db->query($sql);
+    }
 }
 ?>

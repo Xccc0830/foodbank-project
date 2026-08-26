@@ -59,6 +59,89 @@
             });
         });
 
+        // 事件委派：處理受益者清單中 view/assign/delete 按鈕（避免依賴 inline onclick）
+        document.body.addEventListener('click', function (event) {
+            const btn = event.target.closest && event.target.closest('button[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            try {
+                if (action === 'view' && typeof openViewBeneficiaryModal === 'function') {
+                    openViewBeneficiaryModal(btn);
+                    event.preventDefault();
+                } else if (action === 'assign' && typeof openAssignBeneficiaryModal === 'function') {
+                    openAssignBeneficiaryModal(btn);
+                    event.preventDefault();
+                } else if (action === 'delete' && typeof confirmDeleteBeneficiary === 'function') {
+                    confirmDeleteBeneficiary(btn);
+                    event.preventDefault();
+                }
+            } catch (err) {
+                console.error('Beneficiary action handler error:', err);
+            }
+        });
+
+        // Click diagnostics (capture-phase) — 用於偵錯：顯示被點擊元素是否有動作屬性或可能的處理器
+        let clickDiagnosticsEnabled = false;
+        function diagnosticListener(ev) {
+            const el = ev.target;
+            const btn = el.closest ? el.closest('button, a, input, [role="button"]') : null;
+            const item = btn || el;
+            if (!item) return;
+
+            const info = {
+                tag: item.tagName,
+                id: item.id || null,
+                classes: item.className || null,
+                hasOnclickAttr: !!item.getAttribute && item.getAttribute('onclick') ? true : false,
+                hasDataAction: !!item.dataset && Object.prototype.hasOwnProperty.call(item.dataset, 'action'),
+                isAnchorWithHref: item.tagName === 'A' && !!item.getAttribute('href'),
+                isSubmitButton: (item.tagName === 'BUTTON' && (item.type === 'submit' || item.getAttribute('type') === 'submit')) || (item.tagName === 'INPUT' && item.type === 'submit'),
+                insideForm: !!item.closest && !!item.closest('form'),
+                computedRole: item.getAttribute ? item.getAttribute('role') : null
+            };
+
+            console.groupCollapsed('[Click Diagnostics] element clicked');
+            console.log(info);
+            console.log('DOM element:', item);
+            console.groupEnd();
+
+            // 顯示快速 toast 在頁面右上，協助無法看 console 的情況
+            const toast = document.createElement('div');
+            toast.className = 'diagnostic-toast';
+            toast.textContent = `${info.tag}${info.hasDataAction? ' [data-action]' : ''}${info.hasOnclickAttr? ' [onclick]' : ''}${info.isAnchorWithHref? ' [href]' : ''}${info.isSubmitButton? ' [submit]' : ''}`;
+            Object.assign(toast.style, {
+                position: 'fixed',
+                right: '20px',
+                top: '80px',
+                background: '#111827',
+                color: '#fff',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                zIndex: 4000,
+                fontSize: '12px',
+                boxShadow: '0 6px 18px rgba(0,0,0,0.2)'
+            });
+            document.body.appendChild(toast);
+            setTimeout(function () { toast.remove(); }, 1800);
+        }
+
+        // 開放切換診斷器的全域函式
+        function enableClickDiagnostics(enable) {
+            if (enable && !clickDiagnosticsEnabled) {
+                document.addEventListener('click', diagnosticListener, true);
+                clickDiagnosticsEnabled = true;
+                console.log('Click diagnostics enabled');
+            } else if (!enable && clickDiagnosticsEnabled) {
+                document.removeEventListener('click', diagnosticListener, true);
+                clickDiagnosticsEnabled = false;
+                console.log('Click diagnostics disabled');
+            }
+        }
+
+        window.enableClickDiagnostics = enableClickDiagnostics;
+        // 預設開啟偵錯（頁面載入即啟用）
+        enableClickDiagnostics(true);
+
         updateActiveNavItem();
     }
 
@@ -219,14 +302,15 @@
 
     function openAddInventoryModal() {
         showModal('新增庫存項目', `
-            <form onsubmit="event.preventDefault(); closeModal(); showNotification('庫存項目已暫存', 'success');">
+            <form method="post" action="?page=inventory">
+                <input type="hidden" name="action" value="add_inventory" />
                 <div class="form-group">
                     <label>項目名稱*</label>
-                    <input type="text" required />
+                    <input type="text" name="item_name" required />
                 </div>
                 <div class="form-group">
                     <label>分類*</label>
-                    <select required>
+                    <select name="category" required>
                         <option value="">--請選擇--</option>
                         <option value="food">食物</option>
                         <option value="supplies">用品</option>
@@ -235,23 +319,23 @@
                 </div>
                 <div class="form-group">
                     <label>初始數量*</label>
-                    <input type="number" step="0.01" required />
+                    <input type="number" name="quantity_on_hand" step="0.01" required />
                 </div>
                 <div class="form-group">
                     <label>單位*</label>
-                    <input type="text" value="件" required />
+                    <input type="text" name="unit" value="件" required />
                 </div>
                 <div class="form-group">
                     <label>重訂點</label>
-                    <input type="number" step="0.01" />
+                    <input type="number" name="reorder_level" step="0.01" />
                 </div>
                 <div class="form-group">
                     <label>保質期</label>
-                    <input type="date" />
+                    <input type="date" name="expiry_date" />
                 </div>
                 <div class="form-group">
                     <label>位置</label>
-                    <input type="text" />
+                    <input type="text" name="location" />
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
@@ -263,38 +347,43 @@
 
     function openAddBeneficiaryModal() {
         showModal('新增受益者', `
-            <form onsubmit="event.preventDefault(); closeModal(); showNotification('受益者資料已暫存', 'success');">
+            <form method="post" action="?page=beneficiaries">
+                <input type="hidden" name="action" value="add_beneficiary" />
                 <div class="form-group">
                     <label>姓名*</label>
                     <div style="display:flex; gap:10px;">
-                        <input type="text" placeholder="名字" required style="flex:1;" />
-                        <input type="text" placeholder="姓氏" required style="flex:1;" />
+                        <input type="text" name="first_name" placeholder="名字" required style="flex:1;" />
+                        <input type="text" name="last_name" placeholder="姓氏" required style="flex:1;" />
                     </div>
                 </div>
                 <div class="form-group">
                     <label>聯繫電話</label>
-                    <input type="tel" />
+                    <input type="tel" name="phone" />
                 </div>
                 <div class="form-group">
                     <label>郵箱</label>
-                    <input type="email" />
+                    <input type="email" name="email" />
                 </div>
                 <div class="form-group">
                     <label>地址</label>
-                    <textarea></textarea>
+                    <textarea name="address"></textarea>
                 </div>
                 <div class="form-group">
                     <label>家庭成員數*</label>
-                    <input type="number" min="1" required />
+                    <input type="number" name="family_size" min="1" required />
                 </div>
                 <div class="form-group">
                     <label>收入級別*</label>
-                    <select required>
+                    <select name="income_level" required>
                         <option value="">--請選擇--</option>
                         <option value="low">低</option>
                         <option value="medium">中</option>
                         <option value="high">高</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label>備註</label>
+                    <textarea name="notes"></textarea>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
@@ -303,6 +392,58 @@
             </form>
         `);
     }
+
+    // 開啟檢視受益者資訊的 modal，接收按鈕元素（包含 data-* 屬性）
+    function openViewBeneficiaryModal(btn) {
+        const d = btn.dataset;
+        const html = `
+            <div class="beneficiary-view">
+                <p><strong>編號：</strong>${escapeHtml(d.beneficiaryCode || '')}</p>
+                <p><strong>姓名：</strong>${escapeHtml(d.firstName || '')} ${escapeHtml(d.lastName || '')}</p>
+                <p><strong>電話：</strong>${escapeHtml(d.phone || '')}</p>
+                <p><strong>郵箱：</strong>${escapeHtml(d.email || '')}</p>
+                <p><strong>地址：</strong>${escapeHtml(d.address || '')}</p>
+                <p><strong>家庭成員數：</strong>${escapeHtml(d.familySize || '')}</p>
+                <p><strong>收入級別：</strong>${escapeHtml(d.incomeLevel || '')}</p>
+                <p><strong>備註：</strong>${escapeHtml(d.notes || '')}</p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
+                </div>
+            </div>
+        `;
+        showModal('受益者資料', html);
+    }
+
+    // 開啟分配 modal，包含簡單的表單，會 POST 到 beneficiaries 頁面處理
+    function openAssignBeneficiaryModal(btn) {
+        const benId = btn.dataset.beneficiaryId;
+        const fullName = btn.dataset.fullName || '';
+        const html = `
+            <form method="post" action="?page=beneficiaries">
+                <input type="hidden" name="action" value="assign_beneficiary" />
+                <input type="hidden" name="beneficiary_id" value="${escapeHtml(benId)}" />
+                <p>為受益者 <strong>${escapeHtml(fullName)}</strong> 建立分配紀錄：</p>
+                <div class="form-group">
+                    <label>備註（選填）</label>
+                    <textarea name="notes"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">建立分配</button>
+                </div>
+            </form>
+        `;
+        showModal('受益者分配', html);
+    }
+
+    // 小型的 HTML escape 函式
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"'`]/g, function (s) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;","`":"&#x60;"})[s];
+        });
+    }
+
 
     function openNewPurchaseModal() {
         showModal('新增採購單', `
@@ -596,6 +737,96 @@
         document.head.appendChild(styleTag);
     }
 
+    // 受益者：檢視、分配、刪除的輔助函式（在 IIFE 中定義，再暴露到 window）
+    function openViewBeneficiaryModal(btn) {
+        const d = btn ? btn.dataset : {};
+        const html = `
+            <div class="beneficiary-view">
+                <p><strong>編號：</strong>${escapeHtml(d.beneficiaryCode || '')}</p>
+                <p><strong>姓名：</strong>${escapeHtml(d.firstName || '')} ${escapeHtml(d.lastName || '')}</p>
+                <p><strong>電話：</strong>${escapeHtml(d.phone || '')}</p>
+                <p><strong>郵箱：</strong>${escapeHtml(d.email || '')}</p>
+                <p><strong>地址：</strong>${escapeHtml(d.address || '')}</p>
+                <p><strong>家庭成員數：</strong>${escapeHtml(d.familySize || '')}</p>
+                <p><strong>收入級別：</strong>${escapeHtml(d.incomeLevel || '')}</p>
+                <p><strong>註冊日期：</strong>${escapeHtml(d.registrationDate || '')}</p>
+                <p><strong>備註：</strong>${escapeHtml(d.notes || '')}</p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
+                </div>
+            </div>
+        `;
+        showModal('受益者資料', html);
+    }
+
+    function openAssignBeneficiaryModal(btn) {
+        const benId = btn ? btn.dataset.beneficiaryId : '';
+        const fullName = btn ? (btn.dataset.fullName || '') : '';
+        const html = `
+            <form method="post" action="?page=beneficiaries">
+                <input type="hidden" name="action" value="assign_beneficiary" />
+                <input type="hidden" name="beneficiary_id" value="${escapeHtml(benId)}" />
+                <p>為受益者 <strong>${escapeHtml(fullName)}</strong> 建立分配紀錄：</p>
+                <div class="form-group">
+                    <label>備註（選填）</label>
+                    <textarea name="notes"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">建立分配</button>
+                </div>
+            </form>
+        `;
+        showModal('受益者分配', html);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>"'`]/g, function (s) {
+            return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;","`":"&#x60;"})[s];
+        });
+    }
+
+    function confirmDeleteBeneficiary(btn) {
+        const benId = btn ? btn.dataset.beneficiaryId : 0;
+        if (!benId) {
+            showNotification('找不到受益者 ID', 'error');
+            return;
+        }
+        if (!confirm('確認要刪除此受益者？此動作無法還原。')) return;
+
+        // 建立隱藏表單並提交，以符合現有後端處理方式
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = '?page=beneficiaries';
+        form.style.display = 'none';
+
+        const actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'delete_beneficiary';
+        form.appendChild(actionInput);
+
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.name = 'beneficiary_id';
+        idInput.value = benId;
+        form.appendChild(idInput);
+
+        const csrf = document.querySelector('meta[name="csrf-token"]');
+        if (csrf) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrf.content;
+            form.appendChild(csrfInput);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // 將需要被全域呼叫的函式暴露到 window
     window.openAddDonationModal = openAddDonationModal;
     window.openAddInventoryModal = openAddInventoryModal;
     window.openAddBeneficiaryModal = openAddBeneficiaryModal;
@@ -606,4 +837,18 @@
     window.exportToCSV = exportToCSV;
     window.printTable = printTable;
     window.showNotification = showNotification;
+
+    // 受益者相關全域函式（供 onclick 屬性使用）
+    if (typeof openViewBeneficiaryModal === 'function') {
+        window.openViewBeneficiaryModal = openViewBeneficiaryModal;
+    }
+    if (typeof openAssignBeneficiaryModal === 'function') {
+        window.openAssignBeneficiaryModal = openAssignBeneficiaryModal;
+    }
+    if (typeof escapeHtml === 'function') {
+        window.escapeHtml = escapeHtml;
+    }
+    if (typeof confirmDeleteBeneficiary === 'function') {
+        window.confirmDeleteBeneficiary = confirmDeleteBeneficiary;
+    }
 })();

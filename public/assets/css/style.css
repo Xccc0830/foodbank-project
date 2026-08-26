@@ -1044,6 +1044,34 @@ form {
    狀態標籤
    ============================================ */
 
+/* 志工排行名次徽章（改為 SVG 獎牌） */
+.rank-badge {
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   width: 36px;
+   height: 36px;
+   line-height: 1;
+}
+
+.rank-badge svg {
+   width: 100%;
+   height: 100%;
+   display: block;
+}
+
+/* 讓前三名的整列略帶色彩（輕微底色） */
+.rank-1 td { background: rgba(212,175,55,0.06); }
+.rank-2 td { background: rgba(192,192,192,0.04); }
+.rank-3 td { background: rgba(205,127,50,0.04); }
+
+/* 限制表格中名次欄寬度，避免過度擠占 */
+.data-table td:first-child, .data-table th:first-child {
+   width: 56px;
+   text-align: center;
+}
+
+
 .status {
     display: inline-flex;
     align-items: center;

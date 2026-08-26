@@ -109,7 +109,73 @@ if (($_GET['export'] ?? '') === 'volunteers_csv') {
                 <thead><tr><th>排名</th><th>志工姓名</th><th>完成配送次數</th><th>累積公益點數</th></tr></thead>
                 <tbody>
                 <?php foreach ($volunteerRanking as $index => $row): ?>
-                    <tr><td><?php echo $index + 1; ?></td><td><?php echo htmlspecialchars($row['full_name']); ?></td><td><?php echo (int) $row['delivery_count']; ?></td><td><strong><?php echo (int) $row['total_points']; ?></strong></td></tr>
+                    <?php $pos = $index + 1; $rankClass = $pos <= 3 ? 'rank-' . $pos : ''; ?>
+                    <tr class="<?php echo $rankClass; ?>">
+                        <td>
+                            <?php if ($pos <= 3): ?>
+                                <?php if ($pos === 1): ?>
+                                    <span class="rank-badge medal medal-1" title="第1名：金牌" aria-label="第一名獎牌">
+                                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+                                            <defs>
+                                                <linearGradient id="g-gold" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stop-color="#FFF7D9" />
+                                                    <stop offset="100%" stop-color="#D4AF37" />
+                                                </linearGradient>
+                                                <linearGradient id="r-gold" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stop-color="#FF7A7A" />
+                                                    <stop offset="100%" stop-color="#FF3B3B" />
+                                                </linearGradient>
+                                            </defs>
+                                            <circle cx="32" cy="22" r="14" fill="url(#g-gold)" stroke="#b88b24" stroke-width="2" />
+                                            <path d="M24 40 L20 60 L32 54 L44 60 L40 40 Z" fill="url(#r-gold)" />
+                                            <text x="32" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="#3b2f00"><?php echo $pos; ?></text>
+                                        </svg>
+                                    </span>
+                                <?php elseif ($pos === 2): ?>
+                                    <span class="rank-badge medal medal-2" title="第2名：銀牌" aria-label="第二名獎牌">
+                                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+                                            <defs>
+                                                <linearGradient id="g-silver" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stop-color="#F6F7F8" />
+                                                    <stop offset="100%" stop-color="#C0C0C0" />
+                                                </linearGradient>
+                                                <linearGradient id="r-silver" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stop-color="#BFC8D1" />
+                                                    <stop offset="100%" stop-color="#9CA6B2" />
+                                                </linearGradient>
+                                            </defs>
+                                            <circle cx="32" cy="22" r="14" fill="url(#g-silver)" stroke="#9ea6ad" stroke-width="2" />
+                                            <path d="M24 40 L20 60 L32 54 L44 60 L40 40 Z" fill="url(#r-silver)" />
+                                            <text x="32" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="#1f2937"><?php echo $pos; ?></text>
+                                        </svg>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="rank-badge medal medal-3" title="第3名：銅牌" aria-label="第三名獎牌">
+                                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+                                            <defs>
+                                                <linearGradient id="g-bronze" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stop-color="#F9EDE1" />
+                                                    <stop offset="100%" stop-color="#CD7F32" />
+                                                </linearGradient>
+                                                <linearGradient id="r-bronze" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stop-color="#E7C1A2" />
+                                                    <stop offset="100%" stop-color="#B66B3A" />
+                                                </linearGradient>
+                                            </defs>
+                                            <circle cx="32" cy="22" r="14" fill="url(#g-bronze)" stroke="#9b5f2a" stroke-width="2" />
+                                            <path d="M24 40 L20 60 L32 54 L44 60 L40 40 Z" fill="url(#r-bronze)" />
+                                            <text x="32" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="#2b1a0e"><?php echo $pos; ?></text>
+                                        </svg>
+                                    </span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <?php echo $pos; ?>
+                            <?php endif; ?>
+                        </td>
+                        <td><?php echo htmlspecialchars($row['full_name']); ?></td>
+                        <td><?php echo (int) $row['delivery_count']; ?></td>
+                        <td><strong><?php echo (int) $row['total_points']; ?></strong></td>
+                    </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>

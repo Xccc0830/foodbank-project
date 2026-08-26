@@ -6,6 +6,29 @@
 require_once BASE_PATH . '/src/models/InventoryModel.php';
 
 $inventoryModel = new InventoryModel();
+$message = null;
+
+// 處理新增庫存項目
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_inventory') {
+    $data = [
+        'item_name' => trim($_POST['item_name'] ?? ''),
+        'category' => trim($_POST['category'] ?? 'other'),
+        'quantity_on_hand' => (float) ($_POST['quantity_on_hand'] ?? 0),
+        'unit' => trim($_POST['unit'] ?? '件'),
+        'reorder_level' => is_numeric($_POST['reorder_level'] ?? null) ? (float) $_POST['reorder_level'] : 0,
+        'expiry_date' => !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null,
+        'location' => trim($_POST['location'] ?? ''),
+        'status' => 'available',
+    ];
+
+    $insertId = $inventoryModel->addInventoryItem($data);
+    if ($insertId) {
+        $message = ['type' => 'success', 'text' => '庫存項目已新增。'];
+    } else {
+        $message = ['type' => 'error', 'text' => '新增庫存項目失敗，請稍後再試。'];
+    }
+}
+
 $inventoryItems = $inventoryModel->getAllInventory();
 $lowStockItems = $inventoryModel->getLowStockItems();
 
