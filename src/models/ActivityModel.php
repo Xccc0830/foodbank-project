@@ -53,6 +53,20 @@ class ActivityModel extends BaseModel {
         );
     }
 
+    public function canUserRegisterActivity($activityId, $userId) {
+        $activityId = (int) $activityId;
+        $userId = (int) $userId;
+        $result = $this->db->query(
+            "SELECT status FROM activity_assignments
+             WHERE activity_id = {$activityId} AND user_id = {$userId}
+             LIMIT 1"
+        );
+        if (!$result) return true;
+        $row = $result->fetch_assoc();
+        if (!$row) return true;
+        return $row['status'] === 'cancelled';
+    }
+
     public function getAssignmentForCertificate($assignmentId) {
         $assignmentId = (int) $assignmentId;
         $result = $this->db->query(
