@@ -1071,6 +1071,183 @@ form {
    text-align: center;
 }
 
+.data-table.recent-donations-table td:first-child,
+.data-table.recent-donations-table th:first-child {
+   width: auto;
+   min-width: 120px;
+   text-align: left;
+}
+
+.data-table.recent-donations-table {
+   min-width: 520px;
+}
+
+.recent-donations-body {
+   overflow-x: auto;
+}
+
+.data-table.recent-donations-table th,
+.data-table.recent-donations-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+}
+
+.data-table.recent-donations-table th:nth-child(2),
+.data-table.recent-donations-table td:nth-child(2) {
+   min-width: 72px;
+}
+
+.data-table.recent-donations-table th:nth-child(3),
+.data-table.recent-donations-table td:nth-child(3) {
+   min-width: 100px;
+}
+
+.donations-table-body {
+   overflow-x: auto;
+}
+
+.data-table.donations-table {
+   min-width: 1320px;
+}
+
+.data-table.donations-table th,
+.data-table.donations-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+.data-table.donations-table th:first-child,
+.data-table.donations-table td:first-child {
+   width: 72px;
+   min-width: 72px;
+}
+
+.data-table.donations-table th:nth-child(2),
+.data-table.donations-table td:nth-child(2) {
+   min-width: 140px;
+}
+
+.activities-table-body {
+   overflow-x: auto;
+}
+
+.data-table.activities-table {
+   min-width: 820px;
+}
+
+.data-table.activities-table th,
+.data-table.activities-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+.data-table.activities-table th:first-child,
+.data-table.activities-table td:first-child {
+   width: auto;
+   min-width: 150px;
+   text-align: left;
+}
+
+.inventory-table-body {
+   overflow-x: auto;
+}
+
+.data-table.inventory-table {
+   min-width: 1120px;
+}
+
+.data-table.inventory-table th,
+.data-table.inventory-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+.data-table.inventory-table th:first-child,
+.data-table.inventory-table td:first-child {
+   width: auto;
+   min-width: 220px;
+   text-align: left;
+}
+
+.beneficiaries-table-body {
+   overflow-x: auto;
+}
+
+.data-table.beneficiaries-table {
+   min-width: 1100px;
+}
+
+.data-table.beneficiaries-table th,
+.data-table.beneficiaries-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+.distribution-notes {
+   display: block;
+   margin-top: 4px;
+   color: var(--text-secondary);
+}
+
+.distribution-history-button {
+   margin-top: 6px;
+}
+
+.distribution-history-table {
+   min-width: 680px;
+}
+
+.distribution-history-table th,
+.distribution-history-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+/* 配送路線允許長地址換行，確保起點與終點完整可見 */
+.data-table td.delivery-route-cell {
+   width: 320px;
+   min-width: 280px;
+   text-align: left;
+   white-space: normal;
+}
+
+.delivery-route {
+   display: flex;
+   align-items: flex-start;
+   gap: 8px;
+   flex-wrap: wrap;
+}
+
+.delivery-route-point {
+   display: flex;
+   align-items: flex-start;
+   gap: 5px;
+   flex: 1 1 130px;
+   min-width: 130px;
+   max-width: none;
+   overflow: visible;
+   overflow-wrap: anywhere;
+   word-break: break-word;
+   white-space: normal;
+}
+
+.delivery-route-point strong {
+   flex: 0 0 auto;
+   color: var(--text-secondary);
+   font-size: 12px;
+   font-weight: 600;
+}
+
+.delivery-route-arrow {
+   flex: 0 0 auto;
+   color: var(--text-secondary);
+}
+
 
 .status {
     display: inline-flex;
@@ -1096,7 +1273,8 @@ form {
 }
 
 .status-rejected,
-.status-inactive {
+.status-inactive,
+.status-low-stock {
     background: rgba(239, 68, 68, 0.1);
     color: #7F1D1D;
 }

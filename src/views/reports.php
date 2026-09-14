@@ -190,10 +190,14 @@ if (($_GET['export'] ?? '') === 'volunteers_csv') {
     <div class="card-body">
         <?php if ($lowStock): ?>
             <table class="data-table">
-                <thead><tr><th>物資名稱</th><th>現有數量</th><th>重訂點</th></tr></thead>
+                <thead><tr><th>物資名稱</th><th>現有數量</th><th>預定數量</th></tr></thead>
                 <tbody>
                 <?php foreach ($lowStock as $row): ?>
-                    <tr><td><?php echo htmlspecialchars($row['item_name']); ?></td><td><?php echo htmlspecialchars($row['quantity_on_hand']); ?> <?php echo htmlspecialchars($row['unit']); ?></td><td><?php echo htmlspecialchars($row['reorder_level']); ?> <?php echo htmlspecialchars($row['unit']); ?></td></tr>
+                    <?php
+                    $quantityDisplay = rtrim(rtrim(number_format((float) $row['quantity_on_hand'], 2, '.', ''), '0'), '.');
+                    $reorderLevelDisplay = rtrim(rtrim(number_format((float) $row['reorder_level'], 2, '.', ''), '0'), '.');
+                    ?>
+                    <tr><td><?php echo htmlspecialchars($row['item_name']); ?></td><td><?php echo htmlspecialchars($quantityDisplay); ?> <?php echo htmlspecialchars($row['unit']); ?></td><td><?php echo htmlspecialchars($reorderLevelDisplay); ?> <?php echo htmlspecialchars($row['unit']); ?></td></tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>

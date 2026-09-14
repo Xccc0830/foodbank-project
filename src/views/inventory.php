@@ -8,6 +8,35 @@ require_once BASE_PATH . '/src/models/InventoryModel.php';
 $inventoryModel = new InventoryModel();
 $message = null;
 
+// 處理編輯庫存項目
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_inventory') {
+    $inventoryId = (int) ($_POST['inventory_id'] ?? 0);
+    $quantity = is_numeric($_POST['quantity_on_hand'] ?? null) ? (float) $_POST['quantity_on_hand'] : -1;
+    $reorderLevel = is_numeric($_POST['reorder_level'] ?? null) ? (float) $_POST['reorder_level'] : 0;
+    $itemName = trim($_POST['item_name'] ?? '');
+    $category = trim($_POST['category'] ?? 'other');
+    $expiryDate = !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null;
+    $location = trim($_POST['location'] ?? '');
+
+    if ($inventoryId <= 0 || $itemName === '' || $quantity < 0 || $reorderLevel < 0) {
+        $message = ['type' => 'error', 'text' => '請確認庫存名稱、數量與預定數量格式正確。'];
+    } else {
+        $status = $quantity <= $reorderLevel ? 'low_stock' : 'available';
+        $updated = $inventoryModel->updateInventoryItem($inventoryId, [
+            'item_name' => $itemName,
+            'category' => $category,
+            'quantity_on_hand' => $quantity,
+            'reorder_level' => $reorderLevel,
+            'expiry_date' => $expiryDate,
+            'location' => $location,
+            'status' => $status,
+        ]);
+        $message = $updated
+            ? ['type' => 'success', 'text' => '庫存項目已更新。']
+            : ['type' => 'error', 'text' => '更新庫存項目失敗，請稍後再試。'];
+    }
+}
+
 // 處理新增庫存項目
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_inventory') {
     $data = [
@@ -18,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_i
         'reorder_level' => is_numeric($_POST['reorder_level'] ?? null) ? (float) $_POST['reorder_level'] : 0,
         'expiry_date' => !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null,
         'location' => trim($_POST['location'] ?? ''),
-        'status' => 'available',
+        'status' => $data['quantity_on_hand'] <= $data['reorder_level'] ? 'low_stock' : 'available',
     ];
 
     $insertId = $inventoryModel->addInventoryItem($data);
@@ -33,14 +62,15 @@ $inventoryItems = $inventoryModel->getAllInventory();
 $lowStockItems = $inventoryModel->getLowStockItems();
 
 $availableItems = array_filter($inventoryItems, function ($i) {
-    return strtolower((string) $i['status']) === 'available';
+    return !in_array(strtolower((string) $i['status']), ['removed', 'expired'], true)
+        && (float) $i['quantity_on_hand'] > 0;
 });
 ?>
 
 <div class="view-header">
     <div>
         <h1 class="view-title">庫存管理</h1>
-        <p class="view-subtitle">管理食物銀行的庫存、重訂點與保存資訊</p>
+        <p class="view-subtitle">管理食物銀行的庫存、預定數量與保存資訊</p>
     </div>
     <button class="btn btn-primary" onclick="openAddInventoryModal()">
         <i class="fas fa-plus"></i> 新增項目
@@ -52,7 +82,7 @@ $availableItems = array_filter($inventoryItems, function ($i) {
         <i class="fas fa-triangle-exclamation"></i>
         <div>
             <strong>庫存不足提醒</strong>
-            <div>目前有 <?php echo count($lowStockItems); ?> 項低於重訂點，請優先補貨。</div>
+            <div>目前有 <?php echo count($lowStockItems); ?> 項低於預定數量，請優先補貨。</div>
         </div>
     </div>
 <?php endif; ?>
@@ -70,16 +100,16 @@ $availableItems = array_filter($inventoryItems, function ($i) {
         </div>
     </div>
 
-    <div class="card-body">
+    <div class="card-body inventory-table-body">
         <?php if (!empty($inventoryItems)): ?>
-            <table class="data-table">
+            <table class="data-table inventory-table">
                 <thead>
                     <tr>
                         <th>項目代碼</th>
                         <th>項目名稱</th>
                         <th>分類</th>
                         <th>現有數量</th>
-                        <th>重訂點</th>
+                        <th>預定數量</th>
                         <th>保質期</th>
                         <th>位置</th>
                         <th>狀態</th>
@@ -90,23 +120,57 @@ $availableItems = array_filter($inventoryItems, function ($i) {
                     <?php foreach ($inventoryItems as $item): ?>
                         <?php
                         $status = strtolower((string) $item['status']);
-                        $statusClass = $status === 'inactive' ? 'inactive' : 'active';
                         $isLow = (float) $item['quantity_on_hand'] <= (float) $item['reorder_level'];
+                        $statusClass = $isLow || $status === 'low_stock' ? 'low-stock' : ($status === 'inactive' ? 'inactive' : 'active');
+                        $categoryLabels = [
+                            'food' => '食物',
+                            'supplies' => '用品',
+                            'other' => '其他',
+                        ];
+                        $statusLabels = [
+                            'available' => '可用',
+                            'low_stock' => '庫存不足',
+                            'expired' => '已過期',
+                            'removed' => '已移除',
+                            'inactive' => '停用',
+                        ];
+                        if ($isLow) {
+                            $statusLabels['available'] = '庫存不足';
+                            $statusLabels['low_stock'] = '庫存不足';
+                        }
                         $expiry = !empty($item['expiry_date']) ? date('Y-m-d', strtotime($item['expiry_date'])) : '-';
+                        $quantityDisplay = rtrim(rtrim(number_format((float) $item['quantity_on_hand'], 2, '.', ''), '0'), '.');
+                        $reorderLevelDisplay = rtrim(rtrim(number_format((float) $item['reorder_level'], 2, '.', ''), '0'), '.');
                         ?>
-                        <tr<?php echo $isLow ? ' style="background: rgba(245, 158, 11, 0.06);"' : ''; ?>>
+                        <tr data-inventory-id="<?php echo (int) $item['inventory_id']; ?>"<?php echo $isLow ? ' style="background: rgba(245, 158, 11, 0.06);"' : ''; ?>>
                             <td><code><?php echo htmlspecialchars($item['item_code']); ?></code></td>
                             <td><strong><?php echo htmlspecialchars($item['item_name']); ?></strong></td>
-                            <td><?php echo htmlspecialchars($item['category']); ?></td>
-                            <td><?php echo htmlspecialchars($item['quantity_on_hand']); ?> <?php echo htmlspecialchars($item['unit']); ?></td>
-                            <td><?php echo htmlspecialchars($item['reorder_level']); ?> <?php echo htmlspecialchars($item['unit']); ?></td>
+                            <td><?php echo htmlspecialchars($categoryLabels[$item['category']] ?? $item['category']); ?></td>
+                            <td><?php echo htmlspecialchars($quantityDisplay); ?> <?php echo htmlspecialchars($item['unit']); ?></td>
+                            <td><?php echo htmlspecialchars($reorderLevelDisplay); ?> <?php echo htmlspecialchars($item['unit']); ?></td>
                             <td><?php echo $expiry; ?></td>
                             <td><?php echo htmlspecialchars($item['location'] ?? '-'); ?></td>
-                            <td><span class="status status-<?php echo $statusClass; ?>"><?php echo htmlspecialchars($item['status']); ?></span></td>
+                            <td><span class="status status-<?php echo $statusClass; ?>"><?php echo htmlspecialchars($statusLabels[$status] ?? $item['status']); ?></span></td>
                             <td>
                                 <div class="btn-group">
-                                    <a href="#" class="btn btn-secondary btn-sm">查看</a>
-                                    <a href="#" class="btn btn-secondary btn-sm">編輯</a>
+                                    <button type="button" class="btn btn-secondary btn-sm" data-action="view-inventory"
+                                        data-code="<?php echo htmlspecialchars($item['item_code'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-name="<?php echo htmlspecialchars($item['item_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-category="<?php echo htmlspecialchars($categoryLabels[$item['category']] ?? $item['category'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-quantity="<?php echo htmlspecialchars($item['quantity_on_hand'] . ' ' . $item['unit'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-reorder-level="<?php echo htmlspecialchars($item['reorder_level'] . ' ' . $item['unit'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-expiry="<?php echo htmlspecialchars($expiry, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-location="<?php echo htmlspecialchars($item['location'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-status="<?php echo htmlspecialchars($statusLabels[$status] ?? $item['status'], ENT_QUOTES, 'UTF-8'); ?>">查看</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" data-action="edit-inventory"
+                                        data-inventory-id="<?php echo (int) $item['inventory_id']; ?>"
+                                        data-code="<?php echo htmlspecialchars($item['item_code'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-name="<?php echo htmlspecialchars($item['item_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-category="<?php echo htmlspecialchars($item['category'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-quantity="<?php echo htmlspecialchars($item['quantity_on_hand'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-reorder-level="<?php echo htmlspecialchars($item['reorder_level'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-expiry="<?php echo htmlspecialchars($expiry, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-location="<?php echo htmlspecialchars($item['location'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">編輯</button>
                                 </div>
                             </td>
                         </tr>

@@ -52,6 +52,39 @@ class InventoryModel extends BaseModel {
     }
 
     /**
+     * 更新庫存項目資料
+     */
+    public function updateInventoryItem($inventory_id, $data) {
+        $inventory_id = (int) $inventory_id;
+        $stmt = $this->db->prepare(
+            "UPDATE {$this->table}
+             SET item_name = ?, category = ?, quantity_on_hand = ?, reorder_level = ?,
+                 expiry_date = ?, location = ?, status = ?, last_updated = NOW()
+             WHERE inventory_id = ?"
+        );
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param(
+            'ssddsssi',
+            $data['item_name'],
+            $data['category'],
+            $data['quantity_on_hand'],
+            $data['reorder_level'],
+            $data['expiry_date'],
+            $data['location'],
+            $data['status'],
+            $inventory_id
+        );
+        $updated = $stmt->execute();
+        $stmt->close();
+
+        return $updated;
+    }
+
+    /**
      * 生成庫存代碼
      */
     private function generateItemCode() {

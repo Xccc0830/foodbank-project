@@ -87,6 +87,19 @@ foreach ($activities as $index => $activity) {
     $activities[$index]['is_creator'] = ((int) ($activity['created_by'] ?? 0)) === (int) $currentUser['user_id'];
 }
 $myAssignments = $activityModel->getUserAssignments((int) $currentUser['user_id']);
+$activityTypeLabels = [
+    'donation_drive' => '物資募集',
+    'briefing' => '說明會',
+    'cleanup' => '環境行動',
+    'promotion' => '公益宣導',
+    'other' => '其他',
+];
+$activityStatusLabels = [
+    'planned' => '已規劃',
+    'ongoing' => '進行中',
+    'completed' => '已完成',
+    'cancelled' => '已取消',
+];
 ?>
 
 <div class="view-header"><div><h1 class="view-title">活動認領</h1><p class="view-subtitle">發布公益活動，讓企業與志工參與在地行動</p></div></div>
@@ -151,9 +164,9 @@ $myAssignments = $activityModel->getUserAssignments((int) $currentUser['user_id'
 </div>
 <?php endif; ?>
 
-<div class="card mt-32"><div class="card-header"><h2>活動列表</h2></div><div class="card-body">
-<?php if ($activities): ?><table class="data-table"><thead><tr><th>活動名稱</th><th>類型</th><th>時間</th><th>參與人數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
-<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><br><small><?php echo htmlspecialchars($activity['description'] ?? ''); ?></small></td><td><?php echo htmlspecialchars($activity['activity_type']); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activity['status']); ?></span></td><td>
+<div class="card mt-32"><div class="card-header"><h2>活動列表</h2></div><div class="card-body activities-table-body">
+<?php if ($activities): ?><table class="data-table activities-table"><thead><tr><th>活動名稱</th><th>類型</th><th>時間</th><th>參與人數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><?php if (!empty($activity['description']) && trim($activity['description']) !== trim($activity['title'])): ?><br><small><?php echo htmlspecialchars($activity['description']); ?></small><?php endif; ?></td><td><?php echo htmlspecialchars($activityTypeLabels[$activity['activity_type']] ?? $activity['activity_type']); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$activity['status']] ?? $activity['status']); ?></span></td><td>
     <?php if ($activity['can_manage']): ?>
         <div class="inline-action-group">
             <form method="post" class="delivery-action-form">
@@ -187,7 +200,7 @@ $myAssignments = $activityModel->getUserAssignments((int) $currentUser['user_id'
     <td><?php echo htmlspecialchars($assignment['title']); ?></td>
     <td><?php echo $assignment['assignment_type'] === 'company' ? '企業認領' : '個人／志工'; ?></td>
     <td><?php echo htmlspecialchars($assignment['organization_name'] ?? '-'); ?></td>
-    <td><span class="status status-<?php echo htmlspecialchars($assignment['activity_status']); ?>"><?php echo htmlspecialchars($assignment['activity_status']); ?></span></td>
+    <td><span class="status status-<?php echo htmlspecialchars($assignment['activity_status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$assignment['activity_status']] ?? $assignment['activity_status']); ?></span></td>
     <td>
         <?php if (($assignment['assignment_status'] ?? 'registered') === 'cancelled'): ?>
             <span class="status status-warning">已取消（24 小時內不可再認領）</span>

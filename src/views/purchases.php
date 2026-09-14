@@ -6,7 +6,7 @@
 $purchases = [
     [
         'code' => 'PUR20260815001',
-        'supplier' => 'ABC 食品供應公司',
+        'supplier_id' => 'supplier-abc',
         'purchase_date' => '2026-08-15',
         'delivery_date' => '2026-08-20',
         'amount' => 5000,
@@ -14,7 +14,7 @@ $purchases = [
     ],
     [
         'code' => 'PUR20260814001',
-        'supplier' => 'XYZ 商貿公司',
+        'supplier_id' => 'supplier-xyz',
         'purchase_date' => '2026-08-14',
         'delivery_date' => '2026-08-18',
         'amount' => 3500,
@@ -24,14 +24,29 @@ $purchases = [
 
 $suppliers = [
     [
+        'id' => 'supplier-abc',
         'name' => 'ABC 食品供應公司',
         'contact' => '王經理',
         'phone' => '010-1234-5678',
         'email' => 'contact@abc.com',
         'city' => '北京',
         'status' => 'active'
+    ],
+    [
+        'id' => 'supplier-xyz',
+        'name' => 'XYZ 商貿公司',
+        'contact' => '李主任',
+        'phone' => '010-9876-5432',
+        'email' => 'contact@xyz.com',
+        'city' => '上海',
+        'status' => 'active'
     ]
 ];
+
+$supplierNames = [];
+foreach ($suppliers as $supplier) {
+    $supplierNames[$supplier['id']] = $supplier['name'];
+}
 ?>
 
 <div class="view-header">
@@ -81,17 +96,28 @@ $suppliers = [
             </thead>
             <tbody>
                 <?php foreach ($purchases as $purchase): ?>
-                    <tr>
+                    <tr data-purchase-code="<?php echo htmlspecialchars($purchase['code'], ENT_QUOTES, 'UTF-8'); ?>"
+                        data-purchase-supplier-id="<?php echo htmlspecialchars($purchase['supplier_id'], ENT_QUOTES, 'UTF-8'); ?>">
                         <td><code><?php echo htmlspecialchars($purchase['code']); ?></code></td>
-                        <td><?php echo htmlspecialchars($purchase['supplier']); ?></td>
+                        <td><?php echo htmlspecialchars($supplierNames[$purchase['supplier_id']] ?? '未指定供應商'); ?></td>
                         <td><?php echo htmlspecialchars($purchase['purchase_date']); ?></td>
                         <td><?php echo htmlspecialchars($purchase['delivery_date']); ?></td>
-                        <td>HK$<?php echo number_format((float) $purchase['amount'], 2); ?></td>
+                        <td>NT$<?php echo number_format((float) $purchase['amount'], 2); ?></td>
                         <td><span class="status status-<?php echo htmlspecialchars($purchase['status']); ?>"><?php echo htmlspecialchars($purchase['status']); ?></span></td>
                         <td>
                             <div class="btn-group">
-                                <a href="#" class="btn btn-secondary btn-sm">查看</a>
-                                <a href="#" class="btn btn-secondary btn-sm">編輯</a>
+                                <button type="button" class="btn btn-secondary btn-sm" data-action="view-purchase"
+                                    data-code="<?php echo htmlspecialchars($purchase['code'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-supplier="<?php echo htmlspecialchars($supplierNames[$purchase['supplier_id']] ?? '未指定供應商', ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-purchase-date="<?php echo htmlspecialchars($purchase['purchase_date'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-delivery-date="<?php echo htmlspecialchars($purchase['delivery_date'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-amount="<?php echo htmlspecialchars(number_format((float) $purchase['amount'], 2), ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-status="<?php echo htmlspecialchars($purchase['status'], ENT_QUOTES, 'UTF-8'); ?>">查看</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-action="edit-purchase"
+                                    data-code="<?php echo htmlspecialchars($purchase['code'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-supplier="<?php echo htmlspecialchars($supplierNames[$purchase['supplier_id']] ?? '未指定供應商', ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-purchase-date="<?php echo htmlspecialchars($purchase['purchase_date'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-delivery-date="<?php echo htmlspecialchars($purchase['delivery_date'], ENT_QUOTES, 'UTF-8'); ?>">編輯</button>
                             </div>
                         </td>
                     </tr>
@@ -128,7 +154,7 @@ $suppliers = [
             </thead>
             <tbody>
                 <?php foreach ($suppliers as $supplier): ?>
-                    <tr>
+                    <tr data-supplier-id="<?php echo htmlspecialchars($supplier['id'], ENT_QUOTES, 'UTF-8'); ?>">
                         <td><strong><?php echo htmlspecialchars($supplier['name']); ?></strong></td>
                         <td><?php echo htmlspecialchars($supplier['contact']); ?></td>
                         <td><?php echo htmlspecialchars($supplier['phone']); ?></td>
@@ -137,8 +163,16 @@ $suppliers = [
                         <td><span class="status status-active">活躍</span></td>
                         <td>
                             <div class="btn-group">
-                                <a href="#" class="btn btn-secondary btn-sm">編輯</a>
-                                <a href="#" class="btn btn-danger btn-sm">刪除</a>
+                                <button type="button" class="btn btn-secondary btn-sm" data-action="edit-supplier"
+                                    data-supplier-id="<?php echo htmlspecialchars($supplier['id'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-name="<?php echo htmlspecialchars($supplier['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-contact="<?php echo htmlspecialchars($supplier['contact'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-phone="<?php echo htmlspecialchars($supplier['phone'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-email="<?php echo htmlspecialchars($supplier['email'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-city="<?php echo htmlspecialchars($supplier['city'], ENT_QUOTES, 'UTF-8'); ?>">編輯</button>
+                                <button type="button" class="btn btn-danger btn-sm" data-action="delete-supplier"
+                                    data-supplier-id="<?php echo htmlspecialchars($supplier['id'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-name="<?php echo htmlspecialchars($supplier['name'], ENT_QUOTES, 'UTF-8'); ?>">刪除</button>
                             </div>
                         </td>
                     </tr>
@@ -162,7 +196,7 @@ $suppliers = [
     <div class="stat-card">
         <h3>本月採購額</h3>
         <div class="stat-number">45,000</div>
-        <p class="stat-label">HKD</p>
+        <p class="stat-label">TWD</p>
     </div>
     <div class="stat-card">
         <h3>活躍供應商</h3>

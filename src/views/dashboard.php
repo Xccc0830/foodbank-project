@@ -85,9 +85,9 @@ $dashboardRoleLabels = [
             <h2>最近捐贈</h2>
             <p>最新捐贈紀錄</p>
         </div>
-        <div class="card-body">
+        <div class="card-body recent-donations-body">
             <?php if (!empty($recentDonations)): ?>
-                <table class="data-table">
+                <table class="data-table recent-donations-table">
                     <thead>
                         <tr>
                             <th>捐贈者</th>
@@ -99,11 +99,24 @@ $dashboardRoleLabels = [
                     <tbody>
                         <?php foreach ($recentDonations as $donation): ?>
                             <?php $statusClass = 'status-' . strtolower(str_replace(' ', '_', (string) $donation['status'])); ?>
+                            <?php
+                            $donationTypeLabels = [
+                                'food' => '食物',
+                                'supplies' => '用品',
+                                'other' => '其他',
+                            ];
+                            $donationStatusLabels = [
+                                'pending' => '待評估',
+                                'approved' => '已批准',
+                                'received' => '已收貨',
+                                'rejected' => '已拒絕',
+                            ];
+                            ?>
                             <tr>
                                 <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($donation['donation_type']); ?></td>
+                                <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type']] ?? $donation['donation_type']); ?></td>
                                 <td><?php echo htmlspecialchars($donation['quantity']); ?> <?php echo htmlspecialchars($donation['unit']); ?></td>
-                                <td><span class="status <?php echo $statusClass; ?>"><?php echo htmlspecialchars($donation['status']); ?></span></td>
+                                <td><span class="status <?php echo $statusClass; ?>"><?php echo htmlspecialchars($donationStatusLabels[$donation['status']] ?? $donation['status']); ?></span></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -132,7 +145,7 @@ $dashboardRoleLabels = [
                         <tr>
                             <th>物品名稱</th>
                             <th>現有數量</th>
-                            <th>重訂點</th>
+                            <th>預定數量</th>
                         </tr>
                     </thead>
                     <tbody>

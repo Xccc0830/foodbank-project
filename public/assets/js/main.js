@@ -74,73 +74,32 @@
                 } else if (action === 'delete' && typeof confirmDeleteBeneficiary === 'function') {
                     confirmDeleteBeneficiary(btn);
                     event.preventDefault();
+                } else if (action === 'distribution-history' && typeof openDistributionHistoryModal === 'function') {
+                    openDistributionHistoryModal(btn);
+                    event.preventDefault();
+                } else if (action === 'view-purchase' && typeof openViewPurchaseModal === 'function') {
+                    openViewPurchaseModal(btn);
+                    event.preventDefault();
+                } else if (action === 'edit-purchase' && typeof openEditPurchaseModal === 'function') {
+                    openEditPurchaseModal(btn);
+                    event.preventDefault();
+                } else if (action === 'edit-supplier' && typeof openEditSupplierModal === 'function') {
+                    openEditSupplierModal(btn);
+                    event.preventDefault();
+                } else if (action === 'delete-supplier' && typeof confirmDeleteSupplier === 'function') {
+                    confirmDeleteSupplier(btn);
+                    event.preventDefault();
+                } else if (action === 'view-inventory' && typeof openViewInventoryModal === 'function') {
+                    openViewInventoryModal(btn);
+                    event.preventDefault();
+                } else if (action === 'edit-inventory' && typeof openEditInventoryModal === 'function') {
+                    openEditInventoryModal(btn);
+                    event.preventDefault();
                 }
             } catch (err) {
-                console.error('Beneficiary action handler error:', err);
+                console.error('Table action handler error:', err);
             }
         });
-
-        // Click diagnostics (capture-phase) — 用於偵錯：顯示被點擊元素是否有動作屬性或可能的處理器
-        let clickDiagnosticsEnabled = false;
-        function diagnosticListener(ev) {
-            const el = ev.target;
-            const btn = el.closest ? el.closest('button, a, input, [role="button"]') : null;
-            const item = btn || el;
-            if (!item) return;
-
-            const info = {
-                tag: item.tagName,
-                id: item.id || null,
-                classes: item.className || null,
-                hasOnclickAttr: !!item.getAttribute && item.getAttribute('onclick') ? true : false,
-                hasDataAction: !!item.dataset && Object.prototype.hasOwnProperty.call(item.dataset, 'action'),
-                isAnchorWithHref: item.tagName === 'A' && !!item.getAttribute('href'),
-                isSubmitButton: (item.tagName === 'BUTTON' && (item.type === 'submit' || item.getAttribute('type') === 'submit')) || (item.tagName === 'INPUT' && item.type === 'submit'),
-                insideForm: !!item.closest && !!item.closest('form'),
-                computedRole: item.getAttribute ? item.getAttribute('role') : null
-            };
-
-            console.groupCollapsed('[Click Diagnostics] element clicked');
-            console.log(info);
-            console.log('DOM element:', item);
-            console.groupEnd();
-
-            // 顯示快速 toast 在頁面右上，協助無法看 console 的情況
-            const toast = document.createElement('div');
-            toast.className = 'diagnostic-toast';
-            toast.textContent = `${info.tag}${info.hasDataAction? ' [data-action]' : ''}${info.hasOnclickAttr? ' [onclick]' : ''}${info.isAnchorWithHref? ' [href]' : ''}${info.isSubmitButton? ' [submit]' : ''}`;
-            Object.assign(toast.style, {
-                position: 'fixed',
-                right: '20px',
-                top: '80px',
-                background: '#111827',
-                color: '#fff',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                zIndex: 4000,
-                fontSize: '12px',
-                boxShadow: '0 6px 18px rgba(0,0,0,0.2)'
-            });
-            document.body.appendChild(toast);
-            setTimeout(function () { toast.remove(); }, 1800);
-        }
-
-        // 開放切換診斷器的全域函式
-        function enableClickDiagnostics(enable) {
-            if (enable && !clickDiagnosticsEnabled) {
-                document.addEventListener('click', diagnosticListener, true);
-                clickDiagnosticsEnabled = true;
-                console.log('Click diagnostics enabled');
-            } else if (!enable && clickDiagnosticsEnabled) {
-                document.removeEventListener('click', diagnosticListener, true);
-                clickDiagnosticsEnabled = false;
-                console.log('Click diagnostics disabled');
-            }
-        }
-
-        window.enableClickDiagnostics = enableClickDiagnostics;
-        // 預設開啟偵錯（頁面載入即啟用）
-        enableClickDiagnostics(true);
 
         updateActiveNavItem();
     }
@@ -326,7 +285,7 @@
                     <input type="text" name="unit" value="件" required />
                 </div>
                 <div class="form-group">
-                    <label>重訂點</label>
+                    <label>預定數量</label>
                     <input type="number" name="reorder_level" step="0.01" />
                 </div>
                 <div class="form-group">
@@ -396,6 +355,7 @@
     // 開啟檢視受益者資訊的 modal，接收按鈕元素（包含 data-* 屬性）
     function openViewBeneficiaryModal(btn) {
         const d = btn.dataset;
+        const incomeLabels = { low: '低', medium: '中', high: '高' };
         const html = `
             <div class="beneficiary-view">
                 <p><strong>編號：</strong>${escapeHtml(d.beneficiaryCode || '')}</p>
@@ -404,7 +364,7 @@
                 <p><strong>郵箱：</strong>${escapeHtml(d.email || '')}</p>
                 <p><strong>地址：</strong>${escapeHtml(d.address || '')}</p>
                 <p><strong>家庭成員數：</strong>${escapeHtml(d.familySize || '')}</p>
-                <p><strong>收入級別：</strong>${escapeHtml(d.incomeLevel || '')}</p>
+                <p><strong>收入級別：</strong>${escapeHtml(incomeLabels[String(d.incomeLevel || '').toLowerCase()] || d.incomeLevel || '')}</p>
                 <p><strong>備註：</strong>${escapeHtml(d.notes || '')}</p>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
@@ -434,6 +394,47 @@
             </form>
         `;
         showModal('受益者分配', html);
+    }
+
+    function openDistributionHistoryModal(btn) {
+        let history = [];
+        try {
+            history = JSON.parse(btn.dataset.history || '[]');
+        } catch (error) {
+            console.error('Unable to load distribution history:', error);
+        }
+
+        const statusLabels = {
+            pending: '已分配',
+            approved: '已批准',
+            completed: '已完成',
+            cancelled: '已取消'
+        };
+        const rows = history.length
+            ? history.map(function (record) {
+                const quantity = Number(record.quantity);
+                const formattedQuantity = Number.isInteger(quantity) ? String(quantity) : String(quantity).replace(/0+$/, '').replace(/\.$/, '');
+                return `<tr>
+                    <td>${escapeHtml(record.date)}</td>
+                    <td>${escapeHtml(record.item)}</td>
+                    <td>${escapeHtml(formattedQuantity + (record.unit || ''))}</td>
+                    <td>${escapeHtml(statusLabels[record.status] || record.status)}</td>
+                    <td>${escapeHtml(record.notes || '-')}</td>
+                </tr>`;
+            }).join('')
+            : '<tr><td colspan="5" class="muted-text">尚未有分配紀錄</td></tr>';
+
+        showModal('分配歷史 - ' + escapeHtml(btn.dataset.fullName || ''), `
+            <div class="inventory-table-body">
+                <table class="data-table distribution-history-table">
+                    <thead><tr><th>分配時間</th><th>物資</th><th>數量</th><th>狀態</th><th>備註</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
+            </div>
+        `);
     }
 
     // 小型的 HTML escape 函式
@@ -509,6 +510,122 @@
                 </div>
             </form>
         `);
+    }
+
+    function openViewPurchaseModal(btn) {
+        const d = btn.dataset;
+        showModal('採購單詳情', `
+            <div class="beneficiary-view">
+                <p><strong>採購編號：</strong>${escapeHtml(d.code)}</p>
+                <p><strong>供應商：</strong>${escapeHtml(d.supplier)}</p>
+                <p><strong>採購日期：</strong>${escapeHtml(d.purchaseDate)}</p>
+                <p><strong>預計交貨：</strong>${escapeHtml(d.deliveryDate)}</p>
+                <p><strong>總金額：</strong>NT$${escapeHtml(d.amount)}</p>
+                <p><strong>狀態：</strong>${escapeHtml(d.status)}</p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
+                </div>
+            </div>
+        `);
+    }
+
+    function openEditPurchaseModal(btn) {
+        const d = btn.dataset;
+        showModal('編輯採購單', `
+            <form onsubmit="event.preventDefault(); closeModal(); showNotification('採購單已更新', 'success');">
+                <div class="form-group"><label>採購編號</label><input type="text" value="${escapeHtml(d.code)}" disabled /></div>
+                <div class="form-group"><label>供應商</label><input type="text" value="${escapeHtml(d.supplier)}" required /></div>
+                <div class="form-group"><label>採購日期</label><input type="date" value="${escapeHtml(d.purchaseDate)}" required /></div>
+                <div class="form-group"><label>預計交貨日期</label><input type="date" value="${escapeHtml(d.deliveryDate)}" /></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        `);
+    }
+
+    function openEditSupplierModal(btn) {
+        const d = btn.dataset;
+        showModal('編輯供應商', `
+            <form onsubmit="event.preventDefault(); closeModal(); showNotification('供應商資料已更新', 'success');">
+                <div class="form-group"><label>供應商名稱*</label><input type="text" value="${escapeHtml(d.name)}" required /></div>
+                <div class="form-group"><label>聯繫人</label><input type="text" value="${escapeHtml(d.contact)}" /></div>
+                <div class="form-group"><label>電話</label><input type="tel" value="${escapeHtml(d.phone)}" /></div>
+                <div class="form-group"><label>郵箱</label><input type="email" value="${escapeHtml(d.email)}" /></div>
+                <div class="form-group"><label>城市</label><input type="text" value="${escapeHtml(d.city)}" /></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        `);
+    }
+
+    function confirmDeleteSupplier(btn) {
+        const supplierId = btn.dataset.supplierId;
+        const supplierName = btn.dataset.name || '此供應商';
+        if (!supplierId) {
+            showNotification('找不到供應商 ID', 'error');
+            return;
+        }
+        if (!confirm(`確認要刪除「${supplierName}」？`)) return;
+        const row = document.querySelector(`tr[data-supplier-id="${CSS.escape(supplierId)}"]`);
+        if (row) row.remove();
+        document.querySelectorAll(`tr[data-purchase-supplier-id="${CSS.escape(supplierId)}"]`).forEach(function (purchaseRow) {
+            purchaseRow.remove();
+        });
+        showNotification('供應商已刪除', 'success');
+    }
+
+    function openViewInventoryModal(btn) {
+        const d = btn.dataset;
+        showModal('庫存項目詳情', `
+            <div class="beneficiary-view">
+                <p><strong>項目代碼：</strong>${escapeHtml(d.code)}</p>
+                <p><strong>項目名稱：</strong>${escapeHtml(d.name)}</p>
+                <p><strong>分類：</strong>${escapeHtml(d.category)}</p>
+                <p><strong>現有數量：</strong>${escapeHtml(d.quantity)}</p>
+                <p><strong>預定數量：</strong>${escapeHtml(d.reorderLevel)}</p>
+                <p><strong>保質期：</strong>${escapeHtml(d.expiry)}</p>
+                <p><strong>位置：</strong>${escapeHtml(d.location)}</p>
+                <p><strong>狀態：</strong>${escapeHtml(d.status)}</p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
+                </div>
+            </div>
+        `);
+    }
+
+    function openEditInventoryModal(btn) {
+        const d = btn.dataset;
+        const quantity = formatInventoryNumber(d.quantity);
+        const reorderLevel = formatInventoryNumber(d.reorderLevel);
+        showModal('編輯庫存項目', `
+            <form method="post" action="?page=inventory">
+                <input type="hidden" name="action" value="update_inventory" />
+                <input type="hidden" name="inventory_id" value="${escapeHtml(d.inventoryId)}" />
+                <div class="form-group"><label>項目代碼</label><input type="text" value="${escapeHtml(d.code)}" disabled /></div>
+                <div class="form-group"><label>項目名稱*</label><input type="text" name="item_name" value="${escapeHtml(d.name)}" required /></div>
+                <div class="form-group"><label>分類</label><select name="category"><option value="food" ${d.category === 'food' ? 'selected' : ''}>食物</option><option value="supplies" ${d.category === 'supplies' ? 'selected' : ''}>用品</option><option value="other" ${d.category === 'other' ? 'selected' : ''}>其他</option></select></div>
+                <div class="form-group"><label>現有數量</label><input type="number" name="quantity_on_hand" value="${escapeHtml(quantity)}" min="0" step="0.01" required /></div>
+                <div class="form-group"><label>預定數量</label><input type="number" name="reorder_level" value="${escapeHtml(reorderLevel)}" min="0" step="0.01" /></div>
+                <div class="form-group"><label>保質期</label><input type="date" name="expiry_date" value="${escapeHtml(d.expiry === '-' ? '' : d.expiry)}" /></div>
+                <div class="form-group"><label>位置</label><input type="text" name="location" value="${escapeHtml(d.location)}" /></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        `);
+    }
+
+    function formatInventoryNumber(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) {
+            return '';
+        }
+        return Number.isInteger(number) ? String(number) : String(number).replace(/0+$/, '').replace(/\.$/, '');
     }
 
     function showModal(title, content) {
@@ -740,6 +857,7 @@
     // 受益者：檢視、分配、刪除的輔助函式（在 IIFE 中定義，再暴露到 window）
     function openViewBeneficiaryModal(btn) {
         const d = btn ? btn.dataset : {};
+        const incomeLabels = { low: '低', medium: '中', high: '高' };
         const html = `
             <div class="beneficiary-view">
                 <p><strong>編號：</strong>${escapeHtml(d.beneficiaryCode || '')}</p>
@@ -748,7 +866,7 @@
                 <p><strong>郵箱：</strong>${escapeHtml(d.email || '')}</p>
                 <p><strong>地址：</strong>${escapeHtml(d.address || '')}</p>
                 <p><strong>家庭成員數：</strong>${escapeHtml(d.familySize || '')}</p>
-                <p><strong>收入級別：</strong>${escapeHtml(d.incomeLevel || '')}</p>
+                <p><strong>收入級別：</strong>${escapeHtml(incomeLabels[String(d.incomeLevel || '').toLowerCase()] || d.incomeLevel || '')}</p>
                 <p><strong>註冊日期：</strong>${escapeHtml(d.registrationDate || '')}</p>
                 <p><strong>備註：</strong>${escapeHtml(d.notes || '')}</p>
                 <div class="modal-actions">
@@ -762,11 +880,30 @@
     function openAssignBeneficiaryModal(btn) {
         const benId = btn ? btn.dataset.beneficiaryId : '';
         const fullName = btn ? (btn.dataset.fullName || '') : '';
+        let inventoryOptions = [];
+        try {
+            inventoryOptions = JSON.parse(btn.dataset.inventoryOptions || '[]');
+        } catch (error) {
+            console.error('Unable to load inventory options:', error);
+        }
+        const inventorySelectOptions = inventoryOptions.length
+            ? inventoryOptions.map(function (item) {
+                return `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}（可分配 ${escapeHtml(item.available)} ${escapeHtml(item.unit)}）</option>`;
+            }).join('')
+            : '<option value="">目前沒有可分配物資</option>';
         const html = `
             <form method="post" action="?page=beneficiaries">
                 <input type="hidden" name="action" value="assign_beneficiary" />
                 <input type="hidden" name="beneficiary_id" value="${escapeHtml(benId)}" />
                 <p>為受益者 <strong>${escapeHtml(fullName)}</strong> 建立分配紀錄：</p>
+                <div class="form-group">
+                    <label>分配物資*</label>
+                    <select name="inventory_id" required>${inventorySelectOptions}</select>
+                </div>
+                <div class="form-group">
+                    <label>分配數量*</label>
+                    <input type="number" name="quantity" min="0.01" step="0.01" required />
+                </div>
                 <div class="form-group">
                     <label>備註（選填）</label>
                     <textarea name="notes"></textarea>
@@ -832,6 +969,12 @@
     window.openAddBeneficiaryModal = openAddBeneficiaryModal;
     window.openNewPurchaseModal = openNewPurchaseModal;
     window.openAddSupplierModal = openAddSupplierModal;
+    window.openViewPurchaseModal = openViewPurchaseModal;
+    window.openEditPurchaseModal = openEditPurchaseModal;
+    window.openEditSupplierModal = openEditSupplierModal;
+    window.confirmDeleteSupplier = confirmDeleteSupplier;
+    window.openViewInventoryModal = openViewInventoryModal;
+    window.openEditInventoryModal = openEditInventoryModal;
     window.closeModal = closeModal;
     window.switchTab = switchTab;
     window.exportToCSV = exportToCSV;
@@ -844,6 +987,9 @@
     }
     if (typeof openAssignBeneficiaryModal === 'function') {
         window.openAssignBeneficiaryModal = openAssignBeneficiaryModal;
+    }
+    if (typeof openDistributionHistoryModal === 'function') {
+        window.openDistributionHistoryModal = openDistributionHistoryModal;
     }
     if (typeof escapeHtml === 'function') {
         window.escapeHtml = escapeHtml;

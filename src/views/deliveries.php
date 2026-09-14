@@ -163,7 +163,13 @@ $deliveries = $deliveryModel->getAllDeliveries();
             <table class="data-table"><thead><tr><th>路線</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($deliveries as $delivery): ?>
                 <tr>
-                    <td><?php echo htmlspecialchars($delivery['pickup_address']); ?> → <?php echo htmlspecialchars($delivery['delivery_address']); ?></td>
+                    <td class="delivery-route-cell" title="<?php echo htmlspecialchars($delivery['pickup_address'] . ' → ' . $delivery['delivery_address'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <div class="delivery-route">
+                            <span class="delivery-route-point"><strong>起點</strong><?php echo htmlspecialchars($delivery['pickup_address']); ?></span>
+                            <span class="delivery-route-arrow" aria-hidden="true">→</span>
+                            <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
+                        </div>
+                    </td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>

@@ -134,9 +134,9 @@ $rejected = array_filter($donations, function ($d) {
         </div>
     </div>
 
-    <div class="card-body">
+    <div class="card-body donations-table-body">
         <?php if (!empty($donations)): ?>
-            <table class="data-table">
+            <table class="data-table donations-table">
                 <thead>
                     <tr>
                         <th>照片</th>
@@ -166,12 +166,17 @@ $rejected = array_filter($donations, function ($d) {
                             'received' => '已收貨',
                             'archived' => '已封存',
                         ];
+                        $donationTypeLabels = [
+                            'food' => '食物',
+                            'supplies' => '用品',
+                            'other' => '其他',
+                        ];
                         ?>
                         <tr>
                             <td><?php if (!empty($donation['photo_path'])): ?><a href="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" target="_blank" rel="noopener"><img src="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" alt="包裝前合照" class="donation-thumb"></a><?php else: ?>－<?php endif; ?></td>
                             <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
                             <td><?php echo htmlspecialchars($donation['item_name'] ?? '-'); ?></td>
-                            <td><?php echo htmlspecialchars($donation['donation_type']); ?></td>
+                            <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type']] ?? $donation['donation_type']); ?></td>
                             <td><?php echo $donation['weight_kg'] !== null ? htmlspecialchars($donation['weight_kg']) . ' kg' : '-'; ?></td>
                             <td><?php echo !empty($donation['pickup_deadline']) ? htmlspecialchars($donation['pickup_deadline']) : '-'; ?></td>
                             <td><?php echo htmlspecialchars($donation['quantity']); ?> <?php echo htmlspecialchars($donation['unit']); ?></td>
