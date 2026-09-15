@@ -36,10 +36,17 @@ function uploadDonationPhoto(array $file) {
     $destinationPath = $destinationDir . '/' . $filename;
 
     if (!is_dir($destinationDir)) {
-        mkdir($destinationDir, 0755, true);
+        // Suppress PHP warnings and return false when filesystem permissions block creation.
+        if (!@mkdir($destinationDir, 0775, true) && !is_dir($destinationDir)) {
+            return false;
+        }
     }
 
-    if (!move_uploaded_file($file['tmp_name'], $destinationPath)) {
+    if (!is_writable($destinationDir)) {
+        return false;
+    }
+
+    if (!@move_uploaded_file($file['tmp_name'], $destinationPath)) {
         return false;
     }
 
