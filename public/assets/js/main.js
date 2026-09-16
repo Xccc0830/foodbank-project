@@ -154,8 +154,8 @@
             }
 
             const statusCell = row.querySelector('.status');
-            const statusText = statusCell ? statusCell.textContent.toLowerCase() : '';
-            row.style.display = statusText.indexOf(normalized) !== -1 ? '' : 'none';
+            const statusValue = statusCell ? (statusCell.dataset.status || statusCell.textContent).toLowerCase() : '';
+            row.style.display = statusValue.indexOf(normalized) !== -1 ? '' : 'none';
         });
     }
 
@@ -445,29 +445,64 @@
         });
     }
 
+    function getPurchaseSupplierOptions(selectedId, selectedName) {
+        const suppliers = Array.isArray(window.purchaseSuppliers) ? window.purchaseSuppliers : [];
+        const options = ['<option value="">未指定供應商</option>'];
+        const selectedSupplierExists = suppliers.some(function (supplier) {
+            return String(supplier.id) === String(selectedId);
+        });
+        if (selectedId && !selectedSupplierExists) {
+            options.push(`<option value="${escapeHtml(selectedId)}" selected>${escapeHtml(selectedName || '目前供應商（已不存在）')}</option>`);
+        }
+        suppliers.forEach(function (supplier) {
+            const selected = String(supplier.id) === String(selectedId) ? ' selected' : '';
+            options.push(`<option value="${escapeHtml(supplier.id)}"${selected}>${escapeHtml(supplier.name)}</option>`);
+        });
+        return options.join('');
+    }
+
+    function getPurchaseStatusOptions(selectedStatus) {
+        const statuses = {
+            draft: '草稿',
+            pending: '待審核',
+            approved: '已批准',
+            received: '已收貨',
+            cancelled: '已取消'
+        };
+        return Object.keys(statuses).map(function (status) {
+            const selected = status === selectedStatus ? ' selected' : '';
+            return `<option value="${status}"${selected}>${statuses[status]}</option>`;
+        }).join('');
+    }
 
     function openNewPurchaseModal() {
         showModal('新增採購單', `
-            <form onsubmit="event.preventDefault(); closeModal(); showNotification('採購單已暫存', 'success');">
+            <form method="post" action="?page=purchases">
+                <input type="hidden" name="action" value="create_purchase">
+                <input type="hidden" name="csrf_token" value="${escapeHtml(document.querySelector('meta[name="csrf-token"]')?.content || '')}">
                 <div class="form-group">
                     <label>供應商*</label>
-                    <select required>
-                        <option value="">--請選擇--</option>
-                        <option value="supplier1">ABC 食品供應公司</option>
-                        <option value="supplier2">XYZ 商貿公司</option>
-                    </select>
+                    <select name="supplier_id" required>${getPurchaseSupplierOptions('')}</select>
                 </div>
                 <div class="form-group">
                     <label>採購日期*</label>
-                    <input type="date" required />
+                    <input type="date" name="purchase_date" required />
                 </div>
                 <div class="form-group">
                     <label>預計交貨日期</label>
-                    <input type="date" />
+                    <input type="date" name="delivery_date" />
+                </div>
+                <div class="form-group">
+                    <label>總金額*</label>
+                    <input type="number" name="total_amount" min="0" step="0.01" required />
+                </div>
+                <div class="form-group">
+                    <label>狀態*</label>
+                    <select name="status" required>${getPurchaseStatusOptions('draft')}</select>
                 </div>
                 <div class="form-group">
                     <label>備註</label>
-                    <textarea></textarea>
+                    <textarea name="notes"></textarea>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
@@ -514,6 +549,13 @@
 
     function openViewPurchaseModal(btn) {
         const d = btn.dataset;
+        const statusLabels = {
+            draft: '草稿',
+            pending: '待審核',
+            approved: '已批准',
+            received: '已收貨',
+            cancelled: '已取消'
+        };
         showModal('採購單詳情', `
             <div class="beneficiary-view">
                 <p><strong>採購編號：</strong>${escapeHtml(d.code)}</p>
@@ -521,7 +563,7 @@
                 <p><strong>採購日期：</strong>${escapeHtml(d.purchaseDate)}</p>
                 <p><strong>預計交貨：</strong>${escapeHtml(d.deliveryDate)}</p>
                 <p><strong>總金額：</strong>NT$${escapeHtml(d.amount)}</p>
-                <p><strong>狀態：</strong>${escapeHtml(d.status)}</p>
+                <p><strong>狀態：</strong>${escapeHtml(statusLabels[d.status] || d.status)}</p>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
                 </div>
@@ -532,11 +574,15 @@
     function openEditPurchaseModal(btn) {
         const d = btn.dataset;
         showModal('編輯採購單', `
-            <form onsubmit="event.preventDefault(); closeModal(); showNotification('採購單已更新', 'success');">
+            <form method="post" action="?page=purchases">
+                <input type="hidden" name="action" value="update_purchase">
+                <input type="hidden" name="csrf_token" value="${escapeHtml(document.querySelector('meta[name="csrf-token"]')?.content || '')}">
+                <input type="hidden" name="purchase_code" value="${escapeHtml(d.code)}">
                 <div class="form-group"><label>採購編號</label><input type="text" value="${escapeHtml(d.code)}" disabled /></div>
-                <div class="form-group"><label>供應商</label><input type="text" value="${escapeHtml(d.supplier)}" required /></div>
-                <div class="form-group"><label>採購日期</label><input type="date" value="${escapeHtml(d.purchaseDate)}" required /></div>
-                <div class="form-group"><label>預計交貨日期</label><input type="date" value="${escapeHtml(d.deliveryDate)}" /></div>
+                <div class="form-group"><label>供應商</label><select name="supplier_id" required>${getPurchaseSupplierOptions(d.supplierId, d.supplier)}</select></div>
+                <div class="form-group"><label>採購日期</label><input type="date" name="purchase_date" value="${escapeHtml(d.purchaseDate)}" required /></div>
+                <div class="form-group"><label>預計交貨日期</label><input type="date" name="delivery_date" value="${escapeHtml(d.deliveryDate)}" /></div>
+                <div class="form-group"><label>狀態</label><select name="status" required>${getPurchaseStatusOptions(d.status)}</select></div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
@@ -570,12 +616,16 @@
             return;
         }
         if (!confirm(`確認要刪除「${supplierName}」？`)) return;
-        const row = document.querySelector(`tr[data-supplier-id="${CSS.escape(supplierId)}"]`);
-        if (row) row.remove();
-        document.querySelectorAll(`tr[data-purchase-supplier-id="${CSS.escape(supplierId)}"]`).forEach(function (purchaseRow) {
-            purchaseRow.remove();
-        });
-        showNotification('供應商已刪除', 'success');
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = '?page=purchases';
+        form.innerHTML = `
+            <input type="hidden" name="action" value="delete_supplier">
+            <input type="hidden" name="supplier_id" value="${escapeHtml(supplierId)}">
+            <input type="hidden" name="csrf_token" value="${escapeHtml(document.querySelector('meta[name="csrf-token"]')?.content || '')}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
     }
 
     function openViewInventoryModal(btn) {

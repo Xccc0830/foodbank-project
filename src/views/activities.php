@@ -184,8 +184,8 @@ $activityStatusLabels = [
         <form method="post" class="delivery-action-form">
             <input type="hidden" name="action" value="register_activity">
             <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
-            <select name="assignment_type" aria-label="認領身分"><option value="individual">個人／志工</option><option value="company">企業認領</option></select>
-            <input type="text" name="organization_name" placeholder="企業／組織名稱（企業認領填寫）">
+            <select name="assignment_type" class="assignment-type-select" aria-label="認領身分"><option value="individual">個人／志工</option><option value="company">企業認領</option></select>
+            <span class="organization-name-field" hidden><input type="text" name="organization_name" placeholder="企業／組織名稱（企業認領填寫）"></span>
             <button class="btn btn-primary btn-sm" type="submit">認領活動</button>
         </form>
     <?php else: ?>
@@ -193,6 +193,26 @@ $activityStatusLabels = [
     <?php endif; ?>
 </td></tr><?php endforeach; ?></tbody></table>
 <?php else: ?><div class="empty-state"><i class="fas fa-calendar"></i><p>目前沒有公開活動</p></div><?php endif; ?></div></div>
+
+<script>
+document.querySelectorAll('.assignment-type-select').forEach(function (select) {
+    const field = select.form.querySelector('.organization-name-field');
+    const input = field.querySelector('input');
+
+    function updateOrganizationField() {
+        const isCompany = select.value === 'company';
+        field.hidden = !isCompany;
+        input.disabled = !isCompany;
+        input.required = isCompany;
+        if (!isCompany) {
+            input.value = '';
+        }
+    }
+
+    select.addEventListener('change', updateOrganizationField);
+    updateOrganizationField();
+});
+</script>
 
 <div class="card mt-32"><div class="card-header"><h2>我的認領紀錄</h2><p>活動結束後可下載企業永續認證證書</p></div><div class="card-body">
 <?php if ($myAssignments): ?><table class="data-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>

@@ -12,7 +12,7 @@ class RewardModel extends BaseModel {
         $userId = (int) $userId;
         $result = $this->db->query("SELECT COALESCE(SUM(points), 0) AS balance FROM point_transactions WHERE user_id = {$userId}");
         $row = $result ? $result->fetch_assoc() : null;
-        return $row ? (int) $row['balance'] : 0;
+        return max(0, $row ? (int) $row['balance'] : 0);
     }
 
     public function getActiveCatalog() {
@@ -51,6 +51,14 @@ class RewardModel extends BaseModel {
 
         $this->db->begin_transaction();
         try {
+            $balanceResult = $this->db->query("SELECT COALESCE(SUM(points), 0) AS balance FROM point_transactions WHERE user_id = {$userId}");
+            $balanceRow = $balanceResult ? $balanceResult->fetch_assoc() : null;
+            $currentBalance = max(0, $balanceRow ? (int) $balanceRow['balance'] : 0);
+            if ($currentBalance < $cost) {
+                $this->db->rollback();
+                return false;
+            }
+
             $this->db->query("INSERT INTO point_transactions (user_id, points, transaction_type, description) VALUES ({$userId}, -{$cost}, 'redeemed', '兌換獎勵')");
             $this->db->query("INSERT INTO reward_redemptions (user_id, reward_id, points_spent, status) VALUES ({$userId}, {$rewardId}, {$cost}, 'pending')");
 

@@ -3,51 +3,121 @@
  * 採購管理視圖 - SaaS 風格迭代
  */
 
-$purchases = [
-    [
-        'code' => 'PUR20260815001',
-        'supplier_id' => 'supplier-abc',
-        'purchase_date' => '2026-08-15',
-        'delivery_date' => '2026-08-20',
-        'amount' => 5000,
-        'status' => 'pending'
-    ],
-    [
-        'code' => 'PUR20260814001',
-        'supplier_id' => 'supplier-xyz',
-        'purchase_date' => '2026-08-14',
-        'delivery_date' => '2026-08-18',
-        'amount' => 3500,
-        'status' => 'approved'
-    ]
-];
+$supplierResult = $connection->query('SELECT supplier_id, supplier_name, contact_person, phone, email, city, status FROM suppliers ORDER BY supplier_id');
+$suppliers = [];
+if ($supplierResult) {
+    while ($supplier = $supplierResult->fetch_assoc()) {
+        $suppliers[] = [
+            'id' => (string) $supplier['supplier_id'],
+            'name' => $supplier['supplier_name'],
+            'contact' => $supplier['contact_person'] ?? '',
+            'phone' => $supplier['phone'] ?? '',
+            'email' => $supplier['email'] ?? '',
+            'city' => $supplier['city'] ?? '',
+            'status' => $supplier['status']
+        ];
+    }
+}
 
-$suppliers = [
-    [
-        'id' => 'supplier-abc',
-        'name' => 'ABC 食品供應公司',
-        'contact' => '王經理',
-        'phone' => '010-1234-5678',
-        'email' => 'contact@abc.com',
-        'city' => '北京',
-        'status' => 'active'
-    ],
-    [
-        'id' => 'supplier-xyz',
-        'name' => 'XYZ 商貿公司',
-        'contact' => '李主任',
-        'phone' => '010-9876-5432',
-        'email' => 'contact@xyz.com',
-        'city' => '上海',
-        'status' => 'active'
-    ]
-];
+if (count($suppliers) === 0) {
+    $seedSuppliers = [
+        ['ABC001', 'ABC 食品供應公司', '王經理', '010-1234-5678', 'contact@abc.com', '北京'],
+        ['XYZ001', 'XYZ 商貿公司', '李主任', '010-9876-5432', 'contact@xyz.com', '上海']
+    ];
+    $insertSupplier = $connection->prepare('INSERT INTO suppliers (supplier_code, supplier_name, contact_person, phone, email, city, status) VALUES (?, ?, ?, ?, ?, ?, "active")');
+    if (!$insertSupplier) {
+        throw new RuntimeException('無法準備供應商初始化資料。');
+    }
+    foreach ($seedSuppliers as $seedSupplier) {
+        [$supplierCode, $supplierName, $contactPerson, $phone, $email, $city] = $seedSupplier;
+        $insertSupplier->bind_param('ssssss', $supplierCode, $supplierName, $contactPerson, $phone, $email, $city);
+        if (!$insertSupplier->execute()) {
+            throw new RuntimeException('供應商初始化失敗：' . $insertSupplier->error);
+        }
+    }
+    $supplierResult = $connection->query('SELECT supplier_id, supplier_name, contact_person, phone, email, city, status FROM suppliers ORDER BY supplier_id');
+    while ($supplier = $supplierResult->fetch_assoc()) {
+        $suppliers[] = [
+            'id' => (string) $supplier['supplier_id'],
+            'name' => $supplier['supplier_name'],
+            'contact' => $supplier['contact_person'] ?? '',
+            'phone' => $supplier['phone'] ?? '',
+            'email' => $supplier['email'] ?? '',
+            'city' => $supplier['city'] ?? '',
+            'status' => $supplier['status']
+        ];
+    }
+}
 
 $supplierNames = [];
 foreach ($suppliers as $supplier) {
     $supplierNames[$supplier['id']] = $supplier['name'];
 }
+
+$purchaseResult = $connection->query('SELECT purchase_code, supplier_id, purchase_date, delivery_date, total_amount, status FROM purchases ORDER BY purchase_date DESC, purchase_id DESC');
+$purchases = [];
+if ($purchaseResult) {
+    while ($purchase = $purchaseResult->fetch_assoc()) {
+        $purchases[] = [
+            'code' => $purchase['purchase_code'],
+            'supplier_id' => (string) ($purchase['supplier_id'] ?? ''),
+            'purchase_date' => $purchase['purchase_date'],
+            'delivery_date' => $purchase['delivery_date'] ?? '',
+            'amount' => (float) ($purchase['total_amount'] ?? 0),
+            'status' => $purchase['status']
+        ];
+    }
+}
+
+if (count($purchases) === 0 && count($suppliers) >= 2) {
+    $seedPurchases = [
+        ['PUR20260815001', (int) $suppliers[0]['id'], $suppliers[0]['name'], '2026-08-15', '2026-08-20', 5000, 'pending'],
+        ['PUR20260814001', (int) $suppliers[1]['id'], $suppliers[1]['name'], '2026-08-14', '2026-08-18', 3500, 'approved']
+    ];
+    $insertPurchase = $connection->prepare('INSERT INTO purchases (purchase_code, supplier_id, supplier_name, purchase_date, delivery_date, total_amount, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    if (!$insertPurchase) {
+        throw new RuntimeException('無法準備採購單初始化資料。');
+    }
+    foreach ($seedPurchases as $seedPurchase) {
+        [$purchaseCode, $supplierId, $supplierName, $purchaseDate, $deliveryDate, $totalAmount, $status] = $seedPurchase;
+        $insertPurchase->bind_param('sisssds', $purchaseCode, $supplierId, $supplierName, $purchaseDate, $deliveryDate, $totalAmount, $status);
+        if (!$insertPurchase->execute()) {
+            throw new RuntimeException('採購單初始化失敗：' . $insertPurchase->error);
+        }
+    }
+    $purchaseResult = $connection->query('SELECT purchase_code, supplier_id, purchase_date, delivery_date, total_amount, status FROM purchases ORDER BY purchase_date DESC, purchase_id DESC');
+    while ($purchase = $purchaseResult->fetch_assoc()) {
+        $purchases[] = [
+            'code' => $purchase['purchase_code'],
+            'supplier_id' => (string) ($purchase['supplier_id'] ?? ''),
+            'purchase_date' => $purchase['purchase_date'],
+            'delivery_date' => $purchase['delivery_date'] ?? '',
+            'amount' => (float) ($purchase['total_amount'] ?? 0),
+            'status' => $purchase['status']
+        ];
+    }
+}
+
+$purchaseStatusLabels = [
+    'draft' => '草稿',
+    'pending' => '待審核',
+    'approved' => '已批准',
+    'received' => '已收貨',
+    'cancelled' => '已取消'
+];
+
+$supplierOptions = [];
+foreach ($suppliers as $supplier) {
+    $supplierOptions[] = [
+        'id' => $supplier['id'],
+        'name' => $supplier['name']
+    ];
+}
 ?>
+
+<script>
+    window.purchaseSuppliers = <?php echo json_encode($supplierOptions, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+</script>
 
 <div class="view-header">
     <div>
@@ -103,11 +173,12 @@ foreach ($suppliers as $supplier) {
                         <td><?php echo htmlspecialchars($purchase['purchase_date']); ?></td>
                         <td><?php echo htmlspecialchars($purchase['delivery_date']); ?></td>
                         <td>NT$<?php echo number_format((float) $purchase['amount'], 2); ?></td>
-                        <td><span class="status status-<?php echo htmlspecialchars($purchase['status']); ?>"><?php echo htmlspecialchars($purchase['status']); ?></span></td>
+                        <td><span class="status status-<?php echo htmlspecialchars($purchase['status']); ?>" data-status="<?php echo htmlspecialchars($purchase['status']); ?>"><?php echo htmlspecialchars($purchaseStatusLabels[$purchase['status']] ?? $purchase['status']); ?></span></td>
                         <td>
                             <div class="btn-group">
                                 <button type="button" class="btn btn-secondary btn-sm" data-action="view-purchase"
                                     data-code="<?php echo htmlspecialchars($purchase['code'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-supplier-id="<?php echo htmlspecialchars($purchase['supplier_id'], ENT_QUOTES, 'UTF-8'); ?>"
                                     data-supplier="<?php echo htmlspecialchars($supplierNames[$purchase['supplier_id']] ?? '未指定供應商', ENT_QUOTES, 'UTF-8'); ?>"
                                     data-purchase-date="<?php echo htmlspecialchars($purchase['purchase_date'], ENT_QUOTES, 'UTF-8'); ?>"
                                     data-delivery-date="<?php echo htmlspecialchars($purchase['delivery_date'], ENT_QUOTES, 'UTF-8'); ?>"
@@ -115,6 +186,7 @@ foreach ($suppliers as $supplier) {
                                     data-status="<?php echo htmlspecialchars($purchase['status'], ENT_QUOTES, 'UTF-8'); ?>">查看</button>
                                 <button type="button" class="btn btn-secondary btn-sm" data-action="edit-purchase"
                                     data-code="<?php echo htmlspecialchars($purchase['code'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-supplier-id="<?php echo htmlspecialchars($purchase['supplier_id'], ENT_QUOTES, 'UTF-8'); ?>"
                                     data-supplier="<?php echo htmlspecialchars($supplierNames[$purchase['supplier_id']] ?? '未指定供應商', ENT_QUOTES, 'UTF-8'); ?>"
                                     data-purchase-date="<?php echo htmlspecialchars($purchase['purchase_date'], ENT_QUOTES, 'UTF-8'); ?>"
                                     data-delivery-date="<?php echo htmlspecialchars($purchase['delivery_date'], ENT_QUOTES, 'UTF-8'); ?>">編輯</button>
@@ -140,7 +212,7 @@ foreach ($suppliers as $supplier) {
         </div>
     </div>
     <div class="card-body">
-        <table class="data-table">
+        <table class="data-table suppliers-table">
             <thead>
                 <tr>
                     <th>供應商名稱</th>
@@ -185,22 +257,26 @@ foreach ($suppliers as $supplier) {
 <div class="stats-grid mt-20">
     <div class="stat-card">
         <h3>本月採購單</h3>
-        <div class="stat-number">12</div>
+        <div class="stat-number"><?php echo count($purchases); ?></div>
         <p class="stat-label">筆採購單</p>
     </div>
     <div class="stat-card">
-        <h3>待審核</h3>
-        <div class="stat-number">3</div>
-        <p class="stat-label">筆待審核</p>
+        <h3>待審核採購單</h3>
+        <div class="stat-number"><?php echo count(array_filter($purchases, static function ($purchase) {
+            return $purchase['status'] === 'pending';
+        })); ?></div>
+        <p class="stat-label">上方採購清單中的待審核項目</p>
     </div>
     <div class="stat-card">
         <h3>本月採購額</h3>
-        <div class="stat-number">45,000</div>
+        <div class="stat-number"><?php echo number_format(array_sum(array_column($purchases, 'amount'))); ?></div>
         <p class="stat-label">TWD</p>
     </div>
     <div class="stat-card">
         <h3>活躍供應商</h3>
-        <div class="stat-number">8</div>
+        <div class="stat-number"><?php echo count(array_filter($suppliers, static function ($supplier) {
+            return $supplier['status'] === 'active';
+        })); ?></div>
         <p class="stat-label">家供應商</p>
     </div>
 </div>

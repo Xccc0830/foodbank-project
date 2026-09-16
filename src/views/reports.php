@@ -3,11 +3,12 @@
  * 數據分析與報表
  */
 
-if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff'], true)) {
+if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff', 'volunteer'], true)) {
     echo '<div class="alert alert-error">只有食物銀行官方人員可以查看數據分析。</div>';
     return;
 }
 
+$isVolunteer = ($currentUser['role'] ?? '') === 'volunteer';
 $connection = $db->getConnection();
 $startDate = $_GET['start_date'] ?? date('Y-m-d', strtotime('-30 days'));
 $endDate = $_GET['end_date'] ?? date('Y-m-d');
@@ -34,7 +35,7 @@ $matchRate = $deliveryTotal > 0 ? round($deliveryStats['delivered'] / $deliveryT
 
 $volunteerRanking = [];
 $result = $connection->query(
-    "SELECT u.full_name, COUNT(DISTINCT d.delivery_id) AS delivery_count, COALESCE(SUM(pt.points), 0) AS total_points
+    "SELECT u.full_name, COUNT(DISTINCT d.delivery_id) AS delivery_count, GREATEST(COALESCE(SUM(pt.points), 0), 0) AS total_points
      FROM users u
      LEFT JOIN deliveries d ON d.volunteer_id = u.user_id AND d.status = 'delivered'
      LEFT JOIN point_transactions pt ON pt.user_id = u.user_id AND pt.transaction_type = 'earned'
@@ -57,7 +58,7 @@ if ($result) {
     }
 }
 
-if (($_GET['export'] ?? '') === 'volunteers_csv') {
+if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="volunteer_ranking.csv"');
     $output = fopen('php://output', 'w');
@@ -73,11 +74,12 @@ if (($_GET['export'] ?? '') === 'volunteers_csv') {
 
 <div class="view-header">
     <div>
-        <h1 class="view-title">數據分析</h1>
-        <p class="view-subtitle">查詢指定期間的物資流動、任務媒合率與志工排行</p>
+        <h1 class="view-title"><?php echo $isVolunteer ? '榮譽榜' : '數據分析'; ?></h1>
+        <p class="view-subtitle"><?php echo $isVolunteer ? '查看平台志工公益點數與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與志工排行'; ?></p>
     </div>
 </div>
 
+<?php if (!$isVolunteer): ?>
 <div class="card">
     <div class="card-body">
         <form method="get" class="toolbar-row compact">
@@ -88,19 +90,22 @@ if (($_GET['export'] ?? '') === 'volunteers_csv') {
         </form>
     </div>
 </div>
+<?php endif; ?>
 
+<?php if (!$isVolunteer): ?>
 <div class="stats-grid mt-20">
     <div class="stat-card"><h3>待評估捐贈</h3><div class="stat-number"><?php echo $donationStats['pending'] ?? 0; ?></div><p class="stat-label">筆</p></div>
     <div class="stat-card"><h3>已批准捐贈</h3><div class="stat-number"><?php echo $donationStats['approved'] ?? 0; ?></div><p class="stat-label">筆</p></div>
     <div class="stat-card"><h3>任務媒合率</h3><div class="stat-number"><?php echo $matchRate; ?>%</div><p class="stat-label">已配達 / 全部任務</p></div>
     <div class="stat-card"><h3>異常任務</h3><div class="stat-number"><?php echo $deliveryStats['exception']; ?></div><p class="stat-label">筆待處理</p></div>
 </div>
+<?php endif; ?>
 
 <div class="card mt-32">
     <div class="card-header">
         <div class="toolbar-row">
             <div><h2>志工配送排行</h2><p class="toolbar-meta">依累積公益點數排序</p></div>
-            <div class="toolbar-actions"><a class="btn btn-secondary btn-sm" href="?page=reports&amp;start_date=<?php echo urlencode($startDate); ?>&amp;end_date=<?php echo urlencode($endDate); ?>&amp;export=volunteers_csv"><i class="fas fa-download"></i> 匯出 CSV</a></div>
+            <?php if (!$isVolunteer): ?><div class="toolbar-actions"><a class="btn btn-secondary btn-sm" href="?page=reports&amp;start_date=<?php echo urlencode($startDate); ?>&amp;end_date=<?php echo urlencode($endDate); ?>&amp;export=volunteers_csv"><i class="fas fa-download"></i> 匯出 CSV</a></div><?php endif; ?>
         </div>
     </div>
     <div class="card-body">
@@ -185,6 +190,7 @@ if (($_GET['export'] ?? '') === 'volunteers_csv') {
     </div>
 </div>
 
+<?php if (!$isVolunteer): ?>
 <div class="card mt-32">
     <div class="card-header"><h2>低庫存項目</h2><p>需優先補貨的物資</p></div>
     <div class="card-body">
@@ -205,4 +211,5 @@ if (($_GET['export'] ?? '') === 'volunteers_csv') {
             <div class="empty-state"><i class="fas fa-boxes-stacked"></i><p>目前沒有低庫存項目</p></div>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
 </div>

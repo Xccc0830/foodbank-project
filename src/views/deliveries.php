@@ -16,8 +16,12 @@ $isVolunteer = $currentRole === 'volunteer';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'create_delivery') {
+        if (!$isOfficial) {
+            $message = ['type' => 'error', 'text' => '志工只能選擇接單，無法發布配送任務。'];
+        } else {
         $data = [
-            'donation_id' => (int) ($_POST['donation_id'] ?? 0),
+            'donation_id' => $_POST['donation_id'] ?? null,
+            'delivery_method' => $_POST['delivery_method'] ?? 'volunteer',
             'vehicle_type' => $_POST['vehicle_type'] ?? 'motorcycle',
             'total_distance_km' => (float) ($_POST['total_distance_km'] ?? 0),
             'weight_kg' => (float) ($_POST['weight_kg'] ?? 0),
@@ -26,9 +30,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'delivery_address' => trim($_POST['delivery_address'] ?? '忠信食物銀行'),
             'created_by' => $currentUserId,
         ];
-        $message = $deliveryModel->createDelivery($data)
-            ? ['type' => 'success', 'text' => '配送任務已發布，志工可自主接單。']
+        $createdDeliveryId = $deliveryModel->createDelivery($data);
+        $message = $createdDeliveryId
+            ? ['type' => 'success', 'text' => '配送任務已發布，並依選擇的運送方式處理。']
             : ['type' => 'error', 'text' => '配送任務發布失敗。'];
+        }
     } elseif ($action === 'claim_delivery') {
         $message = $isVolunteer && $deliveryModel->claimDelivery((int) $_POST['delivery_id'], $currentUserId)
             ? ['type' => 'success', 'text' => '任務已由目前志工接單。']
@@ -46,14 +52,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '已確認送達，公益點數已記錄。']
             : ['type' => 'error', 'text' => '送達確認失敗。'];
     } elseif ($action === 'load_edit_delivery') {
+        if (!$isOfficial) {
+            $message = ['type' => 'error', 'text' => '志工無法編輯配送任務。'];
+        } else {
         $editingDelivery = $deliveryModel->getDeliveryById((int) $_POST['delivery_id']);
         if (!$editingDelivery || !$deliveryModel->canManageDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole)) {
             $message = ['type' => 'error', 'text' => '您無權編輯此配送任務。'];
             $editingDelivery = null;
         }
+        }
     } elseif ($action === 'update_delivery') {
+        if (!$isOfficial) {
+            $message = ['type' => 'error', 'text' => '志工無法更新配送任務。'];
+            $updated = false;
+        } else {
         $updated = $deliveryModel->updateDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole, [
-            'donation_id' => (int) ($_POST['donation_id'] ?? 0),
+            'donation_id' => $_POST['donation_id'] ?? null,
+            'delivery_method' => $_POST['delivery_method'] ?? 'volunteer',
             'vehicle_type' => $_POST['vehicle_type'] ?? 'motorcycle',
             'total_distance_km' => (float) ($_POST['total_distance_km'] ?? 0),
             'weight_kg' => (float) ($_POST['weight_kg'] ?? 0),
@@ -64,14 +79,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $updated
             ? ['type' => 'success', 'text' => '配送任務已更新。']
             : ['type' => 'error', 'text' => '更新失敗，只有任務發起人或食物銀行／管理者可編輯。'];
+        }
     } elseif ($action === 'delete_delivery') {
+        if (!$isOfficial) {
+            $message = ['type' => 'error', 'text' => '志工無法刪除配送任務。'];
+        } else {
         $message = $deliveryModel->deleteDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole)
             ? ['type' => 'success', 'text' => '已刪除配送任務。']
             : ['type' => 'error', 'text' => '刪除失敗，僅能刪除自己發布的配送任務，或由食物銀行／管理者處理。'];
+        }
     }
 }
 
 $deliveries = $deliveryModel->getAllDeliveries();
+$completedDeliveries = array_filter($deliveries, static function ($delivery) use ($isOfficial, $currentUserId) {
+    return $delivery['status'] === 'delivered'
+        && ($isOfficial || (int) ($delivery['volunteer_id'] ?? 0) === $currentUserId);
+});
+$pendingDeliveries = array_filter($deliveries, static function ($delivery) {
+    return $delivery['status'] !== 'delivered';
+});
 ?>
 
 <div class="view-header">
@@ -86,12 +113,14 @@ $deliveries = $deliveryModel->getAllDeliveries();
 <?php endif; ?>
 
 <div class="grid-2">
+    <?php if ($isOfficial): ?>
     <div class="card">
         <div class="card-header"><h2>發布配送任務</h2><p>依規劃書公式預先計算公益點數</p></div>
         <div class="card-body">
             <form method="post">
                 <input type="hidden" name="action" value="create_delivery">
-                <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0"></div>
+                <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" max="2147483647" placeholder="可留白"></div>
+                <div class="form-group"><label>運送方式*</label><select name="delivery_method" required><option value="food_bank">食物銀行方自行接單</option><option value="volunteer" selected>志工／外送員接單</option><option value="donor">捐贈方自行運送至食物銀行</option></select></div>
                 <div class="grid-2">
                     <div class="form-group"><label>交通工具</label><select name="vehicle_type"><option value="motorcycle">機車</option><option value="car">汽車</option></select></div>
                     <div class="form-group"><label>總配送距離（公里）*</label><input type="number" name="total_distance_km" min="0" step="0.1" required></div>
@@ -106,6 +135,7 @@ $deliveries = $deliveryModel->getAllDeliveries();
             </form>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="card">
         <div class="card-header"><h2>點數規則</h2><p>公益點數不具現金兌換功能</p></div>
@@ -129,6 +159,11 @@ $deliveries = $deliveryModel->getAllDeliveries();
             <input type="hidden" name="delivery_id" value="<?php echo (int) $editingDelivery['delivery_id']; ?>">
             <div class="grid-2">
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" value="<?php echo (int) ($editingDelivery['donation_id'] ?? 0); ?>"></div>
+                <div class="form-group"><label>運送方式*</label><select name="delivery_method" required>
+                    <option value="food_bank" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'food_bank' ? 'selected' : ''; ?>>食物銀行方自行接單</option>
+                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>志工／外送員接單</option>
+                    <option value="donor" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'donor' ? 'selected' : ''; ?>>捐贈方自行運送至食物銀行</option>
+                </select></div>
                 <div class="form-group"><label>交通工具</label><select name="vehicle_type">
                     <option value="motorcycle" <?php echo $editingDelivery['vehicle_type'] === 'motorcycle' ? 'selected' : ''; ?>>機車</option>
                     <option value="car" <?php echo $editingDelivery['vehicle_type'] === 'car' ? 'selected' : ''; ?>>汽車</option>
@@ -157,12 +192,12 @@ $deliveries = $deliveryModel->getAllDeliveries();
 <?php endif; ?>
 
 <div class="card mt-32">
-    <div class="card-header"><h2>任務列表</h2><p>目前共 <?php echo count($deliveries); ?> 筆任務</p></div>
-    <div class="card-body">
-        <?php if ($deliveries): ?>
-            <table class="data-table"><thead><tr><th>路線</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
-            <?php foreach ($deliveries as $delivery): ?>
-                <tr>
+    <div class="card-header"><h2>未完成任務</h2><p>目前共 <?php echo count($pendingDeliveries); ?> 筆任務</p></div>
+    <div class="card-body deliveries-table-body">
+        <?php if ($pendingDeliveries): ?>
+            <table class="data-table deliveries-table"><thead><tr><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <?php foreach ($pendingDeliveries as $delivery): ?>
+                <tr id="delivery-<?php echo (int) $delivery['delivery_id']; ?>">
                     <td class="delivery-route-cell" title="<?php echo htmlspecialchars($delivery['pickup_address'] . ' → ' . $delivery['delivery_address'], ENT_QUOTES, 'UTF-8'); ?>">
                         <div class="delivery-route">
                             <span class="delivery-route-point"><strong>起點</strong><?php echo htmlspecialchars($delivery['pickup_address']); ?></span>
@@ -170,6 +205,7 @@ $deliveries = $deliveryModel->getAllDeliveries();
                             <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
                         </div>
                     </td>
+                    <td><?php echo ['food_bank' => '食物銀行方自行接單', 'volunteer' => '志工／外送員接單', 'donor' => '捐贈方自行運送'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
@@ -178,10 +214,10 @@ $deliveries = $deliveryModel->getAllDeliveries();
                     <td><span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ['open' => '待接單', 'claimed' => '已接單', 'picked_up' => '已取貨', 'delivered' => '已配達', 'exception' => '異常待處理'][$delivery['status']] ?? $delivery['status']; ?></span></td>
                     <td>
                         <div class="delivery-action-stack">
-                            <?php if ($isVolunteer && $delivery['status'] === 'open'): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm">接單</button></form><?php endif; ?>
+                            <?php if ($isVolunteer && ($delivery['delivery_method'] ?? 'volunteer') === 'volunteer' && $delivery['status'] === 'open'): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm">接單</button></form><?php endif; ?>
                             <?php if ($isVolunteer && $delivery['status'] === 'claimed' && (int) $delivery['volunteer_id'] === $currentUserId): ?><form method="post" class="delivery-action-form delivery-action-form-check"><input type="hidden" name="action" value="confirm_pickup"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><label><input type="checkbox" name="seal_intact" required> 防拆貼紙完整</label><label><input type="checkbox" name="item_count_confirmed" required> 已清點物資</label><button class="btn btn-primary btn-sm">確認取貨</button></form><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="report_exception"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><input name="exception_notes" placeholder="異常原因" required><button class="btn btn-danger btn-sm">回報異常</button></form><?php endif; ?>
                             <?php if ($isOfficial && in_array($delivery['status'], ['claimed', 'picked_up'], true)): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm">確認收貨</button></form><?php endif; ?>
-                            <?php $canManageDelivery = ((int) ($delivery['created_by'] ?? 0) === $currentUserId) || $isOfficial; if ($canManageDelivery): ?>
+                            <?php if ($isOfficial): ?>
                                 <div class="inline-action-group">
                                     <form method="post" class="delivery-action-form">
                                         <input type="hidden" name="action" value="load_edit_delivery">
@@ -200,6 +236,35 @@ $deliveries = $deliveryModel->getAllDeliveries();
                 </tr>
             <?php endforeach; ?>
             </tbody></table>
-        <?php else: ?><div class="empty-state"><i class="fas fa-route"></i><p>目前沒有配送任務</p></div><?php endif; ?>
+        <?php else: ?><div class="empty-state"><i class="fas fa-route"></i><p>目前沒有未完成任務</p></div><?php endif; ?>
+    </div>
+</div>
+
+<div class="card mt-32">
+    <div class="card-header"><h2>已完成任務</h2><p>目前共 <?php echo count($completedDeliveries); ?> 筆任務</p></div>
+    <div class="card-body deliveries-table-body">
+        <?php if ($completedDeliveries): ?>
+            <table class="data-table deliveries-table completed-deliveries-table"><thead><tr><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>完成日期與時間</th><th>狀態</th></tr></thead><tbody>
+            <?php foreach ($completedDeliveries as $delivery): ?>
+                <tr id="delivery-<?php echo (int) $delivery['delivery_id']; ?>">
+                    <td class="delivery-route-cell" title="<?php echo htmlspecialchars($delivery['pickup_address'] . ' → ' . $delivery['delivery_address'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <div class="delivery-route">
+                            <span class="delivery-route-point"><strong>起點</strong><?php echo htmlspecialchars($delivery['pickup_address']); ?></span>
+                            <span class="delivery-route-arrow" aria-hidden="true">→</span>
+                            <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
+                        </div>
+                    </td>
+                    <td><?php echo ['food_bank' => '食物銀行方自行接單', 'volunteer' => '志工／外送員接單', 'donor' => '捐贈方自行運送'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
+                    <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
+                    <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
+                    <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
+                    <td><?php echo ['normal' => '一般', 'priority' => '優先', 'urgent' => '急件'][$delivery['urgency']] ?? '一般'; ?></td>
+                    <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
+                    <td><?php echo htmlspecialchars($delivery['delivered_at'] ?? ''); ?></td>
+                    <td><span class="status status-delivered">已配達</span></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody></table>
+        <?php else: ?><div class="empty-state"><i class="fas fa-check-circle"></i><p>目前沒有已完成任務</p></div><?php endif; ?>
     </div>
 </div>
