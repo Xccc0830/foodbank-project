@@ -4,15 +4,12 @@
  */
 
 require_once BASE_PATH . '/src/models/BeneficiaryModel.php';
-require_once BASE_PATH . '/src/models/InventoryModel.php';
 require_once BASE_PATH . '/src/models/DonationModel.php';
 
 $beneficiaryModel = new BeneficiaryModel();
-$inventoryModel = new InventoryModel();
 $donationModel = new DonationModel();
 
 $recentDonations = array_slice($donationModel->getAllDonations(null), 0, 5);
-$lowStockItems = array_slice($inventoryModel->getLowStockItems(), 0, 5);
 $dashboardRole = $currentUser['role'] ?? 'foodbank_staff';
 $dashboardRoleLabels = [
     'admin' => '系統管理總覽',
@@ -38,13 +35,13 @@ $dashboardRoleLabels = [
             <h2>你的公益任務</h2><p>前往配送任務接單，或認領公益活動；完成配送後會記錄公益點數。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
-            <h2>官方人員工作台</h2><p>處理捐贈評估、庫存、受益者服務與配送任務，確保物資完成媒合。</p>
+            <h2>官方人員工作台</h2><p>處理捐贈評估、受益者服務與配送任務，確保物資完成媒合。</p>
             <a href="?page=donations" class="btn btn-primary btn-sm">處理待評估捐贈</a>
         <?php elseif ($dashboardRole === 'donor'): ?>
             <h2>店家捐贈工作台</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
             <a href="?page=donations" class="btn btn-primary btn-sm">上架剩食物資</a>
         <?php elseif ($dashboardRole === 'manager'): ?>
-            <h2>營運管理</h2><p>掌握物資媒合、配送任務、庫存與公益活動的整體進度。</p>
+            <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看配送進度</a>
         <?php else: ?>
             <h2>系統管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
@@ -58,18 +55,6 @@ $dashboardRoleLabels = [
         <h3>活躍受益者</h3>
         <div class="stat-number"><?php echo number_format($beneficiaryModel->countActiveBeneficiaries()); ?></div>
         <p class="stat-label">位受益者</p>
-    </div>
-
-    <div class="stat-card">
-        <h3>庫存項目</h3>
-        <div class="stat-number"><?php echo number_format($inventoryModel->countAvailableItems()); ?></div>
-        <p class="stat-label">個項目</p>
-    </div>
-
-    <div class="stat-card">
-        <h3>總庫存量</h3>
-        <div class="stat-number"><?php echo number_format($inventoryModel->getTotalInventoryValue()); ?></div>
-        <p class="stat-label">件物品</p>
     </div>
 
     <div class="stat-card">
@@ -134,41 +119,6 @@ $dashboardRoleLabels = [
     </div>
 
     <div class="card">
-        <div class="card-header">
-            <h2>低庫存提醒</h2>
-            <p>優先補貨項目</p>
-        </div>
-        <div class="card-body">
-            <?php if (!empty($lowStockItems)): ?>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>物品名稱</th>
-                            <th>現有數量</th>
-                            <th>預定數量</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($lowStockItems as $item): ?>
-                            <tr>
-                                <td><strong><?php echo htmlspecialchars($item['item_name']); ?></strong></td>
-                                <td><?php echo (int) $item['quantity_on_hand']; ?> <?php echo htmlspecialchars($item['unit']); ?></td>
-                                <td><?php echo (int) $item['reorder_level']; ?> <?php echo htmlspecialchars($item['unit']); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <div class="mt-20">
-                    <a href="?page=inventory" class="btn btn-secondary btn-sm">前往庫存頁</a>
-                </div>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-circle-check"></i>
-                    <p>目前沒有低庫存項目</p>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
 </div>
 
 <div class="card mt-32">
@@ -180,7 +130,6 @@ $dashboardRoleLabels = [
         <div class="grid-3">
             <button class="btn btn-primary" onclick="openAddDonationModal()"><i class="fas fa-gift"></i> 新增捐贈</button>
             <button class="btn btn-primary" onclick="openAddBeneficiaryModal()"><i class="fas fa-user-plus"></i> 新增受益者</button>
-            <button class="btn btn-primary" onclick="openAddInventoryModal()"><i class="fas fa-box"></i> 新增庫存</button>
             <button class="btn btn-secondary" onclick="openNewPurchaseModal()"><i class="fas fa-cart-shopping"></i> 新增採購單</button>
             <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
             <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>
