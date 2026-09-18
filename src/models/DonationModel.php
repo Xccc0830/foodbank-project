@@ -126,16 +126,109 @@ class DonationModel extends BaseModel {
      */
     public function getTotalDonationAmount($start_date = null, $end_date = null) {
         $sql = "SELECT SUM(quantity) as total FROM {$this->table} WHERE donation_type = 'money'";
-        
+
         if ($start_date && $end_date) {
             $start_date = $this->db->real_escape_string($start_date);
             $end_date = $this->db->real_escape_string($end_date);
             $sql .= " AND donation_date BETWEEN '{$start_date}' AND '{$end_date}'";
         }
-        
+
         $result = $this->db->query($sql);
         $row = $result->fetch_assoc();
         return $row['total'] ?? 0;
     }
+
+    public function approveDonation($donation_id, $delivery_method = 'volunteer_assist') {
+        $donation_id = (int) $donation_id;
+        $delivery_method = $this->db->real_escape_string($delivery_method);
+
+        $status = $delivery_method === 'self_delivery' ? 'approved_self_delivery' : 'approved_volunteer';
+        $sealCode = 'FB-' . strtoupper(bin2hex(random_bytes(4)));
+        $sealCodeEscaped = $this->db->real_escape_string($sealCode);
+
+        $sql = "UPDATE {$this->table}
+                SET status = '{$status}',
+                    delivery_method = '{$delivery_method}',
+                    seal_code = '{$sealCodeEscaped}',
+                    approved_at = NOW()
+                WHERE donation_id = {$donation_id}";
+        return $this->db->query($sql);
+    }
+
+    public function rejectDonation($donation_id, $reason = '') {
+        $donation_id = (int) $donation_id;
+        $reason = $this->db->real_escape_string($reason);
+
+        $sql = "UPDATE {$this->table}
+                SET status = 'rejected',
+                    rejection_reason = '{$reason}',
+                    rejected_at = NOW()
+                WHERE donation_id = {$donation_id}";
+        return $this->db->query($sql);
+    }
+
+    public function publishDonation($donation_id, $split_count = 1, $rewards_config = []) {
+        $donation_id = (int) $donation_id;
+        $split_count = max(1, (int) $split_count);
+
+        if ($split_count === 1) {
+            $sql = "UPDATE {$this->table}
+                    SET status = 'published',
+                        published_at = NOW(),
+                        split_count = 1
+                    WHERE donation_id = {$donation_id}";
+            return $this->db->query($sql);
+        }
+
+        $this->db->begin_transaction();
+        try {
+            $this->db->query("UPDATE {$this->table}
+                            SET status = 'published',
+                                published_at = NOW(),
+                                split_count = {$split_count}
+                            WHERE donation_id = {$donation_id}");
+            $this->db->commit();
+            return true;
+        } catch (Throwable $e) {
+            $this->db->rollback();
+            return false;
+        }
+    }
+
+    public function updateDeliveryStatus($donation_id, $new_status) {
+        $donation_id = (int) $donation_id;
+        $validStatuses = [
+            'waiting_pickup',
+            'volunteer_received',
+            'in_transit',
+            'at_foodbank',
+            'inspection_complete'
+        ];
+
+        $new_status = $this->db->real_escape_string($new_status);
+        if (!in_array($new_status, $validStatuses)) {
+            return false;
+        }
+
+        $sql = "UPDATE {$this->table}
+                SET current_status = '{$new_status}',
+                    status_updated_at = NOW()
+                WHERE donation_id = {$donation_id}";
+        return $this->db->query($sql);
+    }
+
+    public function getDonationsByEvaluationStatus($status) {
+        $status = $this->db->real_escape_string($status);
+        $sql = "SELECT * FROM {$this->table}
+                WHERE status = '{$status}'
+                ORDER BY donation_date DESC";
+        return $this->query($sql);
+    }
+
+    public function getPublishedDonations() {
+        $sql = "SELECT * FROM {$this->table}
+                WHERE status IN ('published', 'waiting_pickup', 'volunteer_received', 'in_transit')
+                ORDER BY published_at DESC";
+        return $this->query($sql);
+    }
 }
-?>

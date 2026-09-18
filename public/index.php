@@ -281,8 +281,8 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'item_categories', 'beneficiaries', 'purchases', 'settings', 'users', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'item_categories', 'beneficiaries', 'purchases', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'inventory', 'item_categories', 'beneficiaries', 'purchases', 'settings', 'users', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'inventory', 'item_categories', 'beneficiaries', 'purchases', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'donor' => ['dashboard', 'donations', 'notifications', 'certificate'],
 ];
@@ -420,6 +420,7 @@ if ($page === 'purchases' && in_array($role, ['admin', 'foodbank_staff'], true)
 $menu_items = [
     'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
     'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
+    'donations_evaluation' => ['label' => '評估派車', 'icon' => 'fa-solid fa-clipboard-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
     'activities' => ['label' => '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'inventory' => ['label' => '庫存管理', 'icon' => 'fa-solid fa-boxes-stacked'],
