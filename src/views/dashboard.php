@@ -24,9 +24,11 @@ $dashboardRoleLabels = [
         <h1 class="view-title"><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '工作台'); ?></h1>
         <p class="view-subtitle"><?php echo date('Y-m-d'); ?>，歡迎 <?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?></p>
     </div>
+    <?php if ($dashboardRole === 'donor'): ?>
     <button class="btn btn-primary" onclick="openAddDonationModal()">
         <i class="fas fa-plus"></i> 新增捐贈
     </button>
+    <?php endif; ?>
 </div>
 
 <div class="card role-intro mb-20">
@@ -128,8 +130,12 @@ $dashboardRoleLabels = [
     </div>
     <div class="card-body">
         <div class="grid-4">
+            <?php if ($dashboardRole === 'donor'): ?>
             <button class="btn btn-primary" onclick="openAddDonationModal()"><i class="fas fa-gift"></i> 新增捐贈</button>
+            <?php endif; ?>
+            <?php if ($dashboardRole === 'admin'): ?>
             <button class="btn btn-primary" onclick="openAddBeneficiaryModal()"><i class="fas fa-user-plus"></i> 新增受益者</button>
+            <?php endif; ?>
             <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
             <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>
         </div>
