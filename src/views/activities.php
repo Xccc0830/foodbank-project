@@ -11,6 +11,12 @@ $canCreateActivity = in_array($currentRole, ['admin', 'foodbank_staff', 'donor']
 $message = null;
 $editingActivity = null;
 
+$connection = $db->getConnection();
+$userIdEscaped = $connection->real_escape_string((string) $currentUser['user_id']);
+$userResult = $connection->query("SELECT is_enterprise_verified FROM users WHERE user_id = {$userIdEscaped} LIMIT 1");
+$userInfo = $userResult ? $userResult->fetch_assoc() : ['is_enterprise_verified' => 0];
+$isEnterpriseVerified = (int) ($userInfo['is_enterprise_verified'] ?? 0) === 1;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['action'] ?? '') === 'create_activity') {
         $data = [
@@ -184,7 +190,11 @@ $activityStatusLabels = [
         <form method="post" class="delivery-action-form">
             <input type="hidden" name="action" value="register_activity">
             <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
+            <?php if ($isEnterpriseVerified): ?>
             <select name="assignment_type" class="assignment-type-select" aria-label="認領身分"><option value="individual">個人／志工</option><option value="company">企業認領</option></select>
+            <?php else: ?>
+            <input type="hidden" name="assignment_type" value="individual">
+            <?php endif; ?>
             <span class="organization-name-field" hidden><input type="text" name="organization_name" placeholder="企業／組織名稱（企業認領填寫）"></span>
             <button class="btn btn-primary btn-sm" type="submit">認領活動</button>
         </form>

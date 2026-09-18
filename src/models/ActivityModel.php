@@ -108,6 +108,14 @@ class ActivityModel extends BaseModel {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
 
+        if ($assignmentType === 'company') {
+            $userResult = $this->db->query("SELECT is_enterprise_verified FROM users WHERE user_id = {$userId} LIMIT 1");
+            $userInfo = $userResult ? $userResult->fetch_assoc() : null;
+            if (!$userInfo || (int) ($userInfo['is_enterprise_verified'] ?? 0) !== 1) {
+                return false;
+            }
+        }
+
         $existingAssignmentResult = $this->db->query(
             "SELECT assignment_id, status, cancelled_at FROM activity_assignments
              WHERE activity_id = {$activityId} AND user_id = {$userId}
