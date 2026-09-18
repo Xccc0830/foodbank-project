@@ -501,7 +501,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>${title}</h3>
-                        <button type="button" class="modal-close" onclick="closeModal()" aria-label="Close">×</button>
+                        <button type="button" class="modal-close" aria-label="Close">×</button>
                     </div>
                     <div class="modal-body">${content}</div>
                 </div>
@@ -523,6 +523,15 @@
                 input.name = 'csrf_token';
                 input.value = csrfToken.content;
                 form.appendChild(input);
+            });
+        }
+
+        const closeButton = modal.querySelector('.modal-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeModal();
             });
         }
 
