@@ -74,6 +74,10 @@ foodbank-project/
 
 ## 🚀 快速開始
 
+## 🗂️ 專案協作文件
+
+- `MEETING_PROCESS.md`：會議標準流程、紀錄模板與執行規範
+
 ### 前置條件
 
 
