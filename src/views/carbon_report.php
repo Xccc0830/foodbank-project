@@ -1,10 +1,10 @@
 <?php
 /**
- * 減碳與社會效益報表
+ * 永續效益報表
  */
 
 if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff'], true)) {
-    echo '<div class="alert alert-error">只有食物銀行官方人員可以查看減碳報表。</div>';
+    echo '<div class="alert alert-error">只有食物銀行官方人員可以查看永續報表。</div>';
     return;
 }
 
@@ -45,8 +45,8 @@ $totals = [
 
 <div class="view-header">
     <div>
-        <h1 class="view-title">減碳與社會效益分析</h1>
-        <p class="view-subtitle">依已完成配送估算物資流動與減碳成效</p>
+        <h1 class="view-title">永續效益報表</h1>
+        <p class="view-subtitle">追蹤物資流動對環境與社會的正面影響，提升捐贈者參與意願</p>
     </div>
 </div>
 
@@ -63,7 +63,7 @@ $totals = [
 </div>
 
 <div class="card mt-32">
-    <div class="card-header"><h2>月度成效報表</h2><p>文山區試點成效分析（依配達月份彙總）</p></div>
+    <div class="card-header"><h2>月度永續成效報表</h2><p>展示物資流動的環境與社會效益（依配達月份彙總）</p></div>
     <div class="card-body">
         <?php if ($monthlyRows): ?>
             <table class="data-table">

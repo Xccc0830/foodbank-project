@@ -192,6 +192,37 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
 <?php endif; ?>
 
 <div class="card mt-32">
+    <div class="card-header"><h2>物資配送流程</h2><p>從取貨到送達的完整狀態追蹤</p></div>
+    <div class="card-body">
+        <div style="display: flex; justify-content: space-around; align-items: center; text-align: center;">
+            <div style="flex: 1;">
+                <div style="font-size: 24px; margin-bottom: 8px;">📦</div>
+                <div style="font-weight: bold;">待收貨</div>
+                <div style="font-size: 12px; color: #666;">志工接單後</div>
+            </div>
+            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
+            <div style="flex: 1;">
+                <div style="font-size: 24px; margin-bottom: 8px;">✅</div>
+                <div style="font-weight: bold;">已收取</div>
+                <div style="font-size: 12px; color: #666;">驗收物資</div>
+            </div>
+            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
+            <div style="flex: 1;">
+                <div style="font-size: 24px; margin-bottom: 8px;">🚚</div>
+                <div style="font-weight: bold;">配送中</div>
+                <div style="font-size: 12px; color: #666;">運送中</div>
+            </div>
+            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
+            <div style="flex: 1;">
+                <div style="font-size: 24px; margin-bottom: 8px;">🏪</div>
+                <div style="font-weight: bold;">已送達</div>
+                <div style="font-size: 12px; color: #666;">配送完成</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-32">
     <div class="card-header"><h2>未完成任務</h2><p>目前共 <?php echo count($pendingDeliveries); ?> 筆任務</p></div>
     <div class="card-body deliveries-table-body">
         <?php if ($pendingDeliveries): ?>
@@ -211,7 +242,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
                     <td><?php echo ['normal' => '一般', 'priority' => '優先', 'urgent' => '急件'][$delivery['urgency']] ?? '一般'; ?></td>
                     <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
-                    <td><span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ['open' => '待接單', 'claimed' => '已接單', 'picked_up' => '已取貨', 'delivered' => '已配達', 'exception' => '異常待處理'][$delivery['status']] ?? $delivery['status']; ?></span></td>
+                    <td><span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ['open' => '待接單', 'claimed' => '已接單', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理'][$delivery['status']] ?? $delivery['status']; ?></span></td>
                     <td>
                         <div class="delivery-action-stack">
                             <?php if ($isVolunteer && ($delivery['delivery_method'] ?? 'volunteer') === 'volunteer' && $delivery['status'] === 'open'): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm">接單</button></form><?php endif; ?>

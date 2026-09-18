@@ -281,8 +281,8 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'settings', 'users', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'item_categories', 'beneficiaries', 'purchases', 'settings', 'users', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'item_categories', 'beneficiaries', 'purchases', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'donor' => ['dashboard', 'donations', 'notifications', 'certificate'],
 ];
@@ -421,12 +421,13 @@ $menu_items = [
     'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
     'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
-    'activities' => ['label' => '活動認領', 'icon' => 'fa-solid fa-calendar-check'],
+    'activities' => ['label' => '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'inventory' => ['label' => '庫存管理', 'icon' => 'fa-solid fa-boxes-stacked'],
+    'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'purchases' => ['label' => '採購管理', 'icon' => 'fa-solid fa-cart-shopping'],
     'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
-    'carbon_report' => ['label' => '減碳報表', 'icon' => 'fa-solid fa-leaf'],
+    'carbon_report' => ['label' => '永續報表', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],

@@ -195,9 +195,34 @@ class DeliveryModel extends BaseModel {
         return $wasUpdated;
     }
 
+    public function updateDeliveryStatus($deliveryId, $status, $volunteerId = null) {
+        $deliveryId = (int) $deliveryId;
+        $validStatuses = ['waiting_pickup', 'collected', 'in_transit', 'delivered'];
+
+        if (!in_array($status, $validStatuses, true)) {
+            return false;
+        }
+
+        $statusUpdateFields = '';
+        switch ($status) {
+            case 'collected':
+                $statusUpdateFields = ", collected_at = NOW()";
+                break;
+            case 'in_transit':
+                $statusUpdateFields = ", transit_at = NOW()";
+                break;
+            case 'delivered':
+                $statusUpdateFields = ", delivered_at = NOW()";
+                break;
+        }
+
+        $sql = "UPDATE deliveries SET status = '{$status}'{$statusUpdateFields}, updated_at = NOW() WHERE delivery_id = {$deliveryId}";
+        return $this->db->query($sql);
+    }
+
     public function completeDelivery($deliveryId) {
         $deliveryId = (int) $deliveryId;
-        $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up') LIMIT 1");
+        $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up', 'in_transit') LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
 
         if (!$delivery) {
@@ -206,7 +231,7 @@ class DeliveryModel extends BaseModel {
 
         $this->db->begin_transaction();
         try {
-            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up')");
+            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up', 'in_transit')");
             $volunteerId = (int) $delivery['volunteer_id'];
             $points = (int) $delivery['points'];
             if ($volunteerId > 0) {

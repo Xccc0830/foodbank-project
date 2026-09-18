@@ -102,7 +102,7 @@ $activityStatusLabels = [
 ];
 ?>
 
-<div class="view-header"><div><h1 class="view-title">活動認領</h1><p class="view-subtitle">發布公益活動，讓企業與志工參與在地行動</p></div></div>
+<div class="view-header"><div><h1 class="view-title">活動發布</h1><p class="view-subtitle">發布公益活動，讓企業與志工參與在地行動</p></div></div>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
