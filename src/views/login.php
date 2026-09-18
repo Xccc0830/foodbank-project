@@ -46,6 +46,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="login-roles" aria-label="角色快捷登入">
                 <button type="button" class="login-role-button" data-username="admin" data-password="admin123">管理者</button>
                 <button type="button" class="login-role-button" data-username="manager" data-password="manager123">工作人員</button>
+                <button type="button" class="login-role-button" data-username="love_store_001" data-password="love123">愛心商家</button>
                 <button type="button" class="login-role-button" data-username="volunteer" data-password="volunteer123">志工</button>
             </div>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
@@ -54,6 +55,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
                 <strong>開發測試帳號</strong>
                 <span>管理者：admin / admin123</span>
                 <span>忠信食物銀行：manager / manager123</span>
+                <span>愛心商家：love_store_001 / love123</span>
                 <span>志工：volunteer / volunteer123</span>
             </div>
         </section>
