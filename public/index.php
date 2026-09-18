@@ -281,8 +281,8 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'purchases', 'settings', 'users', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'purchases', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'settings', 'users', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'donor' => ['dashboard', 'donations', 'notifications', 'certificate'],
 ];
@@ -293,129 +293,6 @@ $page = isset($_GET['page']) ? trim($_GET['page']) : 'dashboard';
 // 防止目錄遍歷
 $page = basename($page);
 
-if ($page === 'purchases' && in_array($role, ['admin', 'foodbank_staff'], true)
-    && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_supplier') {
-    $supplierId = filter_input(INPUT_POST, 'supplier_id', FILTER_VALIDATE_INT);
-    if (!$supplierId || $supplierId < 1) {
-        http_response_code(400);
-        exit('供應商資料無效。');
-    }
-
-    $deleteSupplier = $connection->prepare('DELETE FROM suppliers WHERE supplier_id = ?');
-    if (!$deleteSupplier) {
-        throw new RuntimeException('無法準備刪除供應商的資料庫操作。');
-    }
-    $deleteSupplier->bind_param('i', $supplierId);
-    if (!$deleteSupplier->execute()) {
-        throw new RuntimeException('刪除供應商失敗：' . $deleteSupplier->error);
-    }
-
-    header('Location: ?page=purchases&supplier_deleted=1');
-    exit;
-}
-
-if ($page === 'purchases' && in_array($role, ['admin', 'foodbank_staff'], true)
-    && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_purchase') {
-    $purchaseCode = trim($_POST['purchase_code'] ?? '');
-    $supplierId = filter_input(INPUT_POST, 'supplier_id', FILTER_VALIDATE_INT);
-    $status = $_POST['status'] ?? '';
-    $purchaseDate = $_POST['purchase_date'] ?? '';
-    $deliveryDate = $_POST['delivery_date'] ?? null;
-    $allowedStatuses = ['draft', 'pending', 'approved', 'received', 'cancelled'];
-
-    if ($purchaseCode === '' || !$supplierId || !in_array($status, $allowedStatuses, true)
-        || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $purchaseDate)
-        || ($deliveryDate !== null && $deliveryDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $deliveryDate))) {
-        http_response_code(400);
-        exit('採購單資料無效。');
-    }
-
-    $supplierQuery = $connection->prepare('SELECT supplier_name FROM suppliers WHERE supplier_id = ? LIMIT 1');
-    if (!$supplierQuery) {
-        throw new RuntimeException('無法準備供應商查詢。');
-    }
-    $supplierQuery->bind_param('i', $supplierId);
-    $supplierQuery->execute();
-    $supplierResult = $supplierQuery->get_result();
-    $supplier = $supplierResult->fetch_assoc();
-    if (!$supplier) {
-        http_response_code(400);
-        exit('指定的供應商不存在。');
-    }
-
-    $updatePurchase = $connection->prepare(
-        'UPDATE purchases SET supplier_id = ?, supplier_name = ?, purchase_date = ?, delivery_date = NULLIF(?, ""), status = ? WHERE purchase_code = ?'
-    );
-    if (!$updatePurchase) {
-        throw new RuntimeException('無法準備更新採購單的資料庫操作。');
-    }
-    $updatePurchase->bind_param('isssss', $supplierId, $supplier['supplier_name'], $purchaseDate, $deliveryDate, $status, $purchaseCode);
-    if (!$updatePurchase->execute()) {
-        throw new RuntimeException('更新採購單失敗：' . $updatePurchase->error);
-    }
-
-    header('Location: ?page=purchases&purchase_updated=1');
-    exit;
-}
-
-if ($page === 'purchases' && in_array($role, ['admin', 'foodbank_staff'], true)
-    && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_purchase') {
-    $supplierId = filter_input(INPUT_POST, 'supplier_id', FILTER_VALIDATE_INT);
-    $status = $_POST['status'] ?? '';
-    $purchaseDate = $_POST['purchase_date'] ?? '';
-    $deliveryDate = $_POST['delivery_date'] ?? null;
-    $amount = filter_var($_POST['total_amount'] ?? null, FILTER_VALIDATE_FLOAT);
-    $notes = trim($_POST['notes'] ?? '');
-    $allowedStatuses = ['draft', 'pending', 'approved', 'received', 'cancelled'];
-
-    if (!$supplierId || !in_array($status, $allowedStatuses, true)
-        || $amount === false || $amount < 0
-        || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $purchaseDate)
-        || ($deliveryDate !== null && $deliveryDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $deliveryDate))) {
-        http_response_code(400);
-        exit('新增採購單資料無效。');
-    }
-
-    $supplierQuery = $connection->prepare('SELECT supplier_name FROM suppliers WHERE supplier_id = ? LIMIT 1');
-    if (!$supplierQuery) {
-        throw new RuntimeException('無法準備供應商查詢。');
-    }
-    $supplierQuery->bind_param('i', $supplierId);
-    $supplierQuery->execute();
-    $supplier = $supplierQuery->get_result()->fetch_assoc();
-    if (!$supplier) {
-        http_response_code(400);
-        exit('指定的供應商不存在。');
-    }
-
-    $purchaseCode = 'PUR' . date('Ymd', strtotime($purchaseDate)) . random_int(100, 999);
-    $insertPurchase = $connection->prepare(
-        'INSERT INTO purchases (purchase_code, supplier_id, supplier_name, purchase_date, delivery_date, total_amount, status, requested_by, notes) VALUES (?, ?, ?, ?, NULLIF(?, ""), ?, ?, ?, ?)'
-    );
-    if (!$insertPurchase) {
-        throw new RuntimeException('無法準備新增採購單的資料庫操作。');
-    }
-    $requestedBy = (int) ($currentUser['user_id'] ?? 0);
-    $insertPurchase->bind_param(
-        'sisssdsis',
-        $purchaseCode,
-        $supplierId,
-        $supplier['supplier_name'],
-        $purchaseDate,
-        $deliveryDate,
-        $amount,
-        $status,
-        $requestedBy,
-        $notes
-    );
-    if (!$insertPurchase->execute()) {
-        throw new RuntimeException('新增採購單失敗：' . $insertPurchase->error);
-    }
-
-    header('Location: ?page=purchases&purchase_created=1');
-    exit;
-}
-
 // 菜單項配置
 $menu_items = [
     'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
@@ -425,7 +302,6 @@ $menu_items = [
     'activities' => ['label' => '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
-    'purchases' => ['label' => '採購管理', 'icon' => 'fa-solid fa-cart-shopping'],
     'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
     'carbon_report' => ['label' => '永續報表', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],

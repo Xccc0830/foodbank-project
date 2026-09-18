@@ -40,7 +40,7 @@ if (isset($db) && $db instanceof Database) {
                 </div>
                 <div class="form-group">
                     <label>系統描述</label>
-                    <textarea>一個完整的食物銀行管理系統，支援捐贈、庫存、受益者與採購管理。</textarea>
+                    <textarea>一個完整的食物銀行管理系統，支援捐贈、受益者與配送管理。</textarea>
                 </div>
                 <div class="form-group">
                     <label>時區</label>

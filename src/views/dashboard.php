@@ -127,10 +127,9 @@ $dashboardRoleLabels = [
         <p>常用管理功能</p>
     </div>
     <div class="card-body">
-        <div class="grid-3">
+        <div class="grid-4">
             <button class="btn btn-primary" onclick="openAddDonationModal()"><i class="fas fa-gift"></i> 新增捐贈</button>
             <button class="btn btn-primary" onclick="openAddBeneficiaryModal()"><i class="fas fa-user-plus"></i> 新增受益者</button>
-            <button class="btn btn-secondary" onclick="openNewPurchaseModal()"><i class="fas fa-cart-shopping"></i> 新增採購單</button>
             <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
             <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>
         </div>
