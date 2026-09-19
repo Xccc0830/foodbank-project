@@ -65,6 +65,36 @@ class DonationModel extends BaseModel {
     }
 
     /**
+     * 審查商家物資捐贈，完成後移至已評估區塊
+     */
+    public function reviewMaterialDonation($donation_id, $decision, $rejection_reason = '', $foodbankDeliveryOption = 'food_bank_pickup') {
+        $donation_id = (int) $donation_id;
+        $evaluationStatus = $decision === 'accepted' ? 'approved_volunteer' : 'rejected';
+        $evaluationStatus = $this->db->real_escape_string($evaluationStatus);
+        $rejectionReason = $this->db->real_escape_string($rejection_reason);
+        $allowedDeliveryOptions = ['food_bank_pickup', 'volunteer_delivery'];
+        if (!in_array($foodbankDeliveryOption, $allowedDeliveryOptions, true)) {
+            return false;
+        }
+        $foodbankDeliveryOption = $this->db->real_escape_string($foodbankDeliveryOption);
+        $deliveryMethod = $foodbankDeliveryOption === 'food_bank_pickup' ? 'self_delivery' : 'volunteer_assist';
+
+        $sql = "UPDATE {$this->table}
+                SET status = 'assessed',
+                    evaluation_status = '{$evaluationStatus}',
+                    evaluation_notes = NULL,
+                    rejection_reason = " . ($decision === 'accepted' ? 'NULL' : "'{$rejectionReason}'") . ",
+                    delivery_option = '{$foodbankDeliveryOption}',
+                    delivery_method = '{$deliveryMethod}',
+                    approved_at = " . ($decision === 'accepted' ? 'NOW()' : 'NULL') . ",
+                    rejected_at = " . ($decision === 'accepted' ? 'NULL' : 'NOW()') . ",
+                    updated_at = NOW()
+                WHERE donation_id = {$donation_id}
+                  AND status = 'pending'";
+        return $this->db->query($sql);
+    }
+
+    /**
      * 取得單筆捐贈記錄
      */
     public function getDonationById($donation_id) {

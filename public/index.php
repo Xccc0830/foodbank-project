@@ -281,10 +281,10 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'settings', 'users', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
-    'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'donor' => ['dashboard', 'donations', 'rewards', 'notifications', 'certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'settings', 'users', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
+    'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
+    'donor' => ['dashboard', 'donations', 'rewards', 'notifications', 'donation_materials', 'certificate'],
 ];
 
 // 簡單的路由系統
@@ -306,6 +306,8 @@ $menu_items = [
     'carbon_report' => ['label' => '永續報表', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell'],
+    'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open'],
+    'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
 ];
