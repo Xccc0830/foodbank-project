@@ -218,13 +218,24 @@ class RewardModel extends BaseModel {
     }
 
     public function fulfillByToken($token, $verifierId, $verifierRole) {
-        $tokenHash = $this->db->real_escape_string(hash('sha256', trim($token)));
+        $token = trim((string) $token);
+        $claim = null;
         $verifierId = (int) $verifierId;
-        $result = $this->db->query("SELECT * FROM reward_claims WHERE token_hash = '{$tokenHash}' LIMIT 1");
-        $claim = $result ? $result->fetch_assoc() : null;
+
+        if (preg_match('/^R([0-9]+)$/i', $token, $matches)) {
+            $claimId = (int) $matches[1];
+            if ($claimId > 0) {
+                $result = $this->db->query("SELECT * FROM reward_claims WHERE claim_id = {$claimId} LIMIT 1");
+                $claim = $result ? $result->fetch_assoc() : null;
+            }
+        } else {
+            $tokenHash = $this->db->real_escape_string(hash('sha256', $token));
+            $result = $this->db->query("SELECT * FROM reward_claims WHERE token_hash = '{$tokenHash}' LIMIT 1");
+            $claim = $result ? $result->fetch_assoc() : null;
+        }
 
         if (!$claim || $claim['status'] !== 'pending') {
-            return ['success' => false, 'message' => '此兌換憑證已完成、已取消或不存在。'];
+            return ['success' => false, 'message' => '此兌換憑證已完成、已取消或不存在，請確認兌換編號或 QR Code。'];
         }
         if (strtotime($claim['token_expires_at']) <= time()) {
             return ['success' => false, 'message' => 'QR Code 已逾時，請志工重新開啟兌換憑證。'];
@@ -242,9 +253,10 @@ class RewardModel extends BaseModel {
             }
         }
 
+        $currentTime = $this->db->real_escape_string(date('Y-m-d H:i:s'));
         $updated = $this->db->query(
             "UPDATE reward_claims SET status = 'fulfilled', redeemed_at = NOW(), redeemed_by = {$verifierId}
-             WHERE claim_id = " . (int) $claim['claim_id'] . " AND status = 'pending' AND token_expires_at > NOW()"
+             WHERE claim_id = " . (int) $claim['claim_id'] . " AND status = 'pending' AND token_expires_at > '{$currentTime}'"
         );
         return $updated && $this->db->affected_rows === 1
             ? ['success' => true, 'message' => '兌換完成，憑證已核銷。']

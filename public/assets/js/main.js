@@ -104,7 +104,8 @@
 
         navItems.forEach(function (item) {
             const href = item.getAttribute('href') || '';
-            item.classList.toggle('active', href.indexOf('page=' + currentPage) !== -1);
+            const itemPage = new URL(href, window.location.href).searchParams.get('page') || 'dashboard';
+            item.classList.toggle('active', itemPage === currentPage);
         });
     }
 
@@ -838,9 +839,6 @@
     window.openAddDonationModal = openAddDonationModal;
     window.openAddInventoryModal = openAddInventoryModal;
     window.openAddBeneficiaryModal = openAddBeneficiaryModal;
-    window.openAddSupplierModal = openAddSupplierModal;
-    window.openEditSupplierModal = openEditSupplierModal;
-    window.confirmDeleteSupplier = confirmDeleteSupplier;
     window.openViewInventoryModal = openViewInventoryModal;
     window.openEditInventoryModal = openEditInventoryModal;
     window.closeModal = closeModal;

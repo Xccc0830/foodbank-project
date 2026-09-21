@@ -774,6 +774,62 @@ body {
     color: var(--primary-color);
 }
 
+.reward-verification-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin: 20px 0;
+    padding: 18px 22px;
+    border: 2px solid;
+    border-radius: 12px;
+    font-size: 16px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+.reward-verification-notice strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 18px;
+}
+
+.reward-verification-notice p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.reward-verification-notice-icon {
+    display: inline-flex;
+    flex: 0 0 30px;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: #FFFFFF;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.reward-verification-notice-success {
+    border-color: #059669;
+    background: #ECFDF5;
+    color: #065F46;
+}
+
+.reward-verification-notice-success .reward-verification-notice-icon {
+    background: #059669;
+}
+
+.reward-verification-notice-error {
+    border-color: #DC2626;
+    background: #FEF2F2;
+    color: #991B1B;
+}
+
+.reward-verification-notice-error .reward-verification-notice-icon {
+    background: #DC2626;
+}
+
 .redemptions-table-body {
     overflow-x: auto;
 }
@@ -800,9 +856,41 @@ body {
     min-width: 180px;
 }
 
+.categories-table-body {
+    overflow-x: auto;
+    width: 100%;
+}
+
+.data-table.categories-table {
+    min-width: 760px;
+}
+
+.data-table.categories-table th,
+.data-table.categories-table td {
+    white-space: nowrap;
+    word-break: keep-all;
+    vertical-align: middle;
+}
+
+.data-table.categories-table th:first-child,
+.data-table.categories-table td:first-child {
+    min-width: 140px;
+}
+
+.data-table.categories-table th:nth-child(2),
+.data-table.categories-table td:nth-child(2) {
+    min-width: 180px;
+}
+
+.data-table.categories-table th:nth-child(4),
+.data-table.categories-table td:nth-child(4) {
+    min-width: 72px;
+    text-align: center;
+}
+
 /* ============================================
-   按鈕樣式
-   ============================================ */
+    按鈕樣式
+    ============================================ */
 
 .btn {
     display: inline-flex;
@@ -1281,6 +1369,32 @@ form {
 
 .data-table.donations-table th:nth-child(2),
 .data-table.donations-table td:nth-child(2) {
+   min-width: 140px;
+}
+
+.donations-evaluation-table-body {
+   overflow-x: auto;
+   width: 100%;
+}
+
+.data-table.donations-evaluation-table {
+   min-width: 760px;
+}
+
+.data-table.donations-evaluation-table th,
+.data-table.donations-evaluation-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+.data-table.donations-evaluation-table th:first-child,
+.data-table.donations-evaluation-table td:first-child {
+   min-width: 120px;
+}
+
+.data-table.donations-evaluation-table th:nth-child(2),
+.data-table.donations-evaluation-table td:nth-child(2) {
    min-width: 140px;
 }
 

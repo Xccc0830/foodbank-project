@@ -145,7 +145,8 @@ $categories = $itemCategoryModel->getAllCategories();
     <div class="card-header"><h2>分類列表</h2><p>目前共 <?php echo count($categories); ?> 個分類</p></div>
     <div class="card-body">
         <?php if ($categories): ?>
-            <table class="data-table">
+        <div class="categories-table-body">
+        <table class="data-table categories-table">
                 <thead>
                     <tr>
                         <th>分類名稱</th>
@@ -189,6 +190,7 @@ $categories = $itemCategoryModel->getAllCategories();
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-layer-group"></i><p>尚未建立任何分類</p></div>
         <?php endif; ?>

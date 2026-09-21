@@ -15,6 +15,8 @@ define('ROOT_PATH', __DIR__);
 require_once BASE_PATH . '/config/database.php';
 require_once BASE_PATH . '/src/helpers/SecurityHelper.php';
 
+date_default_timezone_set('Asia/Taipei');
+
 // 啟用會話
 session_start();
 getCsrfToken();

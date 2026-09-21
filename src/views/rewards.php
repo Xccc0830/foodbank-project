@@ -83,7 +83,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $balance = $rewardModel->getBalance((int) $currentUser['user_id']);
 $catalog = $rewardModel->getAvailableRewards();
 $myRedemptions = $rewardModel->getRedemptionsByUser((int) $currentUser['user_id']);
-$pendingClaims = $isVolunteer ? $rewardModel->getPendingClaimsByUser((int) $currentUser['user_id']) : [];
+$pendingClaims = $isVolunteer
+    ? array_values(array_filter(
+        $rewardModel->getPendingClaimsByUser((int) $currentUser['user_id']),
+        static function ($claim) {
+            return ($claim['status'] ?? '') === 'pending';
+        }
+    ))
+    : [];
 $selectedClaimId = $isVolunteer ? (int) ($_GET['claim_id'] ?? 0) : 0;
 $selectedClaim = $selectedClaimId > 0
     ? $rewardModel->getPendingClaimById($selectedClaimId, (int) $currentUser['user_id'])
@@ -110,7 +117,15 @@ if ($isDonor) {
     </div>
 </div>
 
-<?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
+<?php if ($message): ?>
+    <div class="reward-verification-notice reward-verification-notice-<?php echo htmlspecialchars($message['type'], ENT_QUOTES, 'UTF-8'); ?>" role="alert">
+        <span class="reward-verification-notice-icon"><?php echo $message['type'] === 'success' ? '✓' : '!'; ?></span>
+        <div>
+            <strong><?php echo $message['type'] === 'success' ? '核銷成功' : '核銷未完成'; ?></strong>
+            <p><?php echo htmlspecialchars($message['text']); ?></p>
+        </div>
+    </div>
+<?php endif; ?>
 
 <div class="stats-grid">
     <div class="stat-card"><h3>目前可用點數</h3><div class="stat-number"><?php echo number_format($balance); ?></div><p class="stat-label">公益點數</p></div>
@@ -153,7 +168,7 @@ if ($isDonor) {
             <div class="reward-claim-card">
                 <h3><?php echo htmlspecialchars($claim['title']); ?></h3>
                 <p class="toolbar-meta">兌換編號：<?php echo htmlspecialchars('R' . str_pad((string) $claim['claim_id'], 6, '0', STR_PAD_LEFT)); ?></p>
-                <p class="toolbar-meta"><?php echo (int) $claim['points_spent']; ?> 點・待核銷</p>
+                  <p class="toolbar-meta"><?php echo (int) $claim['points_spent']; ?> 點・待核銷</p>
                 <a class="btn btn-primary btn-sm" href="?page=rewards&amp;claim_id=<?php echo (int) $claim['claim_id']; ?>">查看優惠券</a>
             </div>
         <?php endforeach; ?>
@@ -182,12 +197,21 @@ if ($isDonor) {
 
 <?php if ($canVerify): ?>
 <div class="card mt-32">
-    <div class="card-header"><h2>兌換核銷</h2><p>掃描志工出示的 QR Code，確認後完成核銷</p></div>
+    <div class="card-header">
+        <h2>兌換核銷</h2>
+        <p>
+            <?php if ($isDonor): ?>
+                僅能核銷由您提供的愛心店家優惠券
+            <?php else: ?>
+                食物銀行方僅能核銷食物銀行兌換品；愛心店家優惠券請由提供該優惠的店家核銷
+            <?php endif; ?>
+        </p>
+    </div>
     <div class="card-body">
         <button class="btn btn-secondary btn-sm" type="button" id="start-reward-scanner">啟動相機掃描</button>
         <button class="btn btn-secondary btn-sm" type="button" id="stop-reward-scanner" hidden>關閉相機</button>
         <div id="reward-qr-reader" style="max-width: 420px;"></div>
-        <p id="reward-scanner-status" class="toolbar-meta">也可以直接輸入兌換碼核銷。</p>
+        <p id="reward-scanner-status" class="toolbar-meta">可掃描 QR Code，或輸入兌換編號（例如 R000001）核銷。</p>
         <form method="post" class="mt-20">
             <?php echo csrfField(); ?>
             <input type="hidden" name="action" value="fulfill_claim">

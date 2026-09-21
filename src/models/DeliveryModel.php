@@ -8,6 +8,20 @@ require_once __DIR__ . '/BaseModel.php';
 class DeliveryModel extends BaseModel {
     protected $table = 'deliveries';
 
+    public function __construct() {
+        parent::__construct();
+        $this->ensureDeliveryMethodColumn();
+    }
+
+    private function ensureDeliveryMethodColumn() {
+        $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE 'delivery_method'");
+        if ($result && $result->num_rows === 0) {
+            $this->db->query(
+                "ALTER TABLE deliveries ADD delivery_method ENUM('food_bank', 'volunteer', 'donor') NOT NULL DEFAULT 'volunteer' AFTER donation_id"
+            );
+        }
+    }
+
     public function getAllDeliveries() {
         $sql = "SELECT d.*, u.full_name AS volunteer_name
                 FROM deliveries d
@@ -158,7 +172,7 @@ class DeliveryModel extends BaseModel {
                 error_log("志工接單通知沒有官方收件人：delivery_id={$deliveryId}");
             }
         }
-        return $updated;
+        return $updated && $this->db->affected_rows === 1;
     }
 
     public function confirmPickup($deliveryId, $volunteerId, $sealIntact, $itemCountConfirmed) {
