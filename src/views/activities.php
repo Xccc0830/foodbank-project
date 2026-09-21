@@ -225,7 +225,7 @@ document.querySelectorAll('.assignment-type-select').forEach(function (select) {
 </script>
 
 <div class="card mt-32"><div class="card-header"><h2>我的認領紀錄</h2><p>活動結束後可下載企業永續認證證書</p></div><div class="card-body">
-<?php if ($myAssignments): ?><table class="data-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
+<?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
 <?php foreach ($myAssignments as $assignment): ?><tr>
     <td><?php echo htmlspecialchars($assignment['title']); ?></td>
     <td><?php echo $assignment['assignment_type'] === 'company' ? '企業認領' : '個人／志工'; ?></td>
@@ -244,6 +244,6 @@ document.querySelectorAll('.assignment-type-select').forEach(function (select) {
             </form>
         <?php endif; ?>
     </td>
-</tr><?php endforeach; ?></tbody></table>
+</tr><?php endforeach; ?></tbody></table></div>
 <?php else: ?><div class="empty-state"><i class="fas fa-clipboard-list"></i><p>尚未認領任何活動</p></div><?php endif; ?>
 </div></div>

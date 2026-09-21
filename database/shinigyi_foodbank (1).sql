@@ -633,6 +633,29 @@ CREATE TABLE `reward_redemptions` (
 -- --------------------------------------------------------
 
 --
+-- 資料表結構 `reward_claims`
+--
+
+CREATE TABLE `reward_claims` (
+  `claim_id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `source_type` enum('foodbank','donor') NOT NULL,
+  `reward_id` int(11) DEFAULT NULL,
+  `donor_item_id` int(11) DEFAULT NULL,
+  `title` varchar(150) NOT NULL,
+  `points_spent` int(11) NOT NULL,
+  `status` enum('pending','fulfilled','cancelled') NOT NULL DEFAULT 'pending',
+  `token_hash` char(64) NOT NULL,
+  `token_value` char(64) DEFAULT NULL,
+  `token_expires_at` datetime NOT NULL,
+  `redeemed_at` datetime DEFAULT NULL,
+  `redeemed_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- 資料表結構 `sales`
 --
 
@@ -1015,6 +1038,15 @@ ALTER TABLE `reward_redemptions`
   ADD KEY `reward_id` (`reward_id`);
 
 --
+-- 資料表索引 `reward_claims`
+--
+ALTER TABLE `reward_claims`
+  ADD PRIMARY KEY (`claim_id`),
+  ADD UNIQUE KEY `uq_reward_claim_token` (`token_hash`),
+  ADD KEY `idx_reward_claim_user` (`user_id`),
+  ADD KEY `idx_reward_claim_status` (`status`);
+
+--
 -- 資料表索引 `sales`
 --
 ALTER TABLE `sales`
@@ -1227,6 +1259,12 @@ ALTER TABLE `reward_catalog`
 --
 ALTER TABLE `reward_redemptions`
   MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `reward_claims`
+--
+ALTER TABLE `reward_claims`
+  MODIFY `claim_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `sales`

@@ -281,8 +281,8 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'settings', 'users', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
     'donor' => ['dashboard', 'donations', 'rewards', 'notifications', 'donation_materials', 'certificate'],
 ];
