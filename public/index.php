@@ -301,7 +301,7 @@ $menu_items = [
     'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
     'donations_evaluation' => ['label' => '評估派車', 'icon' => 'fa-solid fa-clipboard-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
-    'activities' => ['label' => '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
+    'activities' => ['label' => $role === 'volunteer' ? '活動認領' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],

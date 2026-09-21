@@ -4,12 +4,15 @@
  */
 
 require_once BASE_PATH . '/src/models/ActivityModel.php';
+require_once BASE_PATH . '/src/models/NotificationModel.php';
 
 $activityModel = new ActivityModel();
+$notificationModel = new NotificationModel();
 $currentRole = $currentUser['role'] ?? 'foodbank_staff';
 $canCreateActivity = in_array($currentRole, ['admin', 'foodbank_staff', 'donor'], true);
 $message = null;
 $editingActivity = null;
+$participantLists = [];
 
 $connection = $db->getConnection();
 $userIdEscaped = $connection->real_escape_string((string) $currentUser['user_id']);
@@ -43,15 +46,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName)
                 ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業認領已送出，活動結束後可下載永續認證證書。' : '已完成活動認領，預計可獲得 5 點榮譽點數。']
-                : ['type' => 'error', 'text' => '認領失敗，可能已經報名過，或剛取消過此活動，需等待 24 小時後才可再認領。'];
+                : ['type' => 'error', 'text' => '認領失敗，可能已經認領過此活動，或活動名額已滿。'];
         }
     }
 
     if (($_POST['action'] ?? '') === 'cancel_activity_registration') {
-        $cancelled = $activityModel->cancelRegistration((int) $_POST['activity_id'], (int) $currentUser['user_id']);
-        $message = $cancelled
-            ? ['type' => 'success', 'text' => '已取消此活動認領，24 小時內將無法再次認領該活動。']
-            : ['type' => 'error', 'text' => '取消失敗，或該活動並非您的認領記錄。'];
+        $cancellationReason = trim($_POST['cancellation_reason'] ?? '');
+        if ($cancellationReason === '') {
+            $message = ['type' => 'error', 'text' => '請填寫取消認領原因。'];
+        } else {
+            $cancelled = $activityModel->cancelRegistration((int) $_POST['activity_id'], (int) $currentUser['user_id'], $cancellationReason);
+            $cancelledActivity = $activityModel->getActivityById((int) $_POST['activity_id']);
+            $message = $cancelled
+                ? ['type' => 'success', 'text' => '已取消此活動認領，現在即可再次認領。']
+                : ['type' => 'error', 'text' => '取消失敗，或該活動並非您的認領記錄。'];
+
+            if ($cancelled && $cancelledActivity) {
+                $officialUsers = $connection->query("SELECT user_id FROM users WHERE role IN ('admin', 'foodbank_staff') AND status = 'active'");
+                $volunteerName = trim((string) ($currentUser['full_name'] ?? $currentUser['username'] ?? '志工'));
+                $notificationTitle = '志工取消活動認領';
+                $notificationMessage = sprintf(
+                    '%s 取消認領活動「%s」，原因：%s',
+                    $volunteerName,
+                    $cancelledActivity['title'],
+                    $cancellationReason
+                );
+                if ($officialUsers) {
+                    while ($officialUser = $officialUsers->fetch_assoc()) {
+                        $notificationModel->notify((int) $officialUser['user_id'], $notificationTitle, $notificationMessage, 'warning');
+                    }
+                }
+            }
+        }
     }
 
     if (($_POST['action'] ?? '') === 'delete_activity') {
@@ -90,6 +116,10 @@ $activities = $activityModel->getAllActivities();
 foreach ($activities as $index => $activity) {
     $activities[$index]['can_register'] = $activityModel->canUserRegisterActivity((int) $activity['activity_id'], (int) $currentUser['user_id']);
     $activities[$index]['can_manage'] = $activityModel->canManageActivity((int) $activity['activity_id'], (int) $currentUser['user_id'], $currentRole);
+    $activities[$index]['can_view_participants'] = $activities[$index]['can_manage'] || in_array($currentRole, ['admin', 'foodbank_staff'], true);
+    if ($activities[$index]['can_view_participants']) {
+        $participantLists[(int) $activity['activity_id']] = $activityModel->getParticipants((int) $activity['activity_id']);
+    }
     $activities[$index]['is_creator'] = ((int) ($activity['created_by'] ?? 0)) === (int) $currentUser['user_id'];
 }
 $myAssignments = $activityModel->getUserAssignments((int) $currentUser['user_id']);
@@ -108,7 +138,7 @@ $activityStatusLabels = [
 ];
 ?>
 
-<div class="view-header"><div><h1 class="view-title">活動發布</h1><p class="view-subtitle">發布公益活動，讓企業與志工參與在地行動</p></div></div>
+<div class="view-header"><div><h1 class="view-title"><?php echo $currentRole === 'volunteer' ? '活動認領' : '活動發布'; ?></h1><p class="view-subtitle"><?php echo $currentRole === 'volunteer' ? '認領公益活動，參與在地行動' : '發布公益活動，讓企業與志工參與在地行動'; ?></p></div></div>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
@@ -180,12 +210,15 @@ $activityStatusLabels = [
                 <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
                 <button class="btn btn-secondary btn-sm" type="submit">編輯活動</button>
             </form>
+            <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與志工</button>
             <form method="post" class="delivery-action-form" onsubmit="return confirm('確定要刪除這個活動嗎？');">
                 <input type="hidden" name="action" value="delete_activity">
                 <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
                 <button class="btn btn-danger btn-sm" type="submit">刪除活動</button>
             </form>
         </div>
+    <?php elseif ($activity['can_view_participants']): ?>
+        <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與志工</button>
     <?php elseif ($activity['can_register']): ?>
         <form method="post" class="delivery-action-form">
             <input type="hidden" name="action" value="register_activity">
@@ -199,7 +232,7 @@ $activityStatusLabels = [
             <button class="btn btn-primary btn-sm" type="submit">認領活動</button>
         </form>
     <?php else: ?>
-        <span class="status status-warning">24 小時內不可再認領</span>
+        <span class="status status-warning">已認領或目前無法認領</span>
     <?php endif; ?>
 </td></tr><?php endforeach; ?></tbody></table>
 <?php else: ?><div class="empty-state"><i class="fas fa-calendar"></i><p>目前沒有公開活動</p></div><?php endif; ?></div></div>
@@ -224,6 +257,69 @@ document.querySelectorAll('.assignment-type-select').forEach(function (select) {
 });
 </script>
 
+<div id="participants-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="participants-modal-title" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="participants-modal-title">參與志工</h3>
+            <button type="button" class="modal-close participants-modal-close" aria-label="關閉參與志工視窗">×</button>
+        </div>
+        <div class="modal-body" id="participants-modal-body"></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const participantData = <?php echo json_encode($participantLists, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    const modal = document.getElementById('participants-modal');
+    const title = document.getElementById('participants-modal-title');
+    const body = document.getElementById('participants-modal-body');
+
+    if (!modal || !title || !body) {
+        return;
+    }
+
+    function closeParticipantsModal() {
+        modal.style.display = 'none';
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, function (character) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#039;',
+                '"': '&quot;'
+            }[character];
+        });
+    }
+
+    document.querySelectorAll('.view-participants-button').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const participants = participantData[button.dataset.activityId] || [];
+            title.textContent = '參與志工：' + (button.dataset.activityTitle || '');
+            body.innerHTML = participants.length
+                ? '<div class="participants-list">' + participants.map(function (participant) {
+                    const name = escapeHtml(participant.full_name || participant.username || '');
+                    const type = participant.assignment_type === 'company' ? '企業認領' : '個人／志工';
+                    const organization = participant.organization_name ? ' · ' + escapeHtml(participant.organization_name) : '';
+                    const phone = participant.phone ? '<small>電話：' + escapeHtml(participant.phone) + '</small>' : '';
+                    return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + '</span>' + phone + '</div>';
+                }).join('') + '</div>'
+                : '<div class="empty-state"><i class="fas fa-users-slash"></i><p>目前沒有參與志工</p></div>';
+            modal.style.display = 'flex';
+        });
+    });
+
+    modal.querySelector('.participants-modal-close').addEventListener('click', closeParticipantsModal);
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+            closeParticipantsModal();
+        }
+    });
+})();
+</script>
+
 <div class="card mt-32"><div class="card-header"><h2>我的認領紀錄</h2><p>活動結束後可下載企業永續認證證書</p></div><div class="card-body">
 <?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
 <?php foreach ($myAssignments as $assignment): ?><tr>
@@ -233,17 +329,72 @@ document.querySelectorAll('.assignment-type-select').forEach(function (select) {
     <td><span class="status status-<?php echo htmlspecialchars($assignment['activity_status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$assignment['activity_status']] ?? $assignment['activity_status']); ?></span></td>
     <td>
         <?php if (($assignment['assignment_status'] ?? 'registered') === 'cancelled'): ?>
-            <span class="status status-warning">已取消（24 小時內不可再認領）</span>
+            <span class="status status-warning">已取消，可再次認領</span>
         <?php elseif ($assignment['activity_status'] === 'completed'): ?>
             <a class="btn btn-secondary btn-sm" href="?page=activity_certificate&assignment_id=<?php echo (int) $assignment['assignment_id']; ?>" target="_blank">查看證書</a>
         <?php else: ?>
-            <form method="post" style="display:inline;">
-                <input type="hidden" name="action" value="cancel_activity_registration">
-                <input type="hidden" name="activity_id" value="<?php echo (int) $assignment['activity_id']; ?>">
-                <button class="btn btn-secondary btn-sm" type="submit">取消認領</button>
-            </form>
+            <button class="btn btn-secondary btn-sm cancel-activity-button" type="button" data-activity-id="<?php echo (int) $assignment['activity_id']; ?>">取消認領</button>
         <?php endif; ?>
     </td>
 </tr><?php endforeach; ?></tbody></table></div>
 <?php else: ?><div class="empty-state"><i class="fas fa-clipboard-list"></i><p>尚未認領任何活動</p></div><?php endif; ?>
 </div></div>
+
+<div id="cancel-activity-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancel-activity-modal-title" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="cancel-activity-modal-title">取消活動認領</h3>
+            <button type="button" class="modal-close" aria-label="關閉取消認領視窗">×</button>
+        </div>
+        <div class="modal-body">
+            <p>請填寫取消此活動認領的原因。</p>
+            <form method="post" id="cancel-activity-form">
+                <input type="hidden" name="action" value="cancel_activity_registration">
+                <input type="hidden" name="activity_id" id="cancel-activity-id">
+                <div class="form-group">
+                    <label for="cancellation-reason">取消原因*</label>
+                    <textarea id="cancellation-reason" name="cancellation_reason" rows="4" maxlength="500" required></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary cancel-activity-modal-close">返回</button>
+                    <button type="submit" class="btn btn-primary">送出取消原因</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const modal = document.getElementById('cancel-activity-modal');
+    const form = document.getElementById('cancel-activity-form');
+    const activityIdInput = document.getElementById('cancel-activity-id');
+    const reasonInput = document.getElementById('cancellation-reason');
+
+    if (!modal || !form || !activityIdInput || !reasonInput) {
+        return;
+    }
+
+    function closeCancelModal() {
+        modal.style.display = 'none';
+        reasonInput.value = '';
+        activityIdInput.value = '';
+    }
+
+    document.querySelectorAll('.cancel-activity-button').forEach(function (button) {
+        button.addEventListener('click', function () {
+            activityIdInput.value = button.dataset.activityId || '';
+            modal.style.display = 'flex';
+            reasonInput.focus();
+        });
+    });
+
+    modal.querySelector('.modal-close').addEventListener('click', closeCancelModal);
+    modal.querySelector('.cancel-activity-modal-close').addEventListener('click', closeCancelModal);
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+            closeCancelModal();
+        }
+    });
+})();
+</script>

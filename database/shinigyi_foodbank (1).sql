@@ -61,6 +61,7 @@ CREATE TABLE `activity_assignments` (
   `user_id` int(11) NOT NULL,
   `status` enum('registered','attended','cancelled') NOT NULL DEFAULT 'registered',
   `cancelled_at` datetime DEFAULT NULL,
+  `cancellation_reason` varchar(500) DEFAULT NULL,
   `points` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `assignment_type` enum('individual','company') NOT NULL DEFAULT 'individual',
@@ -71,7 +72,7 @@ CREATE TABLE `activity_assignments` (
 -- 傾印資料表的資料 `activity_assignments`
 --
 
-INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `status`, `cancelled_at`, `points`, `created_at`, `assignment_type`, `organization_name`) VALUES
+INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `status`, `cancelled_at`, `cancellation_reason`, `points`, `created_at`, `assignment_type`, `organization_name`) VALUES
 (4, 3, 12, 'registered', NULL, 5, '2026-09-16 08:41:39', 'individual', NULL),
 (5, 4, 12, 'registered', NULL, 5, '2026-09-16 08:42:06', 'individual', NULL),
 (6, 5, 4, 'registered', NULL, 5, '2026-09-18 07:05:28', 'individual', NULL),
