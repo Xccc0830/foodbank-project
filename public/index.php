@@ -283,8 +283,8 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
     'donor' => ['dashboard', 'donations', 'rewards', 'notifications', 'donation_materials', 'certificate'],
 ];
@@ -312,6 +312,7 @@ $menu_items = [
     'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
+    'volunteer_management' => ['label' => '志工管理', 'icon' => 'fa-solid fa-people-group'],
 ];
 $allowedPages = $rolePages[$role] ?? ['dashboard'];
 if (!in_array($page, $allowedPages, true)) {
@@ -411,6 +412,9 @@ if (!in_array($page, $allowedPages, true)) {
                     <?php
                     // 根據頁面加載不同的視圖
                     $view_file = BASE_PATH . '/src/views/' . $page . '.php';
+                    if ($page === 'volunteer_management') {
+                        $view_file = BASE_PATH . '/src/views/users.php';
+                    }
 
                     if (file_exists($view_file)) {
                         include $view_file;
