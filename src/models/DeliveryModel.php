@@ -11,6 +11,7 @@ class DeliveryModel extends BaseModel {
     public function __construct() {
         parent::__construct();
         $this->ensureDeliveryMethodColumn();
+        $this->ensureExceptionResponseColumns();
     }
 
     private function ensureDeliveryMethodColumn() {
@@ -19,6 +20,20 @@ class DeliveryModel extends BaseModel {
             $this->db->query(
                 "ALTER TABLE deliveries ADD delivery_method ENUM('food_bank', 'volunteer', 'donor') NOT NULL DEFAULT 'volunteer' AFTER donation_id"
             );
+        }
+    }
+
+    private function ensureExceptionResponseColumns() {
+        $columns = [
+            'exception_response' => "ALTER TABLE deliveries ADD exception_response TEXT DEFAULT NULL AFTER exception_notes",
+            'exception_resolved_at' => "ALTER TABLE deliveries ADD exception_resolved_at DATETIME DEFAULT NULL AFTER exception_response",
+            'exception_resolved_by' => "ALTER TABLE deliveries ADD exception_resolved_by INT DEFAULT NULL AFTER exception_resolved_at",
+        ];
+        foreach ($columns as $column => $alterSql) {
+            $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
+            if ($result && $result->num_rows === 0) {
+                $this->db->query($alterSql);
+            }
         }
     }
 
@@ -106,6 +121,9 @@ class DeliveryModel extends BaseModel {
         $distance = (float) ($data['total_distance_km'] ?? 0);
         $weight = (float) ($data['weight_kg'] ?? 0);
         $urgency = in_array(($data['urgency'] ?? 'normal'), ['normal', 'priority', 'urgent'], true) ? $data['urgency'] : 'normal';
+        $status = in_array(($data['status'] ?? 'open'), ['open', 'claimed', 'picked_up', 'exception', 'cancelled'], true)
+            ? $data['status']
+            : 'open';
         $deliveryMethod = $this->normalizeDeliveryMethod($data['delivery_method'] ?? 'volunteer');
         if ($deliveryMethod === false) {
             return false;
@@ -118,13 +136,33 @@ class DeliveryModel extends BaseModel {
         }
         $donationValue = $donationId === null ? 'NULL' : (string) $donationId;
         $points = max(0, $this->calculatePoints($vehicleType, $distance, $weight, $urgency));
-
         if ($pickupAddress === '' || $deliveryAddress === '') {
             return false;
         }
 
-        $sql = "UPDATE deliveries SET donation_id = {$donationValue}, delivery_method = '{$deliveryMethod}', vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, weight_kg = {$weight}, urgency = '{$urgency}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
+        $sql = "UPDATE deliveries SET donation_id = {$donationValue}, delivery_method = '{$deliveryMethod}', vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, weight_kg = {$weight}, urgency = '{$urgency}', status = '{$status}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
         return $this->db->query($sql);
+    }
+
+    public function updateException($deliveryId, $userId, $userRole, $notes, $response) {
+        if (!$this->canManageDelivery($deliveryId, $userId, $userRole)) {
+            return false;
+        }
+
+        $deliveryId = (int) $deliveryId;
+        $notes = trim((string) $notes);
+        $response = trim((string) $response);
+        $notesEscaped = $this->db->real_escape_string($notes);
+        $responseEscaped = $this->db->real_escape_string($response);
+
+        return $this->db->query(
+            "UPDATE deliveries
+             SET exception_notes = '{$notesEscaped}',
+                 exception_response = '{$responseEscaped}',
+                 updated_at = NOW()
+             WHERE delivery_id = {$deliveryId}
+             LIMIT 1"
+        );
     }
 
     private function normalizeDeliveryMethod($deliveryMethod) {
@@ -207,6 +245,87 @@ class DeliveryModel extends BaseModel {
             }
         }
         return $wasUpdated;
+    }
+
+    public function resolveException($deliveryId, $officialUserId, $resolution, $nextStatus) {
+        $deliveryId = (int) $deliveryId;
+        $officialUserId = (int) $officialUserId;
+        $resolution = trim((string) $resolution);
+        $nextStatus = in_array($nextStatus, ['claimed', 'cancelled'], true) ? $nextStatus : 'claimed';
+
+        if ($resolution === '') {
+            return false;
+        }
+
+        $resolutionEscaped = $this->db->real_escape_string($resolution);
+        $result = $this->db->query(
+            "SELECT volunteer_id FROM deliveries
+             WHERE delivery_id = {$deliveryId} AND status = 'exception' LIMIT 1"
+        );
+        $delivery = $result ? $result->fetch_assoc() : null;
+        if (!$delivery) {
+            return false;
+        }
+
+        $updated = $this->db->query(
+            "UPDATE deliveries
+             SET status = '{$nextStatus}',
+                 exception_response = '{$resolutionEscaped}',
+                 exception_resolved_at = NOW(),
+                 exception_resolved_by = {$officialUserId},
+                 updated_at = NOW()
+             WHERE delivery_id = {$deliveryId} AND status = 'exception'"
+        );
+        if (!$updated || $this->db->affected_rows !== 1) {
+            return false;
+        }
+
+        $volunteerId = (int) ($delivery['volunteer_id'] ?? 0);
+        if ($volunteerId > 0) {
+            $this->notifyUser(
+                $volunteerId,
+                '配送異常已處理',
+                "配送任務 #{$deliveryId} 的異常處理結果：{$resolution}",
+                'info'
+            );
+        }
+        return true;
+    }
+
+    public function rejectException($deliveryId, $officialUserId, $response) {
+        $deliveryId = (int) $deliveryId;
+        $officialUserId = (int) $officialUserId;
+        $response = trim((string) $response);
+        if ($response === '') {
+            return false;
+        }
+
+        $responseEscaped = $this->db->real_escape_string($response);
+        $updated = $this->db->query(
+            "UPDATE deliveries
+             SET status = 'claimed',
+                 exception_response = '{$responseEscaped}',
+                 exception_resolved_at = NOW(),
+                 exception_resolved_by = {$officialUserId},
+                 updated_at = NOW()
+             WHERE delivery_id = {$deliveryId} AND status IN ('exception', 'cancelled')"
+        );
+        if (!$updated || $this->db->affected_rows !== 1) {
+            return false;
+        }
+
+        $result = $this->db->query("SELECT volunteer_id FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
+        $delivery = $result ? $result->fetch_assoc() : null;
+        $volunteerId = (int) ($delivery['volunteer_id'] ?? 0);
+        if ($volunteerId > 0) {
+            $this->notifyUser(
+                $volunteerId,
+                '異常回報已駁回',
+                "配送任務 #{$deliveryId} 的異常回報已駁回：{$response}",
+                'info'
+            );
+        }
+        return true;
     }
 
     public function updateDeliveryStatus($deliveryId, $status, $volunteerId = null) {

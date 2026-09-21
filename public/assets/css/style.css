@@ -1024,14 +1024,38 @@ body {
 
 .delivery-action-form input[type="text"],
 .delivery-action-form input[name="exception_notes"],
+.delivery-action-form textarea[name="exception_notes"],
+.delivery-action-form textarea[name="exception_response"],
 .inline-action-group input[type="text"],
 .inline-action-group input[name="exception_notes"] {
    min-width: 120px;
    max-width: 170px;
+   min-height: 38px;
    padding: 8px 10px;
    border: 1px solid var(--gray-300);
    border-radius: 8px;
    background: var(--bg-primary);
+}
+
+.data-table.deliveries-table td.delivery-exception-cell {
+   min-width: 280px;
+   white-space: normal;
+}
+
+.delivery-exception-cell .delivery-exception-form {
+   flex-direction: column;
+   align-items: stretch;
+   margin-bottom: 8px;
+}
+
+.delivery-exception-cell .delivery-exception-form:last-child {
+   margin-bottom: 0;
+}
+
+.delivery-exception-cell .delivery-exception-form textarea,
+.delivery-exception-cell .delivery-exception-form select {
+   width: 100%;
+   max-width: 280px;
 }
 
 .delivery-action-form-check {
