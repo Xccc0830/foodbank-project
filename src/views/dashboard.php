@@ -42,7 +42,7 @@ $dashboardRoleLabels = [
             <a href="?page=rewards" class="btn btn-secondary btn-sm">管理公益點數兌換</a>
         <?php elseif ($dashboardRole === 'donor'): ?>
             <h2>店家捐贈工作台</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
-            <a href="?page=donations" class="btn btn-primary btn-sm">上架剩食物資</a>
+            <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>
         <?php elseif ($dashboardRole === 'manager'): ?>
             <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看配送進度</a>

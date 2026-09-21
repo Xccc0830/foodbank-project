@@ -30,7 +30,17 @@ class DonationModel extends BaseModel {
         }
         
         $sql .= " ORDER BY donation_date DESC";
-        return $this->query($sql);
+        $donations = $this->query($sql);
+        $uniqueDonations = [];
+
+        foreach ($donations as $donation) {
+            $donationId = (int) ($donation['donation_id'] ?? 0);
+            if (!isset($uniqueDonations[$donationId])) {
+                $uniqueDonations[$donationId] = $donation;
+            }
+        }
+
+        return array_values($uniqueDonations);
     }
 
     /**
@@ -69,15 +79,30 @@ class DonationModel extends BaseModel {
      */
     public function reviewMaterialDonation($donation_id, $decision, $rejection_reason = '', $foodbankDeliveryOption = 'food_bank_pickup') {
         $donation_id = (int) $donation_id;
+        if (!in_array($decision, ['accepted', 'rejected'], true)) {
+            return false;
+        }
+
         $evaluationStatus = $decision === 'accepted' ? 'approved_volunteer' : 'rejected';
         $evaluationStatus = $this->db->real_escape_string($evaluationStatus);
         $rejectionReason = $this->db->real_escape_string($rejection_reason);
         $allowedDeliveryOptions = ['food_bank_pickup', 'volunteer_delivery'];
-        if (!in_array($foodbankDeliveryOption, $allowedDeliveryOptions, true)) {
+        if ($foodbankDeliveryOption !== '' && !in_array($foodbankDeliveryOption, $allowedDeliveryOptions, true)) {
             return false;
         }
+
+        if ($foodbankDeliveryOption === '') {
+            $existingResult = $this->db->query("SELECT delivery_option, delivery_method FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'pending' LIMIT 1");
+            $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
+            $foodbankDeliveryOption = $existingDonation['delivery_option'] ?? 'volunteer_delivery';
+            $deliveryMethod = $existingDonation['delivery_method'] ?? 'volunteer_assist';
+        } else {
+            $foodbankDeliveryOption = $this->db->real_escape_string($foodbankDeliveryOption);
+            $deliveryMethod = $foodbankDeliveryOption === 'food_bank_pickup' ? 'self_delivery' : 'volunteer_assist';
+        }
+
         $foodbankDeliveryOption = $this->db->real_escape_string($foodbankDeliveryOption);
-        $deliveryMethod = $foodbankDeliveryOption === 'food_bank_pickup' ? 'self_delivery' : 'volunteer_assist';
+        $deliveryMethod = $this->db->real_escape_string($deliveryMethod);
 
         $sql = "UPDATE {$this->table}
                 SET status = 'assessed',
@@ -91,7 +116,11 @@ class DonationModel extends BaseModel {
                     updated_at = NOW()
                 WHERE donation_id = {$donation_id}
                   AND status = 'pending'";
-        return $this->db->query($sql);
+        if (!$this->db->query($sql)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -197,32 +226,40 @@ class DonationModel extends BaseModel {
         return $this->db->query($sql);
     }
 
-    public function publishDonation($donation_id, $split_count = 1, $rewards_config = []) {
+    public function publishDonation($donation_id, $publishData = []) {
         $donation_id = (int) $donation_id;
-        $split_count = max(1, (int) $split_count);
+        if (!is_array($publishData)) {
+            $publishData = ['split_count' => $publishData];
+        }
+        $splitCount = max(1, (int) ($publishData['split_count'] ?? 1));
+        $needInspection = !empty($publishData['need_inspection']) ? 1 : 0;
+        $rewardOptions = $publishData['reward_options'] ?? [];
+        $rewardOptions = is_array($rewardOptions) ? array_values(array_intersect(
+            ['points', 'goods', 'free', 'service_hours'],
+            $rewardOptions
+        )) : [];
 
-        if ($split_count === 1) {
-            $sql = "UPDATE {$this->table}
-                    SET status = 'published',
-                        published_at = NOW(),
-                        split_count = 1
-                    WHERE donation_id = {$donation_id}";
-            return $this->db->query($sql);
+        $updates = [
+            "status = 'published'",
+            'published_at = NOW()',
+            "split_count = {$splitCount}",
+            "need_inspection = {$needInspection}",
+            "reward_options = '" . $this->db->real_escape_string(json_encode($rewardOptions, JSON_UNESCAPED_UNICODE)) . "'",
+        ];
+        foreach (['donor_name', 'donor_address', 'item_name', 'quantity', 'weight_kg', 'size_description', 'photo_path', 'pickup_deadline'] as $field) {
+            if (array_key_exists($field, $publishData)) {
+                $value = $publishData[$field];
+                $updates[] = $value === null || $value === ''
+                    ? "{$field} = NULL"
+                    : "{$field} = '" . $this->db->real_escape_string((string) $value) . "'";
+            }
+        }
+        if (array_key_exists('inspection_notes', $publishData)) {
+            $inspectionNotes = $publishData['inspection_notes'];
+            $updates[] = $inspectionNotes === '' ? 'inspection_notes = NULL' : "inspection_notes = '" . $this->db->real_escape_string($inspectionNotes) . "'";
         }
 
-        $this->db->begin_transaction();
-        try {
-            $this->db->query("UPDATE {$this->table}
-                            SET status = 'published',
-                                published_at = NOW(),
-                                split_count = {$split_count}
-                            WHERE donation_id = {$donation_id}");
-            $this->db->commit();
-            return true;
-        } catch (Throwable $e) {
-            $this->db->rollback();
-            return false;
-        }
+        return $this->db->query("UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE donation_id = {$donation_id} AND status = 'assessed'");
     }
 
     public function updateDeliveryStatus($donation_id, $new_status) {

@@ -117,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $donationData = [
         'donor_id' => $currentUserId,
         'donor_name' => $donorName !== '' ? $donorName : ($currentUser['full_name'] ?? '未命名商家'),
+            'donor_address' => trim((string) ($_POST['donor_address'] ?? '')) ?: null,
         'donation_type' => $donationType,
         'quantity' => $quantity,
         'unit' => $unit,
@@ -265,6 +266,11 @@ $formatDateTime = static function ($value) {
             <div class="form-group">
                 <label>店家名稱</label>
                 <input type="text" name="donor_name" placeholder="例如：愛心商家001" required>
+            </div>
+
+            <div class="form-group">
+                <label>店家地址</label>
+                <input type="text" name="donor_address" placeholder="請填寫取貨地址">
             </div>
 
             <div class="form-group">

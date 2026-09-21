@@ -230,7 +230,7 @@ CREATE TABLE `distribution_items` (
 --
 
 CREATE TABLE `donations` (
-  `donation_id` int(11) NOT NULL,
+  `donation_id` int(11) NOT NULL AUTO_INCREMENT,
   `donor_id` int(11) DEFAULT NULL,
   `donor_name` varchar(100) NOT NULL,
   `donation_type` enum('food','supplies','money','other') NOT NULL,
@@ -238,7 +238,7 @@ CREATE TABLE `donations` (
   `unit` varchar(20) DEFAULT NULL,
   `donation_date` datetime NOT NULL,
   `received_by` int(11) DEFAULT NULL,
-  `status` enum('received','pending','assessed','approved','rejected','archived') DEFAULT 'pending',
+  `status` enum('received','pending','assessed','approved','rejected','published','archived') DEFAULT 'pending',
   `evaluation_status` enum('pending','approved_volunteer','approved_self_delivery','published','rejected') DEFAULT 'pending',
   `delivery_method` enum('volunteer_assist','self_delivery') DEFAULT 'volunteer_assist',
   `approval_notes` text DEFAULT NULL,
@@ -264,7 +264,9 @@ CREATE TABLE `donations` (
   `evaluation_notes` text DEFAULT NULL,
   `seal_code` varchar(30) DEFAULT NULL,
   `need_inspection` tinyint(1) DEFAULT 1,
-  `inspection_notes` text DEFAULT NULL
+  `inspection_notes` text DEFAULT NULL,
+  `donor_address` varchar(255) DEFAULT NULL,
+  `reward_options` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
