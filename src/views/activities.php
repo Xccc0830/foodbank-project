@@ -22,9 +22,12 @@ $isEnterpriseVerified = (int) ($userInfo['is_enterprise_verified'] ?? 0) === 1;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['action'] ?? '') === 'create_activity') {
+        $activityType = $_POST['activity_type'] ?? 'other';
+        $activityTypeDetail = trim($_POST['activity_type_detail'] ?? '');
         $data = [
             'title' => trim($_POST['title'] ?? ''),
-            'activity_type' => $_POST['activity_type'] ?? 'other',
+            'activity_type' => $activityType,
+            'activity_type_detail' => $activityType === 'other' ? $activityTypeDetail : null,
             'description' => trim($_POST['description'] ?? ''),
             'start_at' => $_POST['start_at'] ?? date('Y-m-d H:i:s'),
             'end_at' => $_POST['end_at'] ?? null,
@@ -32,9 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'created_by' => (int) $currentUser['user_id'],
             'status' => 'planned',
         ];
-        $message = $data['title'] !== '' && $activityModel->createActivity($data)
+        $message = $data['title'] !== '' && ($activityType !== 'other' || $activityTypeDetail !== '') && $activityModel->createActivity($data)
             ? ['type' => 'success', 'text' => '公益活動已發布。']
-            : ['type' => 'error', 'text' => '請填寫活動名稱，或活動發布失敗。'];
+            : ['type' => 'error', 'text' => $activityType === 'other' && $activityTypeDetail === '' ? '請填寫其他活動類型。' : '請填寫活動名稱，或活動發布失敗。'];
     }
 
     if (($_POST['action'] ?? '') === 'register_activity') {
@@ -97,18 +100,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (($_POST['action'] ?? '') === 'update_activity') {
         $activityId = (int) $_POST['activity_id'];
+        $activityType = $_POST['activity_type'] ?? 'other';
+        $activityTypeDetail = trim($_POST['activity_type_detail'] ?? '');
         $updated = $activityModel->updateActivity($activityId, (int) $currentUser['user_id'], $currentRole, [
             'title' => trim($_POST['title'] ?? ''),
-            'activity_type' => $_POST['activity_type'] ?? 'other',
+            'activity_type' => $activityType,
+            'activity_type_detail' => $activityType === 'other' ? $activityTypeDetail : null,
             'description' => trim($_POST['description'] ?? ''),
             'start_at' => $_POST['start_at'] ?? date('Y-m-d H:i:s'),
             'end_at' => $_POST['end_at'] ?? null,
             'capacity' => (int) ($_POST['capacity'] ?? 0),
         ]);
 
-        $message = $updated
+        $message = $activityType === 'other' && $activityTypeDetail === ''
+            ? ['type' => 'error', 'text' => '請填寫其他活動類型。']
+            : ($updated
             ? ['type' => 'success', 'text' => '活動已更新。']
-            : ['type' => 'error', 'text' => '更新失敗，只有活動發起人或食物銀行/管理者才可編輯。'];
+            : ['type' => 'error', 'text' => '更新失敗，只有活動發起人或食物銀行/管理者才可編輯。']);
     }
 }
 
@@ -130,6 +138,13 @@ $activityTypeLabels = [
     'promotion' => '公益宣導',
     'other' => '其他',
 ];
+$getActivityTypeLabel = static function ($activity) use ($activityTypeLabels) {
+    if (($activity['activity_type'] ?? '') === 'other' && trim((string) ($activity['activity_type_detail'] ?? '')) !== '') {
+        return $activity['activity_type_detail'];
+    }
+
+    return $activityTypeLabels[$activity['activity_type']] ?? $activity['activity_type'];
+};
 $activityStatusLabels = [
     'planned' => '已規劃',
     'ongoing' => '進行中',
@@ -146,7 +161,8 @@ $activityStatusLabels = [
     <div class="card"><div class="card-header"><h2>發布活動</h2><p>支援募資、說明會、淨灘與公益宣導</p></div><div class="card-body">
         <form method="post"><input type="hidden" name="action" value="create_activity">
             <div class="form-group"><label>活動名稱*</label><input name="title" required></div>
-            <div class="form-group"><label>活動類型</label><select name="activity_type"><option value="donation_drive">物資募集</option><option value="briefing">說明會</option><option value="cleanup">環境行動</option><option value="promotion">公益宣導</option><option value="other">其他</option></select></div>
+            <div class="form-group"><label>活動類型</label><select name="activity_type" class="activity-type-select"><option value="donation_drive">物資募集</option><option value="briefing">說明會</option><option value="cleanup">環境行動</option><option value="promotion">公益宣導</option><option value="other">其他</option></select></div>
+            <div class="form-group other-activity-type-field" hidden><label>其他活動類型*</label><input name="activity_type_detail" maxlength="100" placeholder="請輸入活動類型"></div>
             <div class="grid-2"><div class="form-group"><label>開始時間*</label><input type="datetime-local" name="start_at" required></div><div class="form-group"><label>名額</label><input type="number" name="capacity" min="0"></div></div>
             <div class="form-group"><label>活動說明</label><textarea name="description"></textarea></div>
             <button class="btn btn-primary" type="submit"><i class="fas fa-calendar-plus"></i> 發布活動</button>
@@ -178,13 +194,14 @@ $activityStatusLabels = [
             <input type="hidden" name="activity_id" value="<?php echo (int) $editingActivity['activity_id']; ?>">
             <div class="grid-2">
                 <div class="form-group"><label>活動名稱</label><input name="title" value="<?php echo htmlspecialchars($editingActivity['title']); ?>" required></div>
-                <div class="form-group"><label>活動類型</label><select name="activity_type">
+                <div class="form-group"><label>活動類型</label><select name="activity_type" class="activity-type-select">
                     <option value="donation_drive" <?php echo $editingActivity['activity_type'] === 'donation_drive' ? 'selected' : ''; ?>>物資募集</option>
                     <option value="briefing" <?php echo $editingActivity['activity_type'] === 'briefing' ? 'selected' : ''; ?>>說明會</option>
                     <option value="cleanup" <?php echo $editingActivity['activity_type'] === 'cleanup' ? 'selected' : ''; ?>>環境行動</option>
                     <option value="promotion" <?php echo $editingActivity['activity_type'] === 'promotion' ? 'selected' : ''; ?>>公益宣導</option>
                     <option value="other" <?php echo $editingActivity['activity_type'] === 'other' ? 'selected' : ''; ?>>其他</option>
                 </select></div>
+                <div class="form-group other-activity-type-field" hidden><label>其他活動類型*</label><input name="activity_type_detail" maxlength="100" value="<?php echo htmlspecialchars($editingActivity['activity_type_detail'] ?? ''); ?>" placeholder="請輸入活動類型"></div>
             </div>
             <div class="grid-2">
                 <div class="form-group"><label>開始時間</label><input type="datetime-local" name="start_at" value="<?php echo htmlspecialchars(str_replace(' ', 'T', $editingActivity['start_at'])); ?>" required></div>
@@ -202,7 +219,7 @@ $activityStatusLabels = [
 
 <div class="card mt-32"><div class="card-header"><h2>活動列表</h2></div><div class="card-body activities-table-body">
 <?php if ($activities): ?><table class="data-table activities-table"><thead><tr><th>活動名稱</th><th>類型</th><th>時間</th><th>參與人數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
-<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><?php if (!empty($activity['description']) && trim($activity['description']) !== trim($activity['title'])): ?><br><small><?php echo htmlspecialchars($activity['description']); ?></small><?php endif; ?></td><td><?php echo htmlspecialchars($activityTypeLabels[$activity['activity_type']] ?? $activity['activity_type']); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$activity['status']] ?? $activity['status']); ?></span></td><td>
+<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><?php if (!empty($activity['description']) && trim($activity['description']) !== trim($activity['title'])): ?><br><small class="<?php echo mb_strlen(trim($activity['description']), 'UTF-8') > 80 ? 'activity-description' : 'activity-description-short'; ?>"><?php echo htmlspecialchars($activity['description']); ?></small><?php if (mb_strlen(trim($activity['description']), 'UTF-8') > 80): ?><button type="button" class="activity-description-button" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>" data-activity-description="<?php echo htmlspecialchars($activity['description'], ENT_QUOTES, 'UTF-8'); ?>">查看完整說明</button><?php endif; ?><?php endif; ?></td><td><?php echo htmlspecialchars($getActivityTypeLabel($activity)); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$activity['status']] ?? $activity['status']); ?></span></td><td>
     <?php if ($activity['can_manage']): ?>
         <div class="inline-action-group">
             <form method="post" class="delivery-action-form">
@@ -232,10 +249,54 @@ $activityStatusLabels = [
             <button class="btn btn-primary btn-sm" type="submit">認領活動</button>
         </form>
     <?php else: ?>
-        <span class="status status-warning">已認領或目前無法認領</span>
+        <span class="status status-warning">已認領或已逾期</span>
     <?php endif; ?>
 </td></tr><?php endforeach; ?></tbody></table>
 <?php else: ?><div class="empty-state"><i class="fas fa-calendar"></i><p>目前沒有公開活動</p></div><?php endif; ?></div></div>
+
+<div id="activity-description-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="activity-description-modal-title" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="activity-description-modal-title">活動說明</h3>
+            <button type="button" class="modal-close activity-description-modal-close" aria-label="關閉活動說明視窗">×</button>
+        </div>
+        <div class="modal-body">
+            <h4 id="activity-description-title"></h4>
+            <p id="activity-description-content" class="activity-description-full"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const modal = document.getElementById('activity-description-modal');
+    const title = document.getElementById('activity-description-title');
+    const content = document.getElementById('activity-description-content');
+
+    if (!modal || !title || !content) {
+        return;
+    }
+
+    function closeDescriptionModal() {
+        modal.style.display = 'none';
+    }
+
+    document.querySelectorAll('.activity-description-button').forEach(function (button) {
+        button.addEventListener('click', function () {
+            title.textContent = button.dataset.activityTitle || '活動說明';
+            content.textContent = button.dataset.activityDescription || '';
+            modal.style.display = 'flex';
+        });
+    });
+
+    modal.querySelector('.activity-description-modal-close').addEventListener('click', closeDescriptionModal);
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+            closeDescriptionModal();
+        }
+    });
+})();
+</script>
 
 <script>
 document.querySelectorAll('.assignment-type-select').forEach(function (select) {
@@ -254,6 +315,23 @@ document.querySelectorAll('.assignment-type-select').forEach(function (select) {
 
     select.addEventListener('change', updateOrganizationField);
     updateOrganizationField();
+});
+</script>
+
+<script>
+document.querySelectorAll('.activity-type-select').forEach(function (select) {
+    const field = select.form.querySelector('.other-activity-type-field');
+    const input = field.querySelector('input');
+
+    function updateActivityTypeField() {
+        const isOther = select.value === 'other';
+        field.hidden = !isOther;
+        input.disabled = !isOther;
+        input.required = isOther;
+    }
+
+    select.addEventListener('change', updateActivityTypeField);
+    updateActivityTypeField();
 });
 </script>
 
@@ -320,6 +398,7 @@ document.querySelectorAll('.assignment-type-select').forEach(function (select) {
 })();
 </script>
 
+<?php if ($currentRole === 'volunteer'): ?>
 <div class="card mt-32"><div class="card-header"><h2>我的認領紀錄</h2><p>活動結束後可下載企業永續認證證書</p></div><div class="card-body">
 <?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
 <?php foreach ($myAssignments as $assignment): ?><tr>
@@ -339,6 +418,7 @@ document.querySelectorAll('.assignment-type-select').forEach(function (select) {
 </tr><?php endforeach; ?></tbody></table></div>
 <?php else: ?><div class="empty-state"><i class="fas fa-clipboard-list"></i><p>尚未認領任何活動</p></div><?php endif; ?>
 </div></div>
+<?php endif; ?>
 
 <div id="cancel-activity-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancel-activity-modal-title" style="display: none;">
     <div class="modal-content">

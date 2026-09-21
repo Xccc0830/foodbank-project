@@ -1428,6 +1428,7 @@ form {
 
 .data-table.activities-table {
    min-width: 820px;
+    table-layout: fixed;
 }
 
 .data-table.activities-table th,
@@ -1439,9 +1440,71 @@ form {
 
 .data-table.activities-table th:first-child,
 .data-table.activities-table td:first-child {
-   width: auto;
-   min-width: 150px;
+    width: 28%;
+    min-width: 220px;
    text-align: left;
+}
+
+.data-table.activities-table th:nth-child(2),
+.data-table.activities-table td:nth-child(2) {
+    width: 13%;
+}
+
+.data-table.activities-table th:nth-child(3),
+.data-table.activities-table td:nth-child(3) {
+    width: 18%;
+}
+
+.data-table.activities-table th:nth-child(4),
+.data-table.activities-table td:nth-child(4) {
+    width: 12%;
+}
+
+.data-table.activities-table th:nth-child(5),
+.data-table.activities-table td:nth-child(5) {
+    width: 10%;
+}
+
+.data-table.activities-table th:last-child,
+.data-table.activities-table td:last-child {
+    width: 19%;
+    min-width: 250px;
+    white-space: normal;
+}
+
+.activity-description {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    word-break: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.activity-description-short {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.activity-description-button {
+    display: block;
+    margin-top: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.activity-description-button:hover {
+    text-decoration: underline;
+}
+
+.activity-description-full {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .activities-assignments-table-body {

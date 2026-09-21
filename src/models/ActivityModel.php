@@ -64,7 +64,7 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $allowedKeys = ['title', 'activity_type', 'description', 'start_at', 'end_at', 'capacity'];
+        $allowedKeys = ['title', 'activity_type', 'activity_type_detail', 'description', 'start_at', 'end_at', 'capacity'];
         $set = [];
         foreach ($data as $key => $value) {
             if (!in_array($key, $allowedKeys, true)) {

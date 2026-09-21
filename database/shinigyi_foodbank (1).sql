@@ -31,6 +31,7 @@ CREATE TABLE `activities` (
   `activity_id` int(11) NOT NULL,
   `title` varchar(150) NOT NULL,
   `activity_type` enum('donation_drive','briefing','cleanup','promotion','other') NOT NULL DEFAULT 'other',
+  `activity_type_detail` varchar(100) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `start_at` datetime NOT NULL,
   `end_at` datetime DEFAULT NULL,
@@ -44,10 +45,10 @@ CREATE TABLE `activities` (
 -- 傾印資料表的資料 `activities`
 --
 
-INSERT INTO `activities` (`activity_id`, `title`, `activity_type`, `description`, `start_at`, `end_at`, `capacity`, `status`, `created_by`, `created_at`) VALUES
-(3, '文山區惜食募集日', 'donation_drive', '協助整理與募集社區剩食物資。', '2026-09-17 14:02:07', '2026-09-17 18:02:07', 20, 'planned', NULL, '2026-09-15 06:02:07'),
-(4, '食安運送志工說明會', 'briefing', '認識防拆貼紙、冷鏈運送與異常回報流程。', '2026-09-20 14:02:07', '2026-09-20 16:02:07', 30, 'planned', NULL, '2026-09-15 06:02:07'),
-(5, '淨灘', 'cleanup', '白沙灣淨灘活動，天氣不佳則日期順延', '2026-09-30 14:57:00', NULL, 50, 'planned', 1, '2026-09-18 06:57:28');
+INSERT INTO `activities` (`activity_id`, `title`, `activity_type`, `activity_type_detail`, `description`, `start_at`, `end_at`, `capacity`, `status`, `created_by`, `created_at`) VALUES
+(3, '文山區惜食募集日', 'donation_drive', NULL, '協助整理與募集社區剩食物資。', '2026-09-17 14:02:07', '2026-09-17 18:02:07', 20, 'planned', NULL, '2026-09-15 06:02:07'),
+(4, '食安運送志工說明會', 'briefing', NULL, '認識防拆貼紙、冷鏈運送與異常回報流程。', '2026-09-20 14:02:07', '2026-09-20 16:02:07', 30, 'planned', NULL, '2026-09-15 06:02:07'),
+(5, '淨灘', 'cleanup', NULL, '白沙灣淨灘活動，天氣不佳則日期順延', '2026-09-30 14:57:00', NULL, 50, 'planned', 1, '2026-09-18 06:57:28');
 
 -- --------------------------------------------------------
 
