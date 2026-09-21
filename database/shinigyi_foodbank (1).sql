@@ -74,11 +74,11 @@ CREATE TABLE `activity_assignments` (
 --
 
 INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `status`, `cancelled_at`, `cancellation_reason`, `points`, `created_at`, `assignment_type`, `organization_name`) VALUES
-(4, 3, 12, 'registered', NULL, 5, '2026-09-16 08:41:39', 'individual', NULL),
-(5, 4, 12, 'registered', NULL, 5, '2026-09-16 08:42:06', 'individual', NULL),
-(6, 5, 4, 'registered', NULL, 5, '2026-09-18 07:05:28', 'individual', NULL),
-(7, 4, 4, 'registered', NULL, 5, '2026-09-18 07:05:29', 'individual', NULL),
-(8, 3, 4, 'registered', NULL, 5, '2026-09-18 07:05:30', 'individual', NULL);
+(4, 3, 12, 'registered', NULL, NULL, 5, '2026-09-16 08:41:39', 'individual', NULL),
+(5, 4, 12, 'registered', NULL, NULL, 5, '2026-09-16 08:42:06', 'individual', NULL),
+(6, 5, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:28', 'individual', NULL),
+(7, 4, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:29', 'individual', NULL),
+(8, 3, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:30', 'individual', NULL);
 
 -- --------------------------------------------------------
 
@@ -231,6 +231,7 @@ CREATE TABLE `distribution_items` (
 
 CREATE TABLE `donations` (
   `donation_id` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`donation_id`),
   `donor_id` int(11) DEFAULT NULL,
   `donor_name` varchar(100) NOT NULL,
   `donation_type` enum('food','supplies','money','other') NOT NULL,
@@ -891,7 +892,6 @@ ALTER TABLE `distribution_items`
 -- 資料表索引 `donations`
 --
 ALTER TABLE `donations`
-  ADD PRIMARY KEY (`donation_id`),
   ADD KEY `donation_date` (`donation_date`),
   ADD KEY `status` (`status`),
   ADD KEY `received_by` (`received_by`),
