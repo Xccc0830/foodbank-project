@@ -608,6 +608,14 @@ body {
     box-shadow: var(--shadow-sm);
 }
 
+.activity-publish-layout {
+    width: min(100%, 860px);
+}
+
+.activity-publish-layout > .card {
+    width: 100%;
+}
+
 .feature-list {
     list-style: none;
     padding: 0;
@@ -1521,6 +1529,10 @@ form {
 }
 
 @media (max-width: 900px) {
+    .activity-publish-layout {
+        width: 100%;
+    }
+
     .activity-form-grid {
         grid-template-columns: 1fr;
     }

@@ -161,7 +161,7 @@ $activityStatusLabels = [
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
-<div class="grid-2">
+<div class="activity-publish-layout">
     <div class="card"><div class="card-header"><h2>發布活動</h2><p>支援募資、說明會、淨灘與公益宣導</p></div><div class="card-body">
         <form method="post"><?php echo csrfField(); ?><input type="hidden" name="action" value="create_activity">
             <div class="form-group"><label>活動名稱*</label><input name="title" required></div>
@@ -172,20 +172,6 @@ $activityStatusLabels = [
             <button class="btn btn-primary" type="submit"><i class="fas fa-calendar-plus"></i> 發布活動</button>
         </form>
     </div></div>
-    <div class="card participation-card">
-        <div class="card-header">
-            <h2>參與方式</h2>
-            <p>志工與愛心商家可直接認領公開活動</p>
-        </div>
-        <div class="card-body">
-            <ul class="feature-list">
-                <li><span class="feature-icon">●</span><span>企業可集體認領公益專案</span></li>
-                <li><span class="feature-icon">●</span><span>個人與志工可線上報名</span></li>
-                <li><span class="feature-icon">●</span><span>完成參與後可累積榮譽點數</span></li>
-                <li><span class="feature-icon">●</span><span>管理者可追蹤活動人數與狀態</span></li>
-            </ul>
-        </div>
-    </div>
 </div>
 <?php endif; ?>
 
