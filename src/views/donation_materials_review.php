@@ -1,9 +1,12 @@
 <?php
 require_once BASE_PATH . '/src/models/DonationModel.php';
+require_once BASE_PATH . '/src/models/DeliveryModel.php';
 
 $donationModel = new DonationModel();
+$deliveryModel = new DeliveryModel();
 $reviewMessage = null;
 $viewingDonation = null;
+$isPublishView = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -33,10 +36,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'view_review_donation' && $donationId > 0) {
         $viewingDonation = $donationModel->getDonationById($donationId);
+        $isPublishView = false;
     }
 
     if ($action === 'view_publish_donation' && $donationId > 0) {
         $viewingDonation = $donationModel->getDonationById($donationId);
+        $isPublishView = true;
     }
 
     if ($action === 'publish_material_donation' && $donationId > 0) {
@@ -324,15 +329,23 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     <div class="card-body">
         <?php if (!empty($publishedDonations)): ?>
             <table class="data-table">
-                <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>配送選擇</th><th>發布時間</th><th>操作</th></tr></thead>
+                <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>配送選擇</th><th>目前進度</th><th>發布時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($publishedDonations as $donation): ?>
+                    <?php $deliveryProgress = $deliveryModel->getDonationDeliveryProgress((int) $donation['donation_id']); ?>
                     <tr>
                         <td><span class="status status-success">已發布</span></td>
                         <td><?php echo htmlspecialchars($donation['donor_name'] ?? ''); ?></td>
                         <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type'] ?? ''] ?? '其他'); ?></td>
                         <td><?php echo htmlspecialchars($donation['item_name'] ?? '未填寫'); ?></td>
                         <td><?php echo htmlspecialchars($deliveryOptionLabels[$donation['delivery_option'] ?? ''] ?? '未指定'); ?></td>
+                        <td>
+                            <?php if ($deliveryProgress['accepted_tasks'] > 0): ?>
+                                <span class="status status-success">已有人接受</span>
+                            <?php else: ?>
+                                <span class="status status-pending">尚未有配送者</span>
+                            <?php endif; ?>
+                        </td>
                         <td><?php echo htmlspecialchars($formatDateTime($donation['published_at'] ?? null)); ?></td>
                         <td>
                             <form method="post">
@@ -422,6 +435,43 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             </div>
                             <div class="modal-actions"><button type="submit" name="decision" value="accepted" class="btn btn-primary">發布</button></div>
                         </div>
+                    </form>
+                <?php elseif (($viewingDonation['status'] ?? '') === 'assessed' && $isPublishView && ($viewingDonation['evaluation_status'] ?? '') !== 'rejected'): ?>
+                    <form method="post" class="review-decision-form">
+                        <input type="hidden" name="action" value="publish_material_donation">
+                        <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
+                        <h3>發布物資資訊</h3>
+                        <p class="form-hint">以下內容預設為商家填寫的資料，食物銀行可在發布前修改。</p>
+                        <div class="grid-2">
+                            <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
+                            <label>商家地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
+                            <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
+                            <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($viewingDonation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
+                        </div>
+                        <div class="publish-options">
+                            <strong>是否需協助檢查物資</strong>
+                            <label><input type="radio" name="need_inspection" value="1" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 1 ? 'checked' : ''; ?>> 檢查物資</label>
+                            <label><input type="radio" name="need_inspection" value="0" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 0 ? 'checked' : ''; ?>> 不需檢查（請商家貼防弊貼紙）</label>
+                            <input type="text" name="inspection_notes" value="<?php echo htmlspecialchars($viewingDonation['inspection_notes'] ?? '', ENT_QUOTES); ?>" placeholder="檢查備註或防弊貼紙提醒">
+                        </div>
+                        <div class="publish-options">
+                            <strong>是否要拆單</strong>
+                            <label><input type="radio" name="split_enabled" value="0" checked> 否</label>
+                            <label><input type="radio" name="split_enabled" value="1"> 是</label>
+                            <label>拆成 <input type="number" name="split_count" min="2" value="2" disabled> 個運送單</label>
+                        </div>
+                        <div class="publish-options">
+                            <strong>獎勵機制</strong>
+                            <label><input type="checkbox" name="reward_options[]" value="points" checked> 點數</label>
+                            <label><input type="checkbox" name="reward_options[]" value="goods" checked> 物資</label>
+                            <label><input type="checkbox" name="reward_options[]" value="free" checked> 無償</label>
+                            <label><input type="checkbox" name="reward_options[]" value="service_hours" checked> 服務時數</label>
+                        </div>
+                        <div class="modal-actions"><button type="submit" class="btn btn-primary">發布</button></div>
                     </form>
                 <?php elseif (($viewingDonation['status'] ?? '') === 'assessed'): ?>
                     <div class="assessment-summary">

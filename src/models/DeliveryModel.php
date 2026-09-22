@@ -90,6 +90,20 @@ class DeliveryModel extends BaseModel {
         return $result ? $result->fetch_assoc() : null;
     }
 
+    public function getDonationDeliveryProgress($donationId) {
+        $donationId = (int) $donationId;
+        $result = $this->db->query("SELECT COUNT(*) AS total_tasks,
+                                           SUM(CASE WHEN volunteer_id IS NOT NULL THEN 1 ELSE 0 END) AS accepted_tasks
+                                    FROM deliveries
+                                    WHERE donation_id = {$donationId}
+                                      AND delivery_method = 'volunteer'");
+        $progress = $result ? $result->fetch_assoc() : null;
+        return [
+            'total_tasks' => (int) ($progress['total_tasks'] ?? 0),
+            'accepted_tasks' => (int) ($progress['accepted_tasks'] ?? 0),
+        ];
+    }
+
         public function getMaterialTransportTasks() {
                 $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
                                              n.quantity, n.unit, n.weight_kg AS published_weight_kg,
