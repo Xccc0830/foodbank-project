@@ -90,6 +90,37 @@ class DeliveryModel extends BaseModel {
         return $result ? $result->fetch_assoc() : null;
     }
 
+        public function getMaterialTransportTasks() {
+                $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
+                                             n.quantity, n.unit, n.weight_kg AS published_weight_kg,
+                                             n.size_description, n.photo_path, n.pickup_deadline,
+                                             n.need_inspection, n.inspection_notes, n.reward_options,
+                                             n.split_count
+                                FROM deliveries d
+                                INNER JOIN donations n ON n.donation_id = d.donation_id
+                                WHERE n.status = 'published'
+                                    AND d.delivery_method = 'volunteer'
+                                    AND d.status IN ('open', 'claimed')
+                                ORDER BY n.published_at DESC, d.delivery_id ASC";
+                return $this->query($sql);
+        }
+
+        public function getMaterialTransportTask($deliveryId) {
+                $deliveryId = (int) $deliveryId;
+                $result = $this->db->query("SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
+                                                                                     n.quantity, n.unit, n.weight_kg AS published_weight_kg,
+                                                                                     n.size_description, n.photo_path, n.pickup_deadline,
+                                                                                     n.need_inspection, n.inspection_notes, n.reward_options,
+                                                                                     n.split_count, n.status AS donation_status
+                                                                        FROM deliveries d
+                                                                        INNER JOIN donations n ON n.donation_id = d.donation_id
+                                                                        WHERE d.delivery_id = {$deliveryId}
+                                                                            AND n.status = 'published'
+                                                                            AND d.delivery_method = 'volunteer'
+                                                                        LIMIT 1");
+                return $result ? $result->fetch_assoc() : null;
+        }
+
     public function canManageDelivery($deliveryId, $userId, $userRole) {
         if (!in_array($userRole, ['admin', 'foodbank_staff'], true)) {
             return false;
@@ -210,6 +241,13 @@ class DeliveryModel extends BaseModel {
                 error_log("志工接單通知沒有官方收件人：delivery_id={$deliveryId}");
             }
         }
+        return $updated && $this->db->affected_rows === 1;
+    }
+
+    public function cancelClaimedDelivery($deliveryId, $volunteerId) {
+        $deliveryId = (int) $deliveryId;
+        $volunteerId = (int) $volunteerId;
+        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = NULL, status = 'open', updated_at = NOW() WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'claimed' AND volunteer_id = {$volunteerId}");
         return $updated && $this->db->affected_rows === 1;
     }
 
