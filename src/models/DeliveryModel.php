@@ -190,6 +190,21 @@ class DeliveryModel extends BaseModel {
                 return $result ? $result->fetch_assoc() : null;
         }
 
+            public function getMaterialTransportHistoryTasks($volunteerId) {
+                $volunteerId = (int) $volunteerId;
+                $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
+                                 n.quantity, n.unit, n.weight_kg AS published_weight_kg,
+                                 n.size_description, n.photo_path, n.pickup_deadline
+                        FROM deliveries d
+                        INNER JOIN donations n ON n.donation_id = d.donation_id
+                        WHERE n.status = 'published'
+                            AND d.delivery_method = 'volunteer'
+                            AND d.volunteer_id = {$volunteerId}
+                            AND d.status = 'delivered'
+                        ORDER BY d.delivered_at DESC, d.delivery_id DESC";
+                return $this->query($sql);
+            }
+
     public function canManageDelivery($deliveryId, $userId, $userRole) {
         if (!in_array($userRole, ['admin', 'foodbank_staff'], true)) {
             return false;

@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['view_delivery_id'])) {
 }
 
 $tasks = $deliveryModel->getMaterialTransportTasks();
+$historyTasks = $deliveryModel->getMaterialTransportHistoryTasks($currentUserId);
 $tasksByDonation = [];
 foreach ($tasks as $task) {
     $donationId = (int) ($task['donation_id'] ?? 0);
@@ -99,6 +100,37 @@ $photoUrl = static function ($photoPath) {
     <div class="empty-state"><i class="fas fa-truck-fast"></i><p>目前沒有已發布的物資運送任務</p></div>
 <?php endif; ?>
 
+<div class="card mt-32">
+    <div class="card-header">
+        <h2>歷史紀錄</h2>
+        <p>食物銀行確認任務完成後，已完成的運送會出現在這裡。</p>
+    </div>
+    <div class="card-body">
+        <?php if (!empty($historyTasks)): ?>
+            <table class="data-table">
+                <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類別</th><th>名稱</th><th>數量</th><th>完成時間</th><th>操作</th></tr></thead>
+                <tbody>
+                <?php foreach ($historyTasks as $task): ?>
+                    <tr>
+                        <td><span class="status status-success">已完成運送</span></td>
+                        <td><?php echo htmlspecialchars($task['donor_name'] ?? ''); ?></td>
+                        <td><?php echo htmlspecialchars($donationTypeLabels[$task['donation_type'] ?? 'other'] ?? '其他'); ?></td>
+                        <td><?php echo htmlspecialchars($task['item_name'] ?? '未提供'); ?></td>
+                        <td><?php echo htmlspecialchars($task['quantity'] ?? ''); ?> <?php echo htmlspecialchars($task['unit'] ?? ''); ?></td>
+                        <td><?php echo htmlspecialchars($task['delivered_at'] ?? '未提供'); ?></td>
+                        <td>
+                            <a class="btn btn-secondary btn-sm" href="?page=material_transport&amp;view_delivery_id=<?php echo (int) $task['delivery_id']; ?>">查看詳情</a>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <div class="empty-state"><i class="fas fa-box-archive"></i><p>目前沒有歷史運送紀錄</p></div>
+        <?php endif; ?>
+    </div>
+</div>
+
 <?php if ($viewingTask): ?>
     <div class="material-transport-overlay">
         <div class="material-transport-modal">
@@ -124,7 +156,9 @@ $photoUrl = static function ($photoPath) {
                     <p><strong>送達地點：</strong><?php echo htmlspecialchars($viewingTask['delivery_address'] ?? '忠信食物銀行'); ?></p>
                     <p><strong>本單重量：</strong><?php echo htmlspecialchars($viewingTask['weight_kg'] ?? '0'); ?> 公斤</p>
                 </div>
-                <?php if (($viewingTask['status'] ?? '') === 'open'): ?>
+                <?php if (($viewingTask['status'] ?? '') === 'delivered'): ?>
+                    <div class="alert alert-success">此運送任務已完成。</div>
+                <?php elseif (($viewingTask['status'] ?? '') === 'open'): ?>
                     <form method="post" class="material-transport-accept-form">
                         <input type="hidden" name="action" value="accept_material_transport">
                         <input type="hidden" name="delivery_id" value="<?php echo (int) $viewingTask['delivery_id']; ?>">
