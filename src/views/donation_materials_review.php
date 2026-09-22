@@ -424,9 +424,43 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         </div>
                     </form>
                 <?php elseif (($viewingDonation['status'] ?? '') === 'assessed' && ($viewingDonation['evaluation_status'] ?? '') !== 'rejected'): ?>
-                    <div class="publish-summary">
-                        <?php $renderDetails($viewingDonation); ?>
-                    </div>
+                    <form method="post" class="review-decision-form">
+                        <input type="hidden" name="action" value="publish_material_donation">
+                        <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
+                        <h3>發布物資資訊</h3>
+                        <p class="form-hint">以下內容預設為商家送出的資料，食物銀行可在發布前修正。</p>
+                        <div class="grid-2">
+                            <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
+                            <label>商家地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
+                            <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
+                            <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($viewingDonation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
+                        </div>
+                        <div class="publish-options">
+                            <strong>是否需協助檢查物資</strong>
+                            <label><input type="radio" name="need_inspection" value="1" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 1 ? 'checked' : ''; ?>> 檢查物資</label>
+                            <label><input type="radio" name="need_inspection" value="0" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 0 ? 'checked' : ''; ?>> 不需檢查（請商家貼防弊貼紙）</label>
+                            <input type="text" name="inspection_notes" value="<?php echo htmlspecialchars($viewingDonation['inspection_notes'] ?? '', ENT_QUOTES); ?>" placeholder="檢查備註或防弊貼紙提醒">
+                        </div>
+                        <div class="publish-options">
+                            <strong>是否要拆單</strong>
+                            <label><input type="radio" name="split_enabled" value="0" checked> 否</label>
+                            <label><input type="radio" name="split_enabled" value="1"> 是</label>
+                            <label>拆成 <input type="number" name="split_count" min="2" value="2" disabled> 個運送單</label>
+                            <p class="form-hint">發布後會依此數量建立可供志工選擇的運送需求。</p>
+                        </div>
+                        <div class="publish-options">
+                            <strong>獎勵機制</strong>
+                            <label><input type="checkbox" name="reward_options[]" value="points" checked> 點數</label>
+                            <label><input type="checkbox" name="reward_options[]" value="goods" checked> 物資</label>
+                            <label><input type="checkbox" name="reward_options[]" value="free" checked> 無償</label>
+                            <label><input type="checkbox" name="reward_options[]" value="service_hours" checked> 服務時數</label>
+                        </div>
+                        <div class="modal-actions"><button type="submit" class="btn btn-primary">發布</button></div>
+                    </form>
                 <?php elseif (($viewingDonation['status'] ?? '') === 'published'): ?>
                     <div class="publish-summary">
                         <p><strong>發布時間：</strong><?php echo htmlspecialchars($formatDateTime($viewingDonation['published_at'] ?? null)); ?></p>
@@ -499,6 +533,19 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         otherCheckbox.checked = false;
                     }
                 });
+            });
+        });
+
+        const splitRadios = document.querySelectorAll('input[name="split_enabled"]');
+        const splitCountInput = document.querySelector('input[name="split_count"]');
+        splitRadios.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                if (splitCountInput) {
+                    splitCountInput.disabled = radio.value !== '1' || !radio.checked;
+                    if (radio.value === '1' && radio.checked) {
+                        splitCountInput.focus();
+                    }
+                }
             });
         });
 
