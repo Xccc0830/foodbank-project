@@ -50,6 +50,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '物資已發布到平台。']
             : ['type' => 'error', 'text' => '發布失敗，請確認物資仍在待發布狀態。'];
     }
+
+    if ($action === 'complete_published_donation' && $donationId > 0) {
+        $completed = $deliveryModel->completeDonationDeliveries($donationId);
+        $reviewMessage = $completed
+            ? ['type' => 'success', 'text' => '運送任務已完成，物資已移至歷史紀錄。']
+            : ['type' => 'error', 'text' => '目前沒有可完成的運送任務。'];
+    }
 }
 
 $donations = $donationModel->getAllDonations();
@@ -66,8 +73,22 @@ $assessedDonations = array_values(array_filter($merchantDonations, static functi
 $pendingPublishDonations = array_values(array_filter($assessedDonations, static function ($donation) {
     return ($donation['evaluation_status'] ?? '') !== 'rejected';
 }));
-$publishedDonations = array_values(array_filter($merchantDonations, static function ($donation) {
-    return strtolower((string) ($donation['status'] ?? '')) === 'published';
+$publishedDonations = array_values(array_filter($merchantDonations, static function ($donation) use ($deliveryModel) {
+    if (strtolower((string) ($donation['status'] ?? '')) !== 'published') {
+        return false;
+    }
+    $progress = $deliveryModel->getDonationDeliveryProgress((int) $donation['donation_id']);
+    return $progress['total_tasks'] === 0 || $progress['completed_tasks'] < $progress['total_tasks'];
+}));
+$historyDonations = array_values(array_filter($merchantDonations, static function ($donation) use ($deliveryModel) {
+    if (strtolower((string) ($donation['evaluation_status'] ?? '')) === 'rejected') {
+        return true;
+    }
+    if (strtolower((string) ($donation['status'] ?? '')) !== 'published') {
+        return false;
+    }
+    $progress = $deliveryModel->getDonationDeliveryProgress((int) $donation['donation_id']);
+    return $progress['total_tasks'] > 0 && $progress['completed_tasks'] >= $progress['total_tasks'];
 }));
 
 $donationTypeLabels = [
@@ -340,8 +361,10 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <td><?php echo htmlspecialchars($donation['item_name'] ?? '未填寫'); ?></td>
                         <td><?php echo htmlspecialchars($deliveryOptionLabels[$donation['delivery_option'] ?? ''] ?? '未指定'); ?></td>
                         <td>
-                            <?php if ($deliveryProgress['accepted_tasks'] > 0): ?>
-                                <span class="status status-success">已有人接受</span>
+                            <?php if ($deliveryProgress['completed_tasks'] >= $deliveryProgress['total_tasks'] && $deliveryProgress['total_tasks'] > 0): ?>
+                                <span class="status status-success">運送完成</span>
+                            <?php elseif ($deliveryProgress['accepted_tasks'] > 0): ?>
+                                <span class="status status-info">運送中</span>
                             <?php else: ?>
                                 <span class="status status-pending">尚未有配送者</span>
                             <?php endif; ?>
@@ -353,6 +376,13 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                                 <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
                                 <button type="submit" class="btn btn-primary btn-sm">查看</button>
                             </form>
+                            <?php if ($deliveryProgress['accepted_tasks'] > 0 && $deliveryProgress['completed_tasks'] < $deliveryProgress['total_tasks']): ?>
+                                <form method="post" class="inline-form">
+                                    <input type="hidden" name="action" value="complete_published_donation">
+                                    <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
+                                    <button type="submit" class="btn btn-success btn-sm">任務完成</button>
+                                </form>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -360,6 +390,33 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
             </table>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-bullhorn"></i><p>目前沒有已發布物資</p></div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card mt-32">
+    <div class="card-header"><h2>歷史紀錄</h2><p>已完成運送或不接受的物資會出現在這裡。</p></div>
+    <div class="card-body">
+        <?php if (!empty($historyDonations)): ?>
+            <table class="data-table">
+                <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>數量</th><th>時間</th><th>操作</th></tr></thead>
+                <tbody>
+                <?php foreach ($historyDonations as $donation): ?>
+                    <?php $isRejectedHistory = ($donation['evaluation_status'] ?? '') === 'rejected'; ?>
+                    <tr>
+                        <td><span class="status <?php echo $isRejectedHistory ? 'status-rejected' : 'status-success'; ?>"><?php echo $isRejectedHistory ? '不接受' : '運送完成'; ?></span></td>
+                        <td><?php echo htmlspecialchars($donation['donor_name'] ?? ''); ?></td>
+                        <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type'] ?? ''] ?? '其他'); ?></td>
+                        <td><?php echo htmlspecialchars($donation['item_name'] ?? '未填寫'); ?></td>
+                        <td><?php echo htmlspecialchars($donation['quantity'] ?? ''); ?> <?php echo htmlspecialchars($donation['unit'] ?? ''); ?></td>
+                        <td><?php echo htmlspecialchars($formatDateTime($isRejectedHistory ? ($donation['rejected_at'] ?? null) : ($donation['updated_at'] ?? null))); ?></td>
+                        <td><form method="post"><input type="hidden" name="action" value="view_review_donation"><input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>"><button type="submit" class="btn btn-secondary btn-sm">查看</button></form></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <div class="empty-state"><i class="fas fa-box-archive"></i><p>目前沒有歷史紀錄</p></div>
         <?php endif; ?>
     </div>
 </div>
@@ -481,6 +538,14 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                     <div class="publish-summary">
                         <p><strong>發布時間：</strong><?php echo htmlspecialchars($formatDateTime($viewingDonation['published_at'] ?? null)); ?></p>
                         <?php $renderDetails($viewingDonation); ?>
+                        <?php $viewProgress = $deliveryModel->getDonationDeliveryProgress((int) $viewingDonation['donation_id']); ?>
+                        <?php if ($viewProgress['accepted_tasks'] > 0 && $viewProgress['completed_tasks'] < $viewProgress['total_tasks']): ?>
+                            <form method="post" class="review-decision-form">
+                                <input type="hidden" name="action" value="complete_published_donation">
+                                <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
+                                <button type="submit" class="btn btn-success">任務完成</button>
+                            </form>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>

@@ -93,7 +93,8 @@ class DeliveryModel extends BaseModel {
     public function getDonationDeliveryProgress($donationId) {
         $donationId = (int) $donationId;
         $result = $this->db->query("SELECT COUNT(*) AS total_tasks,
-                                           SUM(CASE WHEN volunteer_id IS NOT NULL THEN 1 ELSE 0 END) AS accepted_tasks
+                           SUM(CASE WHEN volunteer_id IS NOT NULL THEN 1 ELSE 0 END) AS accepted_tasks,
+                           SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS completed_tasks
                                     FROM deliveries
                                     WHERE donation_id = {$donationId}
                                       AND delivery_method = 'volunteer'");
@@ -101,7 +102,61 @@ class DeliveryModel extends BaseModel {
         return [
             'total_tasks' => (int) ($progress['total_tasks'] ?? 0),
             'accepted_tasks' => (int) ($progress['accepted_tasks'] ?? 0),
+            'completed_tasks' => (int) ($progress['completed_tasks'] ?? 0),
         ];
+    }
+
+    public function getDonorTransportTasks($donorId) {
+        $donorId = (int) $donorId;
+        $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
+                       n.quantity, n.unit, n.weight_kg AS published_weight_kg,
+                       n.size_description, n.photo_path, n.pickup_deadline
+                FROM deliveries d
+                INNER JOIN donations n ON n.donation_id = d.donation_id
+                WHERE n.donor_id = {$donorId}
+                  AND n.status = 'published'
+                  AND d.delivery_method = 'volunteer'
+                  AND d.status IN ('open', 'claimed', 'picked_up')
+                ORDER BY n.published_at DESC, d.delivery_id ASC";
+        return $this->query($sql);
+    }
+
+    public function donorConfirmPickup($deliveryId, $donorId) {
+        $deliveryId = (int) $deliveryId;
+        $donorId = (int) $donorId;
+        return $this->db->query("UPDATE deliveries d
+            INNER JOIN donations n ON n.donation_id = d.donation_id
+            SET d.status = 'picked_up', d.pickup_confirmed_at = NOW(), d.updated_at = NOW()
+            WHERE d.delivery_id = {$deliveryId}
+              AND n.donor_id = {$donorId}
+              AND d.delivery_method = 'volunteer'
+              AND d.status = 'claimed'") && $this->db->affected_rows === 1;
+    }
+
+    public function completeDonationDeliveries($donationId) {
+        $donationId = (int) $donationId;
+        $result = $this->db->query("SELECT delivery_id, volunteer_id, points FROM deliveries WHERE donation_id = {$donationId} AND status IN ('claimed', 'picked_up')");
+        if (!$result || $result->num_rows === 0) {
+            return false;
+        }
+
+        $this->db->begin_transaction();
+        try {
+            while ($delivery = $result->fetch_assoc()) {
+                $deliveryId = (int) $delivery['delivery_id'];
+                $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up')");
+                $volunteerId = (int) ($delivery['volunteer_id'] ?? 0);
+                if ($volunteerId > 0) {
+                    $points = (int) ($delivery['points'] ?? 0);
+                    $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
+                }
+            }
+            $this->db->commit();
+            return true;
+        } catch (Throwable $exception) {
+            $this->db->rollback();
+            return false;
+        }
     }
 
         public function getMaterialTransportTasks() {

@@ -1,8 +1,10 @@
 <?php
 require_once BASE_PATH . '/src/models/DonationModel.php';
+require_once BASE_PATH . '/src/models/DeliveryModel.php';
 require_once BASE_PATH . '/src/helpers/UploadHelper.php';
 
 $donationModel = new DonationModel();
+$deliveryModel = new DeliveryModel();
 $currentUserId = isset($currentUser['user_id']) ? (int) $currentUser['user_id'] : 0;
 $formMessage = null;
 $viewingDonation = null;
@@ -166,6 +168,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_
     $viewingDonation = $donationModel->getDonationById((int) ($_POST['donation_id'] ?? 0));
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'donor_confirm_pickup') {
+    $confirmed = $deliveryModel->donorConfirmPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId);
+    $formMessage = $confirmed
+        ? ['type' => 'success', 'text' => '已確認外送員領取物資，運送狀態已更新。']
+        : ['type' => 'error', 'text' => '確認失敗，請確認外送員已接受任務。'];
+}
+
 $merchantDonations = $donationModel->getAllDonations(null, $currentUserId);
 $pendingDonations = array_values(array_filter($merchantDonations, static function ($row) {
     return strtolower((string) ($row['status'] ?? '')) === 'pending';
@@ -174,6 +183,7 @@ $evaluatedDonations = array_values(array_filter($merchantDonations, static funct
     return strtolower((string) ($row['status'] ?? '')) === 'assessed'
     && in_array(strtolower((string) ($row['evaluation_status'] ?? '')), ['approved_volunteer', 'approved_self_delivery', 'rejected'], true);
 }));
+$transportTasks = $deliveryModel->getDonorTransportTasks($currentUserId);
 $donationTypeLabels = [
     'food' => '食物',
     'supplies' => '民生用品',
@@ -477,6 +487,50 @@ $formatDateTime = static function ($value) {
                 <i class="fas fa-check-circle"></i>
                 <p>目前沒有評估結果</p>
             </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card mt-20">
+    <div class="card-header">
+        <h2>運送</h2>
+        <p>查看已發布物資的運送狀態，並確認外送員是否已領取物資。</p>
+    </div>
+    <div class="card-body">
+        <?php if (!empty($transportTasks)): ?>
+            <table class="data-table">
+                <thead><tr><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>數量</th><th>狀態</th><th>操作</th></tr></thead>
+                <tbody>
+                <?php foreach ($transportTasks as $task): ?>
+                    <?php
+                    $transportStatus = $task['status'] ?? 'open';
+                    $transportStatusLabel = $transportStatus === 'open'
+                        ? '尚在等待運送人員'
+                        : ($transportStatus === 'claimed' ? '運送員正在路上' : '物資已領取，運送中');
+                    ?>
+                    <tr>
+                        <td><?php echo htmlspecialchars($task['donor_name'] ?? ''); ?></td>
+                        <td><?php echo htmlspecialchars($donationTypeLabels[$task['donation_type'] ?? ''] ?? '其他'); ?></td>
+                        <td><?php echo htmlspecialchars($task['item_name'] ?? '未填寫'); ?></td>
+                        <td><?php echo htmlspecialchars($task['quantity'] ?? ''); ?> <?php echo htmlspecialchars($task['unit'] ?? ''); ?></td>
+                        <td><span class="status <?php echo $transportStatus === 'open' ? 'status-pending' : 'status-info'; ?>"><?php echo htmlspecialchars($transportStatusLabel); ?></span></td>
+                        <td>
+                            <?php if ($transportStatus === 'claimed'): ?>
+                                <form method="post" class="inline-form">
+                                    <input type="hidden" name="action" value="donor_confirm_pickup">
+                                    <input type="hidden" name="delivery_id" value="<?php echo (int) $task['delivery_id']; ?>">
+                                    <button type="submit" class="btn btn-primary btn-sm">外送員已將物資領取</button>
+                                </form>
+                            <?php else: ?>
+                                <span class="text-muted">等待狀態更新</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <div class="empty-state"><i class="fas fa-truck"></i><p>目前沒有運送中的物資</p></div>
         <?php endif; ?>
     </div>
 </div>
