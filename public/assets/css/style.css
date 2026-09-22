@@ -1507,6 +1507,25 @@ form {
     word-break: break-word;
 }
 
+.activity-form-grid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.6fr);
+}
+
+.activity-form-grid .form-group {
+    min-width: 0;
+}
+
+.activity-form-grid input {
+    width: 100%;
+    min-width: 0;
+}
+
+@media (max-width: 900px) {
+    .activity-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .activities-assignments-table-body {
    overflow-x: auto;
 }
@@ -1998,6 +2017,18 @@ form {
 
 .reward-card h3 {
     margin-bottom: 6px;
+}
+
+.reward-card > [data-action="edit-reward"],
+.reward-card > form:not(.reward-management-form) {
+    display: block;
+    width: max-content;
+    min-width: 84px;
+    margin-top: 8px;
+}
+
+.reward-card > .reward-management-form {
+    margin-top: 12px;
 }
 
 .reward-cost {

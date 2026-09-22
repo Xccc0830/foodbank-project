@@ -286,7 +286,7 @@ $rolePages = [
     'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
     'foodbank_staff' => ['dashboard', 'donation_materials_review', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'donor' => ['dashboard', 'rewards', 'notifications', 'donation_materials', 'certificate'],
+    'donor' => ['dashboard', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate'],
 ];
 
 // 簡單的路由系統
@@ -302,7 +302,7 @@ $menu_items = [
     'donations_evaluation' => ['label' => '評估派車', 'icon' => 'fa-solid fa-clipboard-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
     'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
-    'activities' => ['label' => $role === 'volunteer' ? '活動認領' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
+    'activities' => ['label' => in_array($role, ['volunteer', 'donor'], true) ? '活動認領' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
@@ -319,6 +319,7 @@ $allowedPages = $rolePages[$role] ?? ['dashboard'];
 if (!in_array($page, $allowedPages, true)) {
     $page = 'dashboard';
 }
+ob_start();
 ?>
 <!DOCTYPE html>
 <html lang="zh-TW">

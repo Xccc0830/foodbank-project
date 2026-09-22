@@ -80,6 +80,42 @@ class RewardModel extends BaseModel {
         );
     }
 
+    public function getFulfillmentsByUser($userId) {
+        $userId = (int) $userId;
+        return $this->query(
+            "SELECT rc.claim_id, rc.title, rc.source_type, rc.points_spent, rc.redeemed_at, rc.created_at,
+                    u.full_name AS volunteer_name
+             FROM reward_claims rc
+             LEFT JOIN users u ON u.user_id = rc.user_id
+             WHERE rc.redeemed_by = {$userId} AND rc.status = 'fulfilled'
+             ORDER BY rc.redeemed_at DESC, rc.created_at DESC"
+        );
+    }
+
+    public function getPendingFoodbankClaims() {
+        return $this->query(
+            "SELECT rc.claim_id, rc.title, rc.points_spent, rc.created_at,
+                    u.full_name AS volunteer_name
+             FROM reward_claims rc
+             LEFT JOIN users u ON u.user_id = rc.user_id
+             WHERE rc.source_type = 'foodbank' AND rc.status = 'pending'
+             ORDER BY rc.created_at DESC"
+        );
+    }
+
+    public function getFoodbankRedemptions() {
+        return $this->query(
+            "SELECT rc.claim_id, rc.title, rc.points_spent, rc.status,
+                    rc.created_at, rc.redeemed_at, volunteer.full_name AS volunteer_name,
+                    verifier.full_name AS verifier_name
+             FROM reward_claims rc
+             LEFT JOIN users volunteer ON volunteer.user_id = rc.user_id
+             LEFT JOIN users verifier ON verifier.user_id = rc.redeemed_by
+             WHERE rc.source_type = 'foodbank'
+             ORDER BY rc.created_at DESC"
+        );
+    }
+
     public function redeem($userId, $sourceType, $sourceId) {
         $userId = (int) $userId;
         $sourceType = $sourceType === 'donor' ? 'donor' : 'foodbank';
@@ -127,8 +163,10 @@ class RewardModel extends BaseModel {
                 $this->db->query("UPDATE {$table} SET stock = stock - 1 WHERE {$idColumn} = {$sourceId} AND stock > 0");
             }
 
+            $claimId = (int) $this->db->insert_id;
             $this->db->commit();
-            return ['token' => $token, 'expires_at' => $expiresAt, 'claim_id' => $this->db->insert_id];
+            $this->notifyRedemptionCreated($userId, $sourceType, $sourceId, $reward['title'], $cost);
+            return ['token' => $token, 'expires_at' => $expiresAt, 'claim_id' => $claimId];
         } catch (Throwable $exception) {
             $this->db->rollback();
             return false;
@@ -258,12 +296,90 @@ class RewardModel extends BaseModel {
             "UPDATE reward_claims SET status = 'fulfilled', redeemed_at = NOW(), redeemed_by = {$verifierId}
              WHERE claim_id = " . (int) $claim['claim_id'] . " AND status = 'pending' AND token_expires_at > '{$currentTime}'"
         );
-        return $updated && $this->db->affected_rows === 1
-            ? ['success' => true, 'message' => '兌換完成，憑證已核銷。']
-            : ['success' => false, 'message' => '兌換憑證狀態已變更，請重新掃描。'];
+        if ($updated && $this->db->affected_rows === 1) {
+            $this->notifyVolunteerFulfilled((int) $claim['user_id'], $claim['title']);
+            return ['success' => true, 'message' => '兌換完成，憑證已核銷。'];
+        }
+        return ['success' => false, 'message' => '兌換憑證狀態已變更，請重新掃描。'];
+    }
+
+    private function notifyRedemptionCreated($volunteerId, $sourceType, $sourceId, $title, $cost) {
+        $title = $this->db->real_escape_string($title);
+        $message = $this->db->real_escape_string("志工已兌換「{$title}」，使用 {$cost} 點，請至公益點數兌換頁面查看並核銷。");
+        $roles = $sourceType === 'foodbank' ? "('admin', 'foodbank_staff')" : "('donor')";
+        $ownerCondition = $sourceType === 'donor'
+            ? " AND u.user_id = (SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $sourceId . " LIMIT 1)"
+            : '';
+        $this->db->query(
+            "INSERT INTO notifications (user_id, title, message, type)
+             SELECT u.user_id, '新的公益點數兌換', '{$message}', 'info'
+             FROM users u
+             WHERE u.role IN {$roles} AND u.status = 'active'{$ownerCondition}"
+        );
+    }
+
+    private function notifyVolunteerFulfilled($volunteerId, $title) {
+        $title = $this->db->real_escape_string($title);
+        $this->db->query(
+            "INSERT INTO notifications (user_id, title, message, type)
+             VALUES (" . (int) $volunteerId . ", '公益點數兌換已核銷', '「{$title}」已由食物銀行完成核銷。', 'success')"
+        );
     }
 
     public function createReward($data) {
         return $this->insert($data);
+    }
+
+    public function updateReward($rewardId, $data) {
+        $rewardId = (int) $rewardId;
+        $title = $this->db->real_escape_string($data['title']);
+        $description = $this->db->real_escape_string($data['description']);
+        $costPoints = (int) $data['cost_points'];
+        $stock = $data['stock'] === null ? 'NULL' : (int) $data['stock'];
+
+        return $rewardId > 0 && $this->db->query(
+            "UPDATE reward_catalog
+             SET title = '{$title}', description = '{$description}', cost_points = {$costPoints}, stock = {$stock}
+             WHERE reward_id = {$rewardId} AND status = 'active'"
+        );
+    }
+
+    public function deleteReward($rewardId) {
+        $rewardId = (int) $rewardId;
+        return $rewardId > 0 && $this->db->query(
+            "UPDATE reward_catalog SET status = 'inactive' WHERE reward_id = {$rewardId} AND status = 'active'"
+        );
+    }
+
+    public function updateDonorReward($itemId, $donorId, $data, $isAdmin = false) {
+        $itemId = (int) $itemId;
+        $donorId = (int) $donorId;
+        $title = $this->db->real_escape_string($data['title']);
+        $description = $this->db->real_escape_string($data['description']);
+        $category = $this->db->real_escape_string($data['category']);
+        $costPoints = (int) $data['cost_points'];
+        $stock = $data['stock'] === null ? 'NULL' : (int) $data['stock'];
+        $ownerCondition = $isAdmin
+            ? "item_id = {$itemId}"
+            : "item_id = {$itemId} AND donor_id = {$donorId}";
+
+        return $itemId > 0 && ($isAdmin || $donorId > 0) && $this->db->query(
+            "UPDATE donor_reward_items
+             SET title = '{$title}', description = '{$description}', category = '{$category}', cost_points = {$costPoints}, stock = {$stock}
+             WHERE {$ownerCondition} AND status = 'active'"
+        );
+    }
+
+    public function deleteDonorReward($itemId, $donorId, $isAdmin = false) {
+        $itemId = (int) $itemId;
+        $donorId = (int) $donorId;
+        $ownerCondition = $isAdmin
+            ? "item_id = {$itemId}"
+            : "item_id = {$itemId} AND donor_id = {$donorId}";
+
+        return $itemId > 0 && ($isAdmin || $donorId > 0) && $this->db->query(
+            "UPDATE donor_reward_items SET status = 'inactive'
+             WHERE {$ownerCondition} AND status = 'active'"
+        );
     }
 }

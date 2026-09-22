@@ -9,7 +9,8 @@ require_once BASE_PATH . '/src/models/NotificationModel.php';
 $activityModel = new ActivityModel();
 $notificationModel = new NotificationModel();
 $currentRole = $currentUser['role'] ?? 'foodbank_staff';
-$canCreateActivity = in_array($currentRole, ['admin', 'foodbank_staff', 'donor'], true);
+$canCreateActivity = in_array($currentRole, ['admin', 'foodbank_staff'], true);
+$canRegisterActivities = in_array($currentRole, ['volunteer', 'donor'], true);
 $message = null;
 $editingActivity = null;
 $participantLists = [];
@@ -19,9 +20,11 @@ $userIdEscaped = $connection->real_escape_string((string) $currentUser['user_id'
 $userResult = $connection->query("SELECT is_enterprise_verified FROM users WHERE user_id = {$userIdEscaped} LIMIT 1");
 $userInfo = $userResult ? $userResult->fetch_assoc() : ['is_enterprise_verified' => 0];
 $isEnterpriseVerified = (int) ($userInfo['is_enterprise_verified'] ?? 0) === 1;
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['action'] ?? '') === 'create_activity') {
+        if (!$canCreateActivity) {
+            $message = ['type' => 'error', 'text' => '只有食物銀行人員可以發布公益活動。'];
+        } else {
         $activityType = $_POST['activity_type'] ?? 'other';
         $activityTypeDetail = trim($_POST['activity_type_detail'] ?? '');
         $data = [
@@ -38,13 +41,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $data['title'] !== '' && ($activityType !== 'other' || $activityTypeDetail !== '') && $activityModel->createActivity($data)
             ? ['type' => 'success', 'text' => '公益活動已發布。']
             : ['type' => 'error', 'text' => $activityType === 'other' && $activityTypeDetail === '' ? '請填寫其他活動類型。' : '請填寫活動名稱，或活動發布失敗。'];
+        }
     }
 
     if (($_POST['action'] ?? '') === 'register_activity') {
         $assignmentType = ($_POST['assignment_type'] ?? 'individual') === 'company' ? 'company' : 'individual';
         $organizationName = $assignmentType === 'company' ? trim($_POST['organization_name'] ?? '') : null;
 
-        if ($assignmentType === 'company' && $organizationName === '') {
+        if ($assignmentType === 'company' && $currentRole !== 'donor' && $organizationName === '') {
             $message = ['type' => 'error', 'text' => '企業認領請填寫企業／組織名稱。'];
         } else {
             $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName)
@@ -122,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $activities = $activityModel->getAllActivities();
 foreach ($activities as $index => $activity) {
-    $activities[$index]['can_register'] = $activityModel->canUserRegisterActivity((int) $activity['activity_id'], (int) $currentUser['user_id']);
+    $activities[$index]['can_register'] = $canRegisterActivities && $activityModel->canUserRegisterActivity((int) $activity['activity_id'], (int) $currentUser['user_id']);
     $activities[$index]['can_manage'] = $activityModel->canManageActivity((int) $activity['activity_id'], (int) $currentUser['user_id'], $currentRole);
     $activities[$index]['can_view_participants'] = $activities[$index]['can_manage'] || in_array($currentRole, ['admin', 'foodbank_staff'], true);
     if ($activities[$index]['can_view_participants']) {
@@ -153,17 +157,17 @@ $activityStatusLabels = [
 ];
 ?>
 
-<div class="view-header"><div><h1 class="view-title"><?php echo $currentRole === 'volunteer' ? '活動認領' : '活動發布'; ?></h1><p class="view-subtitle"><?php echo $currentRole === 'volunteer' ? '認領公益活動，參與在地行動' : '發布公益活動，讓企業與志工參與在地行動'; ?></p></div></div>
+<div class="view-header"><div><h1 class="view-title"><?php echo in_array($currentRole, ['volunteer', 'donor'], true) ? '活動認領' : '活動發布'; ?></h1><p class="view-subtitle"><?php echo $currentRole === 'volunteer' ? '認領公益活動，參與在地行動' : ($currentRole === 'donor' ? '以愛心商家身分認領公益活動，參與在地行動' : '發布公益活動，讓企業與志工參與在地行動'); ?></p></div></div>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
 <div class="grid-2">
     <div class="card"><div class="card-header"><h2>發布活動</h2><p>支援募資、說明會、淨灘與公益宣導</p></div><div class="card-body">
-        <form method="post"><input type="hidden" name="action" value="create_activity">
+        <form method="post"><?php echo csrfField(); ?><input type="hidden" name="action" value="create_activity">
             <div class="form-group"><label>活動名稱*</label><input name="title" required></div>
             <div class="form-group"><label>活動類型</label><select name="activity_type" class="activity-type-select"><option value="donation_drive">物資募集</option><option value="briefing">說明會</option><option value="cleanup">環境行動</option><option value="promotion">公益宣導</option><option value="other">其他</option></select></div>
             <div class="form-group other-activity-type-field" hidden><label>其他活動類型*</label><input name="activity_type_detail" maxlength="100" placeholder="請輸入活動類型"></div>
-            <div class="grid-2"><div class="form-group"><label>開始時間*</label><input type="datetime-local" name="start_at" required></div><div class="form-group"><label>名額</label><input type="number" name="capacity" min="0"></div></div>
+            <div class="grid-2 activity-form-grid"><div class="form-group"><label>開始時間*</label><input type="datetime-local" name="start_at" required></div><div class="form-group"><label>名額</label><input type="number" name="capacity" min="0"></div></div>
             <div class="form-group"><label>活動說明</label><textarea name="description"></textarea></div>
             <button class="btn btn-primary" type="submit"><i class="fas fa-calendar-plus"></i> 發布活動</button>
         </form>
@@ -171,7 +175,7 @@ $activityStatusLabels = [
     <div class="card participation-card">
         <div class="card-header">
             <h2>參與方式</h2>
-            <p>志工可直接認領公開活動</p>
+            <p>志工與愛心商家可直接認領公開活動</p>
         </div>
         <div class="card-body">
             <ul class="feature-list">
@@ -189,7 +193,7 @@ $activityStatusLabels = [
 <div class="card mt-32">
     <div class="card-header"><h2>編輯活動</h2></div>
     <div class="card-body">
-        <form method="post">
+        <form method="post"><?php echo csrfField(); ?>
             <input type="hidden" name="action" value="update_activity">
             <input type="hidden" name="activity_id" value="<?php echo (int) $editingActivity['activity_id']; ?>">
             <div class="grid-2">
@@ -203,7 +207,7 @@ $activityStatusLabels = [
                 </select></div>
                 <div class="form-group other-activity-type-field" hidden><label>其他活動類型*</label><input name="activity_type_detail" maxlength="100" value="<?php echo htmlspecialchars($editingActivity['activity_type_detail'] ?? ''); ?>" placeholder="請輸入活動類型"></div>
             </div>
-            <div class="grid-2">
+            <div class="grid-2 activity-form-grid">
                 <div class="form-group"><label>開始時間</label><input type="datetime-local" name="start_at" value="<?php echo htmlspecialchars(str_replace(' ', 'T', $editingActivity['start_at'])); ?>" required></div>
                 <div class="form-group"><label>名額</label><input type="number" name="capacity" min="0" value="<?php echo (int) ($editingActivity['capacity'] ?? 0); ?>"></div>
             </div>
@@ -222,13 +226,13 @@ $activityStatusLabels = [
 <?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><?php if (!empty($activity['description']) && trim($activity['description']) !== trim($activity['title'])): ?><br><small class="<?php echo mb_strlen(trim($activity['description']), 'UTF-8') > 80 ? 'activity-description' : 'activity-description-short'; ?>"><?php echo htmlspecialchars($activity['description']); ?></small><?php if (mb_strlen(trim($activity['description']), 'UTF-8') > 80): ?><button type="button" class="activity-description-button" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>" data-activity-description="<?php echo htmlspecialchars($activity['description'], ENT_QUOTES, 'UTF-8'); ?>">查看完整說明</button><?php endif; ?><?php endif; ?></td><td><?php echo htmlspecialchars($getActivityTypeLabel($activity)); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$activity['status']] ?? $activity['status']); ?></span></td><td>
     <?php if ($activity['can_manage']): ?>
         <div class="inline-action-group">
-            <form method="post" class="delivery-action-form">
+            <form method="post" class="delivery-action-form"><?php echo csrfField(); ?>
                 <input type="hidden" name="action" value="load_edit_activity">
                 <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
                 <button class="btn btn-secondary btn-sm" type="submit">編輯活動</button>
             </form>
             <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與志工</button>
-            <form method="post" class="delivery-action-form" onsubmit="return confirm('確定要刪除這個活動嗎？');">
+            <form method="post" class="delivery-action-form" onsubmit="return confirm('確定要刪除這個活動嗎？');"><?php echo csrfField(); ?>
                 <input type="hidden" name="action" value="delete_activity">
                 <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
                 <button class="btn btn-danger btn-sm" type="submit">刪除活動</button>
@@ -237,10 +241,12 @@ $activityStatusLabels = [
     <?php elseif ($activity['can_view_participants']): ?>
         <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與志工</button>
     <?php elseif ($activity['can_register']): ?>
-        <form method="post" class="delivery-action-form">
+        <form method="post" class="delivery-action-form"><?php echo csrfField(); ?>
             <input type="hidden" name="action" value="register_activity">
             <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
-            <?php if ($isEnterpriseVerified): ?>
+            <?php if ($currentRole === 'donor'): ?>
+            <input type="hidden" name="assignment_type" value="company">
+            <?php elseif ($isEnterpriseVerified): ?>
             <select name="assignment_type" class="assignment-type-select" aria-label="認領身分"><option value="individual">個人／志工</option><option value="company">企業認領</option></select>
             <?php else: ?>
             <input type="hidden" name="assignment_type" value="individual">
@@ -398,7 +404,7 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
 })();
 </script>
 
-<?php if ($currentRole === 'volunteer'): ?>
+<?php if (in_array($currentRole, ['volunteer', 'donor'], true)): ?>
 <div class="card mt-32"><div class="card-header"><h2>我的認領紀錄</h2><p>活動結束後可下載企業永續認證證書</p></div><div class="card-body">
 <?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
 <?php foreach ($myAssignments as $assignment): ?><tr>
@@ -428,7 +434,7 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
         </div>
         <div class="modal-body">
             <p>請填寫取消此活動認領的原因。</p>
-            <form method="post" id="cancel-activity-form">
+            <form method="post" id="cancel-activity-form"><?php echo csrfField(); ?>
                 <input type="hidden" name="action" value="cancel_activity_registration">
                 <input type="hidden" name="activity_id" id="cancel-activity-id">
                 <div class="form-group">

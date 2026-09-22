@@ -12,6 +12,8 @@ $canCreateCatalogReward = in_array($currentUser['role'] ?? '', ['admin', 'foodba
 $isDonor = ($currentUser['role'] ?? '') === 'donor';
 $isVolunteer = $currentRole === 'volunteer';
 $canVerify = in_array($currentRole, ['admin', 'foodbank_staff', 'donor'], true);
+$message = $_SESSION['rewards_flash_message'] ?? null;
+unset($_SESSION['rewards_flash_message']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -51,22 +53,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'title' => trim($_POST['title'] ?? ''),
             'description' => trim($_POST['description'] ?? ''),
             'cost_points' => (int) ($_POST['cost_points'] ?? 0),
-            'stock' => $_POST['stock'] !== '' ? (int) $_POST['stock'] : null,
+            'stock' => ($_POST['stock'] ?? '') !== '' ? (int) $_POST['stock'] : null,
             'status' => 'active',
         ];
-        $message = ($data['title'] !== '' && $data['cost_points'] > 0 && $rewardModel->createReward($data))
+        $message = ($data['title'] !== '' && $data['cost_points'] > 0 && ($data['stock'] === null || $data['stock'] >= 0) && $rewardModel->createReward($data))
             ? ['type' => 'success', 'text' => '兌換品項已新增。']
             : ['type' => 'error', 'text' => '請填寫獎勵名稱與有效點數門檻。'];
+    } elseif ($action === 'update_reward' && $canCreateCatalogReward) {
+        $data = [
+            'title' => trim($_POST['title'] ?? ''),
+            'description' => trim($_POST['description'] ?? ''),
+            'cost_points' => (int) ($_POST['cost_points'] ?? 0),
+            'stock' => ($_POST['stock'] ?? '') !== '' ? (int) $_POST['stock'] : null,
+        ];
+        $message = ($data['title'] !== '' && $data['cost_points'] > 0 && ($data['stock'] === null || $data['stock'] >= 0) && $rewardModel->updateReward((int) ($_POST['reward_id'] ?? 0), $data))
+            ? ['type' => 'success', 'text' => '兌換品項已更新。']
+            : ['type' => 'error', 'text' => '請確認品項名稱、所需點數與庫存格式。'];
+    } elseif ($action === 'delete_reward' && $canCreateCatalogReward) {
+        $message = $rewardModel->deleteReward((int) ($_POST['reward_id'] ?? 0))
+            ? ['type' => 'success', 'text' => '兌換品項已刪除。']
+            : ['type' => 'error', 'text' => '品項刪除失敗，請稍後再試。'];
+    } elseif ($action === 'update_donor_reward' && ($isDonor || $currentRole === 'admin')) {
+        $data = [
+            'title' => trim($_POST['title'] ?? ''),
+            'description' => trim($_POST['description'] ?? ''),
+            'category' => $_POST['category'] ?? 'other',
+            'cost_points' => (int) ($_POST['cost_points'] ?? 0),
+            'stock' => ($_POST['stock'] ?? '') !== '' ? (int) $_POST['stock'] : null,
+        ];
+        $validCategories = ['discount', 'product', 'experience', 'other'];
+        $message = ($data['title'] !== '' && $data['cost_points'] > 0 && ($data['stock'] === null || $data['stock'] >= 0) && in_array($data['category'], $validCategories, true) && $rewardModel->updateDonorReward((int) ($_POST['item_id'] ?? 0), (int) $currentUser['user_id'], $data, $currentRole === 'admin'))
+            ? ['type' => 'success', 'text' => '獎勵方案已更新。']
+            : ['type' => 'error', 'text' => '請確認方案名稱、分類、所需點數與庫存格式。'];
+    } elseif ($action === 'delete_donor_reward' && ($isDonor || $currentRole === 'admin')) {
+        $message = $rewardModel->deleteDonorReward((int) ($_POST['item_id'] ?? 0), (int) $currentUser['user_id'], $currentRole === 'admin')
+            ? ['type' => 'success', 'text' => '獎勵方案已刪除。']
+            : ['type' => 'error', 'text' => '獎勵方案刪除失敗，請稍後再試。'];
     } elseif ($action === 'create_donor_reward' && $isDonor) {
         $connection = $db->getConnection();
         $donorId = (int) $currentUser['user_id'];
         $title = $connection->real_escape_string(trim($_POST['title'] ?? ''));
         $description = $connection->real_escape_string(trim($_POST['description'] ?? ''));
         $costPoints = (int) ($_POST['cost_points'] ?? 0);
-        $stock = $_POST['stock'] !== '' ? (int) $_POST['stock'] : 'NULL';
+        $stock = ($_POST['stock'] ?? '') !== '' ? (int) $_POST['stock'] : 'NULL';
         $category = $connection->real_escape_string($_POST['category'] ?? 'other');
 
-        if ($title !== '' && $costPoints > 0) {
+        if ($title !== '' && $costPoints > 0 && ($stock === 'NULL' || $stock >= 0)) {
             $sql = "INSERT INTO donor_reward_items (donor_id, title, description, cost_points, stock, category, status)
                     VALUES ({$donorId}, '{$title}', '{$description}', {$costPoints}, {$stock}, '{$category}', 'active')";
             if ($connection->query($sql)) {
@@ -78,11 +110,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = ['type' => 'error', 'text' => '請填寫獎勵名稱與有效點數門檻。'];
         }
     }
+
+    $_SESSION['rewards_flash_message'] = $message;
+    $redirectUrl = '?page=rewards';
+    if ($action === 'refresh_claim' && !empty($_POST['claim_id'])) {
+        $redirectUrl .= '&claim_id=' . (int) $_POST['claim_id'];
+    }
+    header('Location: ' . $redirectUrl);
+    exit;
 }
 
 $balance = $rewardModel->getBalance((int) $currentUser['user_id']);
 $catalog = $rewardModel->getAvailableRewards();
 $myRedemptions = $rewardModel->getRedemptionsByUser((int) $currentUser['user_id']);
+$myFulfillments = $canVerify
+    ? $rewardModel->getFulfillmentsByUser((int) $currentUser['user_id'])
+    : [];
+$foodbankPendingClaims = in_array($currentRole, ['admin', 'foodbank_staff'], true)
+    ? $rewardModel->getPendingFoodbankClaims()
+    : [];
+$foodbankRedemptions = in_array($currentRole, ['admin', 'foodbank_staff'], true)
+    ? $rewardModel->getFoodbankRedemptions()
+    : [];
 $pendingClaims = $isVolunteer
     ? array_values(array_filter(
         $rewardModel->getPendingClaimsByUser((int) $currentUser['user_id']),
@@ -142,6 +191,56 @@ if ($isDonor) {
                         <p><?php echo htmlspecialchars($reward['description'] ?? ''); ?></p>
                         <span class="reward-cost"><?php echo (int) $reward['cost_points']; ?> 點</span>
                         <?php if ($reward['stock'] !== null): ?><p class="toolbar-meta">剩餘 <?php echo (int) $reward['stock']; ?> 份</p><?php endif; ?>
+                        <?php if ($canCreateCatalogReward && $reward['source_type'] === 'foodbank'): ?>
+                            <button class="btn btn-secondary btn-sm" type="button" data-action="edit-reward">編輯品項</button>
+                            <form method="post" class="reward-management-form" hidden>
+                                <?php echo csrfField(); ?>
+                                <input type="hidden" name="action" value="update_reward">
+                                <input type="hidden" name="reward_id" value="<?php echo (int) $reward['source_id']; ?>">
+                                <div class="form-group"><label>品項名稱</label><input name="title" value="<?php echo htmlspecialchars($reward['title'], ENT_QUOTES, 'UTF-8'); ?>" required></div>
+                                <div class="form-group"><label>說明</label><textarea name="description"><?php echo htmlspecialchars($reward['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea></div>
+                                <div class="grid-2">
+                                    <div class="form-group"><label>所需點數</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
+                                    <div class="form-group"><label>庫存</label><input type="number" name="stock" min="0" value="<?php echo $reward['stock'] !== null ? (int) $reward['stock'] : ''; ?>" placeholder="不限量"></div>
+                                </div>
+                                <button class="btn btn-primary btn-sm" type="submit">儲存修改</button>
+                                <button class="btn btn-secondary btn-sm" type="button" data-action="cancel-edit-reward">取消</button>
+                            </form>
+                            <form method="post" class="reward-delete-form" onsubmit="return confirm('確定要刪除此兌換品項嗎？');">
+                                <?php echo csrfField(); ?>
+                                <input type="hidden" name="action" value="delete_reward">
+                                <input type="hidden" name="reward_id" value="<?php echo (int) $reward['source_id']; ?>">
+                                <button class="btn btn-danger btn-sm" type="submit">刪除品項</button>
+                            </form>
+                        <?php elseif ($currentRole === 'admin' && $reward['source_type'] === 'donor'): ?>
+                            <button class="btn btn-secondary btn-sm" type="button" data-action="edit-reward">編輯品項</button>
+                            <form method="post" class="reward-management-form" hidden>
+                                <?php echo csrfField(); ?>
+                                <input type="hidden" name="action" value="update_donor_reward">
+                                <input type="hidden" name="item_id" value="<?php echo (int) $reward['source_id']; ?>">
+                                <div class="form-group"><label>品項名稱</label><input name="title" value="<?php echo htmlspecialchars($reward['title'], ENT_QUOTES, 'UTF-8'); ?>" required></div>
+                                <div class="form-group"><label>說明</label><textarea name="description"><?php echo htmlspecialchars($reward['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea></div>
+                                <div class="grid-2">
+                                    <div class="form-group"><label>分類</label>
+                                        <select name="category" required>
+                                            <?php foreach (['discount' => '折扣優惠', 'product' => '實體商品', 'experience' => '體驗活動', 'other' => '其他'] as $categoryValue => $categoryLabel): ?>
+                                                <option value="<?php echo $categoryValue; ?>" <?php echo ($reward['category'] ?? 'other') === $categoryValue ? 'selected' : ''; ?>><?php echo $categoryLabel; ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="form-group"><label>所需點數</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
+                                </div>
+                                <div class="form-group"><label>庫存</label><input type="number" name="stock" min="0" value="<?php echo $reward['stock'] !== null ? (int) $reward['stock'] : ''; ?>" placeholder="不限量"></div>
+                                <button class="btn btn-primary btn-sm" type="submit">儲存修改</button>
+                                <button class="btn btn-secondary btn-sm" type="button" data-action="cancel-edit-reward">取消</button>
+                            </form>
+                            <form method="post" class="reward-delete-form" onsubmit="return confirm('確定要刪除此愛心商家品項嗎？');">
+                                <?php echo csrfField(); ?>
+                                <input type="hidden" name="action" value="delete_donor_reward">
+                                <input type="hidden" name="item_id" value="<?php echo (int) $reward['source_id']; ?>">
+                                <button class="btn btn-danger btn-sm" type="submit">刪除品項</button>
+                            </form>
+                        <?php endif; ?>
                         <?php if ($isVolunteer): ?>
                             <form method="post">
                                 <?php echo csrfField(); ?>
@@ -222,6 +321,61 @@ if ($isDonor) {
 </div>
 <?php endif; ?>
 
+<?php if (in_array($currentRole, ['admin', 'foodbank_staff'], true)): ?>
+<div class="card mt-32">
+    <div class="card-header"><h2>食物銀行待核銷兌換</h2><p>志工完成兌換後會立即出現在這裡，請確認兌換編號或 QR Code 後核銷。</p></div>
+    <div class="card-body">
+        <?php if ($foodbankPendingClaims): ?>
+            <div class="redemptions-table-body">
+                <table class="data-table redemptions-table">
+                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>志工</th><th>點數</th><th>兌換時間</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($foodbankPendingClaims as $claim): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars('R' . str_pad((string) $claim['claim_id'], 6, '0', STR_PAD_LEFT)); ?></td>
+                            <td><?php echo htmlspecialchars($claim['title']); ?></td>
+                            <td><?php echo htmlspecialchars($claim['volunteer_name'] ?? '未知使用者'); ?></td>
+                            <td><?php echo (int) $claim['points_spent']; ?> 點</td>
+                            <td><?php echo htmlspecialchars($claim['created_at']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="empty-state"><i class="fas fa-clipboard-check"></i><p>目前沒有待核銷兌換</p></div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card mt-32">
+    <div class="card-header"><h2>食物銀行兌換紀錄</h2><p>查看所有食物銀行兌換品的申請與核銷狀態。</p></div>
+    <div class="card-body">
+        <?php if ($foodbankRedemptions): ?>
+            <div class="redemptions-table-body">
+                <table class="data-table redemptions-table">
+                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>志工</th><th>點數</th><th>狀態</th><th>時間</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($foodbankRedemptions as $redemption): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars('R' . str_pad((string) $redemption['claim_id'], 6, '0', STR_PAD_LEFT)); ?></td>
+                            <td><?php echo htmlspecialchars($redemption['title']); ?></td>
+                            <td><?php echo htmlspecialchars($redemption['volunteer_name'] ?? '未知使用者'); ?></td>
+                            <td><?php echo (int) $redemption['points_spent']; ?> 點</td>
+                            <td><?php echo ['pending' => '待核銷', 'fulfilled' => '已核銷', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></td>
+                            <td><?php echo htmlspecialchars($redemption['redeemed_at'] ?: $redemption['created_at']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="empty-state"><i class="fas fa-receipt"></i><p>尚未有食物銀行兌換紀錄</p></div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="card mt-32">
     <div class="card-header"><h2>我的兌換紀錄</h2></div>
     <div class="card-body">
@@ -235,6 +389,31 @@ if ($isDonor) {
             </div>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-receipt"></i><p>尚未兌換過獎勵</p></div>
+        <?php endif; ?>
+
+        <?php if ($canVerify): ?>
+        <div class="mt-32">
+            <div class="card-header"><h2>我的核銷紀錄</h2><p>顯示由目前帳號完成核銷的兌換憑證</p></div>
+            <?php if ($myFulfillments): ?>
+                <div class="redemptions-table-body">
+                    <table class="data-table redemptions-table">
+                        <thead><tr><th>兌換品項</th><th>兌換者</th><th>花費點數</th><th>核銷時間</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($myFulfillments as $fulfillment): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($fulfillment['title']); ?></td>
+                                <td><?php echo htmlspecialchars($fulfillment['volunteer_name'] ?? '未知使用者'); ?></td>
+                                <td><?php echo (int) $fulfillment['points_spent']; ?> 點</td>
+                                <td><?php echo htmlspecialchars($fulfillment['redeemed_at'] ?? ''); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <div class="empty-state"><i class="fas fa-clipboard-check"></i><p>尚未完成任何核銷</p></div>
+            <?php endif; ?>
+        </div>
         <?php endif; ?>
 
         <?php if ($selectedClaim): ?>
@@ -340,7 +519,7 @@ if ($isDonor) {
     <div class="card-header"><h2>我的獎勵方案</h2><p>設定志工可在貴店家兌換的獎勵與優惠</p></div>
     <div class="card-body">
         <?php if ($donorRewards): ?>
-            <table class="data-table"><thead><tr><th>方案名稱</th><th>所需點數</th><th>分類</th><th>庫存</th><th>狀態</th></tr></thead><tbody>
+            <table class="data-table"><thead><tr><th>方案名稱</th><th>所需點數</th><th>分類</th><th>庫存</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($donorRewards as $reward): ?>
                 <tr>
                     <td><strong><?php echo htmlspecialchars($reward['title']); ?></strong><br><small><?php echo htmlspecialchars($reward['description'] ?? ''); ?></small></td>
@@ -348,6 +527,41 @@ if ($isDonor) {
                     <td><?php echo ['discount' => '折扣', 'product' => '商品', 'experience' => '體驗', 'other' => '其他'][$reward['category']] ?? $reward['category']; ?></td>
                     <td><?php echo $reward['stock'] !== null ? (int) $reward['stock'] . ' 份' : '不限量'; ?></td>
                     <td><span class="status status-<?php echo $reward['status']; ?>"><?php echo $reward['status'] === 'active' ? '啟用' : '停用'; ?></span></td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm" type="button" data-action="edit-donor-reward">編輯方案</button>
+                        <form method="post" onsubmit="return confirm('確定要刪除此獎勵方案嗎？');" style="display: inline-block;">
+                            <?php echo csrfField(); ?>
+                            <input type="hidden" name="action" value="delete_donor_reward">
+                            <input type="hidden" name="item_id" value="<?php echo (int) $reward['item_id']; ?>">
+                            <button class="btn btn-danger btn-sm" type="submit">刪除方案</button>
+                        </form>
+                    </td>
+                </tr>
+                <tr hidden>
+                    <td colspan="6">
+                        <form method="post" class="reward-management-form">
+                            <?php echo csrfField(); ?>
+                            <input type="hidden" name="action" value="update_donor_reward">
+                            <input type="hidden" name="item_id" value="<?php echo (int) $reward['item_id']; ?>">
+                            <div class="grid-2">
+                                <div class="form-group"><label>方案名稱</label><input name="title" value="<?php echo htmlspecialchars($reward['title'], ENT_QUOTES, 'UTF-8'); ?>" required></div>
+                                <div class="form-group"><label>所需點數</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
+                            </div>
+                            <div class="grid-2">
+                                <div class="form-group"><label>分類</label>
+                                    <select name="category" required>
+                                        <?php foreach (['discount' => '折扣優惠', 'product' => '實體商品', 'experience' => '體驗活動', 'other' => '其他'] as $categoryValue => $categoryLabel): ?>
+                                            <option value="<?php echo $categoryValue; ?>" <?php echo $reward['category'] === $categoryValue ? 'selected' : ''; ?>><?php echo $categoryLabel; ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group"><label>庫存</label><input type="number" name="stock" min="0" value="<?php echo $reward['stock'] !== null ? (int) $reward['stock'] : ''; ?>" placeholder="不限量"></div>
+                            </div>
+                            <div class="form-group"><label>說明</label><textarea name="description"><?php echo htmlspecialchars($reward['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea></div>
+                            <button class="btn btn-primary btn-sm" type="submit">儲存修改</button>
+                            <button class="btn btn-secondary btn-sm" type="button" data-action="cancel-donor-reward-edit">取消</button>
+                        </form>
+                    </td>
                 </tr>
             <?php endforeach; ?>
             </tbody></table>

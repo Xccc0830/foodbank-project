@@ -46,6 +46,10 @@ class ActivityModel extends BaseModel {
         $creatorRole = $activity['creator_role'] ?? 'foodbank_staff';
         $role = $userRole ?? 'foodbank_staff';
 
+        if ($role === 'donor') {
+            return false;
+        }
+
         if ($isCreator) {
             return true;
         }
@@ -112,11 +116,26 @@ class ActivityModel extends BaseModel {
     public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
+        $userResult = $this->db->query("SELECT role, is_enterprise_verified, full_name FROM users WHERE user_id = {$userId} AND status = 'active' LIMIT 1");
+        $userInfo = $userResult ? $userResult->fetch_assoc() : null;
+        if (!$userInfo) {
+            return false;
+        }
+
+        if (!in_array($userInfo['role'] ?? '', ['volunteer', 'donor'], true)) {
+            return false;
+        }
+
+        $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
+        if (($userInfo['role'] ?? '') === 'donor') {
+            $assignmentType = 'company';
+            $organizationName = trim((string) ($organizationName ?: $userInfo['full_name']));
+        } elseif ($assignmentType === 'company' && (int) ($userInfo['is_enterprise_verified'] ?? 0) !== 1) {
+            return false;
+        }
 
         if ($assignmentType === 'company') {
-            $userResult = $this->db->query("SELECT is_enterprise_verified FROM users WHERE user_id = {$userId} LIMIT 1");
-            $userInfo = $userResult ? $userResult->fetch_assoc() : null;
-            if (!$userInfo || (int) ($userInfo['is_enterprise_verified'] ?? 0) !== 1) {
+            if (trim((string) $organizationName) === '') {
                 return false;
             }
         }
@@ -134,7 +153,7 @@ class ActivityModel extends BaseModel {
                return false;
             }
 
-            $activityResult = $this->db->query("SELECT capacity FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
+                $activityResult = $this->db->query("SELECT capacity, start_at, end_at FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
             $activity = $activityResult ? $activityResult->fetch_assoc() : null;
             if (!$activity) {
                return false;
@@ -146,7 +165,6 @@ class ActivityModel extends BaseModel {
                return false;
             }
 
-            $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
             $points = $assignmentType === 'individual' ? 5 : 0;
             $organizationNameEscaped = $organizationName !== null ? "'" . $this->db->real_escape_string($organizationName) . "'" : 'NULL';
 
@@ -161,11 +179,10 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
         $points = $assignmentType === 'individual' ? 5 : 0;
         $organizationNameEscaped = $organizationName !== null ? "'" . $this->db->real_escape_string($organizationName) . "'" : 'NULL';
 
-        $activityResult = $this->db->query("SELECT capacity FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
+        $activityResult = $this->db->query("SELECT capacity, start_at, end_at FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
         $activity = $activityResult ? $activityResult->fetch_assoc() : null;
         if (!$activity) {
             return false;
