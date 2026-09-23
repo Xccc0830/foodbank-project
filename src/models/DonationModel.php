@@ -30,7 +30,17 @@ class DonationModel extends BaseModel {
         }
         
         $sql .= " ORDER BY donation_date DESC";
-        return $this->query($sql);
+        $donations = $this->query($sql);
+        $uniqueDonations = [];
+
+        foreach ($donations as $donation) {
+            $donationId = (int) ($donation['donation_id'] ?? 0);
+            if (!isset($uniqueDonations[$donationId])) {
+                $uniqueDonations[$donationId] = $donation;
+            }
+        }
+
+        return array_values($uniqueDonations);
     }
 
     /**
@@ -62,6 +72,55 @@ class DonationModel extends BaseModel {
                 SET status = '{$status}', evaluation_notes = '{$evaluation_notes}'
                 WHERE donation_id = {$donation_id}";
         return $this->db->query($sql);
+    }
+
+    /**
+     * 審查商家物資捐贈，完成後移至已評估區塊
+     */
+    public function reviewMaterialDonation($donation_id, $decision, $rejection_reason = '', $foodbankDeliveryOption = 'food_bank_pickup') {
+        $donation_id = (int) $donation_id;
+        if (!in_array($decision, ['accepted', 'rejected'], true)) {
+            return false;
+        }
+
+        $evaluationStatus = $decision === 'accepted' ? 'approved_volunteer' : 'rejected';
+        $evaluationStatus = $this->db->real_escape_string($evaluationStatus);
+        $rejectionReason = $this->db->real_escape_string($rejection_reason);
+        $allowedDeliveryOptions = ['food_bank_pickup', 'volunteer_delivery'];
+        if ($foodbankDeliveryOption !== '' && !in_array($foodbankDeliveryOption, $allowedDeliveryOptions, true)) {
+            return false;
+        }
+
+        if ($foodbankDeliveryOption === '') {
+            $existingResult = $this->db->query("SELECT delivery_option, delivery_method FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'pending' LIMIT 1");
+            $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
+            $foodbankDeliveryOption = $existingDonation['delivery_option'] ?? 'volunteer_delivery';
+            $deliveryMethod = $existingDonation['delivery_method'] ?? 'volunteer_assist';
+        } else {
+            $foodbankDeliveryOption = $this->db->real_escape_string($foodbankDeliveryOption);
+            $deliveryMethod = $foodbankDeliveryOption === 'food_bank_pickup' ? 'self_delivery' : 'volunteer_assist';
+        }
+
+        $foodbankDeliveryOption = $this->db->real_escape_string($foodbankDeliveryOption);
+        $deliveryMethod = $this->db->real_escape_string($deliveryMethod);
+
+        $sql = "UPDATE {$this->table}
+                SET status = 'assessed',
+                    evaluation_status = '{$evaluationStatus}',
+                    evaluation_notes = NULL,
+                    rejection_reason = " . ($decision === 'accepted' ? 'NULL' : "'{$rejectionReason}'") . ",
+                    delivery_option = '{$foodbankDeliveryOption}',
+                    delivery_method = '{$deliveryMethod}',
+                    approved_at = " . ($decision === 'accepted' ? 'NOW()' : 'NULL') . ",
+                    rejected_at = " . ($decision === 'accepted' ? 'NULL' : 'NOW()') . ",
+                    updated_at = NOW()
+                WHERE donation_id = {$donation_id}
+                  AND status = 'pending'";
+        if (!$this->db->query($sql)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -167,32 +226,78 @@ class DonationModel extends BaseModel {
         return $this->db->query($sql);
     }
 
-    public function publishDonation($donation_id, $split_count = 1, $rewards_config = []) {
+    public function publishDonation($donation_id, $publishData = []) {
         $donation_id = (int) $donation_id;
-        $split_count = max(1, (int) $split_count);
+        if (!is_array($publishData)) {
+            $publishData = ['split_count' => $publishData];
+        }
+        $splitCount = max(1, (int) ($publishData['split_count'] ?? 1));
+        $needInspection = !empty($publishData['need_inspection']) ? 1 : 0;
+        $rewardOptions = $publishData['reward_options'] ?? [];
+        $rewardOptions = is_array($rewardOptions) ? array_values(array_intersect(
+            ['points', 'goods', 'free', 'service_hours'],
+            $rewardOptions
+        )) : [];
 
-        if ($split_count === 1) {
-            $sql = "UPDATE {$this->table}
-                    SET status = 'published',
-                        published_at = NOW(),
-                        split_count = 1
-                    WHERE donation_id = {$donation_id}";
-            return $this->db->query($sql);
+        $updates = [
+            "status = 'published'",
+            'published_at = NOW()',
+            "split_count = {$splitCount}",
+            "need_inspection = {$needInspection}",
+            "reward_options = '" . $this->db->real_escape_string(json_encode($rewardOptions, JSON_UNESCAPED_UNICODE)) . "'",
+        ];
+        foreach (['donor_name', 'donor_address', 'item_name', 'quantity', 'weight_kg', 'size_description', 'photo_path', 'pickup_deadline'] as $field) {
+            if (array_key_exists($field, $publishData)) {
+                $value = $publishData[$field];
+                $updates[] = $value === null || $value === ''
+                    ? "{$field} = NULL"
+                    : "{$field} = '" . $this->db->real_escape_string((string) $value) . "'";
+            }
+        }
+        if (array_key_exists('inspection_notes', $publishData)) {
+            $inspectionNotes = $publishData['inspection_notes'];
+            $updates[] = $inspectionNotes === '' ? 'inspection_notes = NULL' : "inspection_notes = '" . $this->db->real_escape_string($inspectionNotes) . "'";
+        }
+
+        $existingResult = $this->db->query("SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'assessed' LIMIT 1");
+        $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
+        if (!$existingDonation) {
+            return false;
         }
 
         $this->db->begin_transaction();
-        try {
-            $this->db->query("UPDATE {$this->table}
-                            SET status = 'published',
-                                published_at = NOW(),
-                                split_count = {$split_count}
-                            WHERE donation_id = {$donation_id}");
-            $this->db->commit();
-            return true;
-        } catch (Throwable $e) {
+        if (!$this->db->query("UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE donation_id = {$donation_id} AND status = 'assessed'")) {
             $this->db->rollback();
             return false;
         }
+
+        $deliveryOption = $existingDonation['delivery_option'] ?? 'volunteer_delivery';
+        $deliveryMethod = $deliveryOption === 'donor_delivery' ? 'donor' : 'volunteer';
+        $vehicleType = in_array(($existingDonation['vehicle_type'] ?? ''), ['car', 'motorcycle'], true)
+            ? $existingDonation['vehicle_type']
+            : 'motorcycle';
+        $weight = ((float) ($publishData['weight_kg'] ?? $existingDonation['weight_kg'] ?? 0)) / $splitCount;
+        $pickupAddress = trim((string) ($publishData['donor_address'] ?? $existingDonation['donor_address'] ?? ''));
+        if ($pickupAddress === '') {
+            $pickupAddress = (string) ($publishData['donor_name'] ?? $existingDonation['donor_name'] ?? '商家取貨地點');
+        }
+        $itemCategory = $this->db->real_escape_string((string) ($existingDonation['donation_type'] ?? 'other'));
+        $itemDescription = $this->db->real_escape_string((string) ($publishData['item_name'] ?? $existingDonation['item_name'] ?? '物資'));
+        $pickupAddress = $this->db->real_escape_string($pickupAddress);
+        $sealCode = $this->db->real_escape_string((string) ($existingDonation['seal_code'] ?? ''));
+
+        for ($taskNumber = 0; $taskNumber < $splitCount; $taskNumber++) {
+            $taskSql = "INSERT INTO deliveries
+                (donation_id, delivery_method, vehicle_type, total_distance_km, weight_kg, seal_code, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
+                VALUES ({$donation_id}, '{$deliveryMethod}', '{$vehicleType}', 0, {$weight}, '{$sealCode}', 'normal', 0, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+            if (!$this->db->query($taskSql)) {
+                $this->db->rollback();
+                return false;
+            }
+        }
+
+        $this->db->commit();
+        return true;
     }
 
     public function updateDeliveryStatus($donation_id, $new_status) {

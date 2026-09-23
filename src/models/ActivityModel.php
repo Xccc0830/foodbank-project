@@ -22,6 +22,18 @@ class ActivityModel extends BaseModel {
         return $result ? $result->fetch_assoc() : null;
     }
 
+    public function getParticipants($activityId) {
+        $activityId = (int) $activityId;
+        return $this->query(
+            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.status AS assignment_status,
+                    u.full_name, u.username, u.email, u.phone
+             FROM activity_assignments aa
+             JOIN users u ON u.user_id = aa.user_id
+             WHERE aa.activity_id = {$activityId} AND aa.status <> 'cancelled'
+             ORDER BY aa.created_at ASC"
+        );
+    }
+
     public function canManageActivity($activityId, $userId, $userRole = null) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
@@ -33,6 +45,10 @@ class ActivityModel extends BaseModel {
         $isCreator = ((int) ($activity['created_by'] ?? 0)) === $userId;
         $creatorRole = $activity['creator_role'] ?? 'foodbank_staff';
         $role = $userRole ?? 'foodbank_staff';
+
+        if ($role === 'donor') {
+            return false;
+        }
 
         if ($isCreator) {
             return true;
@@ -52,7 +68,7 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $allowedKeys = ['title', 'activity_type', 'description', 'start_at', 'end_at', 'capacity'];
+        $allowedKeys = ['title', 'activity_type', 'activity_type_detail', 'description', 'start_at', 'end_at', 'capacity'];
         $set = [];
         foreach ($data as $key => $value) {
             if (!in_array($key, $allowedKeys, true)) {
@@ -94,24 +110,32 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $cancelledAt = $existing['cancelled_at'] ?? null;
-        if ($cancelledAt === null) {
-            return true;
-        }
-
-        $cooldownUntil = new DateTime($cancelledAt, new DateTimeZone('UTC'));
-        $cooldownUntil->modify('+24 hours');
-        return new DateTime('now', new DateTimeZone('UTC')) >= $cooldownUntil;
+        return true;
     }
 
     public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
+        $userResult = $this->db->query("SELECT role, is_enterprise_verified, full_name FROM users WHERE user_id = {$userId} AND status = 'active' LIMIT 1");
+        $userInfo = $userResult ? $userResult->fetch_assoc() : null;
+        if (!$userInfo) {
+            return false;
+        }
+
+        if (!in_array($userInfo['role'] ?? '', ['volunteer', 'donor'], true)) {
+            return false;
+        }
+
+        $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
+        if (($userInfo['role'] ?? '') === 'donor') {
+            $assignmentType = 'company';
+            $organizationName = trim((string) ($organizationName ?: $userInfo['full_name']));
+        } elseif ($assignmentType === 'company' && (int) ($userInfo['is_enterprise_verified'] ?? 0) !== 1) {
+            return false;
+        }
 
         if ($assignmentType === 'company') {
-            $userResult = $this->db->query("SELECT is_enterprise_verified FROM users WHERE user_id = {$userId} LIMIT 1");
-            $userInfo = $userResult ? $userResult->fetch_assoc() : null;
-            if (!$userInfo || (int) ($userInfo['is_enterprise_verified'] ?? 0) !== 1) {
+            if (trim((string) $organizationName) === '') {
                 return false;
             }
         }
@@ -125,21 +149,11 @@ class ActivityModel extends BaseModel {
         if ($existingAssignmentResult && $existingAssignmentResult->num_rows > 0) {
             $existingAssignment = $existingAssignmentResult->fetch_assoc();
             $status = $existingAssignment['status'] ?? 'registered';
-            $cancelledAt = $existingAssignment['cancelled_at'] ?? null;
-
             if ($status === 'registered') {
                return false;
             }
 
-            if ($status === 'cancelled' && $cancelledAt !== null) {
-               $cooldownUntil = new DateTime($cancelledAt, new DateTimeZone('UTC'));
-               $cooldownUntil->modify('+24 hours');
-               if (new DateTime('now', new DateTimeZone('UTC')) < $cooldownUntil) {
-                   return false;
-               }
-            }
-
-            $activityResult = $this->db->query("SELECT capacity FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
+                $activityResult = $this->db->query("SELECT capacity, start_at, end_at FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
             $activity = $activityResult ? $activityResult->fetch_assoc() : null;
             if (!$activity) {
                return false;
@@ -151,7 +165,6 @@ class ActivityModel extends BaseModel {
                return false;
             }
 
-            $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
             $points = $assignmentType === 'individual' ? 5 : 0;
             $organizationNameEscaped = $organizationName !== null ? "'" . $this->db->real_escape_string($organizationName) . "'" : 'NULL';
 
@@ -166,11 +179,10 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
         $points = $assignmentType === 'individual' ? 5 : 0;
         $organizationNameEscaped = $organizationName !== null ? "'" . $this->db->real_escape_string($organizationName) . "'" : 'NULL';
 
-        $activityResult = $this->db->query("SELECT capacity FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
+        $activityResult = $this->db->query("SELECT capacity, start_at, end_at FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
         $activity = $activityResult ? $activityResult->fetch_assoc() : null;
         if (!$activity) {
             return false;
@@ -196,13 +208,20 @@ class ActivityModel extends BaseModel {
         }
     }
 
-    public function cancelRegistration($activityId, $userId) {
+    public function cancelRegistration($activityId, $userId, $cancellationReason) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
+        $cancellationReason = trim((string) $cancellationReason);
+
+        if ($cancellationReason === '') {
+            return false;
+        }
+
+        $cancellationReasonEscaped = $this->db->real_escape_string($cancellationReason);
 
         return (bool) $this->db->query(
             "UPDATE activity_assignments
-             SET status = 'cancelled', cancelled_at = NOW()
+             SET status = 'cancelled', cancelled_at = NOW(), cancellation_reason = '{$cancellationReasonEscaped}'
              WHERE activity_id = {$activityId} AND user_id = {$userId} AND status = 'registered' LIMIT 1"
         );
     }
@@ -224,7 +243,7 @@ class ActivityModel extends BaseModel {
     public function getUserAssignments($userId) {
         $userId = (int) $userId;
         return $this->query(
-            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.status AS assignment_status, aa.points, aa.cancelled_at,
+            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.status AS assignment_status, aa.points, aa.cancelled_at, aa.cancellation_reason,
                    a.activity_id, a.title, a.status AS activity_status, a.start_at, a.created_by
              FROM activity_assignments aa
              JOIN activities a ON a.activity_id = aa.activity_id

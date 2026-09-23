@@ -15,6 +15,8 @@ define('ROOT_PATH', __DIR__);
 require_once BASE_PATH . '/config/database.php';
 require_once BASE_PATH . '/src/helpers/SecurityHelper.php';
 
+date_default_timezone_set('Asia/Taipei');
+
 // 啟用會話
 session_start();
 getCsrfToken();
@@ -281,10 +283,10 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'settings', 'users', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
-    'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'donor' => ['dashboard', 'donations', 'rewards', 'notifications', 'certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
+    'volunteer' => ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
+    'donor' => ['dashboard', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate'],
 ];
 
 // 簡單的路由系統
@@ -299,20 +301,25 @@ $menu_items = [
     'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
     'donations_evaluation' => ['label' => '評估派車', 'icon' => 'fa-solid fa-clipboard-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
-    'activities' => ['label' => '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
+    'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
+    'activities' => ['label' => in_array($role, ['volunteer', 'donor'], true) ? '活動認領' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
     'carbon_report' => ['label' => '永續報表', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell'],
+    'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open'],
+    'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
+    'volunteer_management' => ['label' => '志工管理', 'icon' => 'fa-solid fa-people-group'],
 ];
 $allowedPages = $rolePages[$role] ?? ['dashboard'];
 if (!in_array($page, $allowedPages, true)) {
     $page = 'dashboard';
 }
+ob_start();
 ?>
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -407,6 +414,9 @@ if (!in_array($page, $allowedPages, true)) {
                     <?php
                     // 根據頁面加載不同的視圖
                     $view_file = BASE_PATH . '/src/views/' . $page . '.php';
+                    if ($page === 'volunteer_management') {
+                        $view_file = BASE_PATH . '/src/views/users.php';
+                    }
 
                     if (file_exists($view_file)) {
                         include $view_file;

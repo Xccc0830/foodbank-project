@@ -37,11 +37,11 @@ $dashboardRoleLabels = [
             <h2>你的公益任務</h2><p>前往配送任務接單，或認領公益活動；完成配送後會記錄公益點數。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
-            <h2>官方人員工作台</h2><p>處理捐贈評估、受益者服務與配送任務，確保物資完成媒合。</p>
-            <a href="?page=donations" class="btn btn-primary btn-sm">處理待評估捐贈</a>
+            <h2>官方人員工作台</h2><p>處理物資審查、受益者服務與公益活動，確保物資完成媒合。</p>
+            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理公益點數兌換</a>
         <?php elseif ($dashboardRole === 'donor'): ?>
             <h2>店家捐贈工作台</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
-            <a href="?page=donations" class="btn btn-primary btn-sm">上架剩食物資</a>
+            <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>
         <?php elseif ($dashboardRole === 'manager'): ?>
             <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看配送進度</a>

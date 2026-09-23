@@ -47,6 +47,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $isVolunteer && $deliveryModel->reportException((int) $_POST['delivery_id'], $currentUserId, $_POST['exception_notes'] ?? '')
             ? ['type' => 'success', 'text' => '異常已回報，食物銀行官方人員會進行處理。']
             : ['type' => 'error', 'text' => '請填寫異常原因後再送出。'];
+    } elseif ($action === 'resolve_exception') {
+        $resolved = $isOfficial && $deliveryModel->resolveException(
+            (int) $_POST['delivery_id'],
+            $currentUserId,
+            $_POST['exception_response'] ?? '',
+            $_POST['exception_next_status'] ?? 'claimed'
+        );
+        $message = $resolved
+            ? ['type' => 'success', 'text' => '異常已處理，回覆已通知志工。']
+            : ['type' => 'error', 'text' => '異常處理失敗，請填寫處理結果或確認任務狀態。'];
+    } elseif ($action === 'reject_exception') {
+        $rejected = $isOfficial && $deliveryModel->rejectException(
+            (int) $_POST['delivery_id'],
+            $currentUserId,
+            $_POST['exception_response'] ?? ''
+        );
+        $message = $rejected
+            ? ['type' => 'success', 'text' => '異常回報已駁回，任務已恢復為已接單。']
+            : ['type' => 'error', 'text' => '駁回異常回報失敗，請填寫回覆內容。'];
     } elseif ($action === 'complete_delivery') {
         $message = $isOfficial && $deliveryModel->completeDelivery((int) $_POST['delivery_id'])
             ? ['type' => 'success', 'text' => '已確認送達，公益點數已記錄。']
@@ -73,6 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'total_distance_km' => (float) ($_POST['total_distance_km'] ?? 0),
             'weight_kg' => (float) ($_POST['weight_kg'] ?? 0),
             'urgency' => $_POST['urgency'] ?? 'normal',
+            'status' => $_POST['status'] ?? 'open',
             'pickup_address' => trim($_POST['pickup_address'] ?? ''),
             'delivery_address' => trim($_POST['delivery_address'] ?? '忠信食物銀行'),
         ]);
@@ -80,6 +100,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '配送任務已更新。']
             : ['type' => 'error', 'text' => '更新失敗，只有任務發起人或食物銀行／管理者可編輯。'];
         }
+    } elseif ($action === 'update_exception') {
+        $updated = $isOfficial && $deliveryModel->updateException(
+            (int) $_POST['delivery_id'],
+            $currentUserId,
+            $currentRole,
+            $_POST['exception_notes'] ?? '',
+            $_POST['exception_response'] ?? ''
+        );
+        $message = $updated
+            ? ['type' => 'success', 'text' => '異常回報內容已更新。']
+            : ['type' => 'error', 'text' => '異常回報更新失敗。'];
     } elseif ($action === 'delete_delivery') {
         if (!$isOfficial) {
             $message = ['type' => 'error', 'text' => '志工無法刪除配送任務。'];
@@ -155,6 +186,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
     <div class="card-header"><h2>編輯配送任務</h2><p>更新任務內容與點數計算</p></div>
     <div class="card-body">
         <form method="post">
+            <?php echo csrfField(); ?>
             <input type="hidden" name="action" value="update_delivery">
             <input type="hidden" name="delivery_id" value="<?php echo (int) $editingDelivery['delivery_id']; ?>">
             <div class="grid-2">
@@ -178,6 +210,14 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                     <option value="normal" <?php echo $editingDelivery['urgency'] === 'normal' ? 'selected' : ''; ?>>一般配送</option>
                     <option value="priority" <?php echo $editingDelivery['urgency'] === 'priority' ? 'selected' : ''; ?>>優先配送</option>
                     <option value="urgent" <?php echo $editingDelivery['urgency'] === 'urgent' ? 'selected' : ''; ?>>急件配送</option>
+                </select></div>
+                <div class="form-group"><label>任務狀態</label><select name="status" required>
+                    <?php
+                    $statusLabels = ['open' => '待接單', 'claimed' => '已接單', 'picked_up' => '已取貨', 'exception' => '異常待處理', 'cancelled' => '已取消'];
+                    foreach ($statusLabels as $statusValue => $statusLabel):
+                    ?>
+                        <option value="<?php echo $statusValue; ?>" <?php echo ($editingDelivery['status'] ?? 'open') === $statusValue ? 'selected' : ''; ?>><?php echo $statusLabel; ?></option>
+                    <?php endforeach; ?>
                 </select></div>
                 <div class="form-group"><label>送達地址*</label><input type="text" name="delivery_address" value="<?php echo htmlspecialchars($editingDelivery['delivery_address']); ?>" required></div>
             </div>
@@ -226,7 +266,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
     <div class="card-header"><h2>未完成任務</h2><p>目前共 <?php echo count($pendingDeliveries); ?> 筆任務</p></div>
     <div class="card-body deliveries-table-body">
         <?php if ($pendingDeliveries): ?>
-            <table class="data-table deliveries-table"><thead><tr><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <table class="data-table deliveries-table"><thead><tr><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>異常回報</th><th>編輯配送任務</th></tr></thead><tbody>
             <?php foreach ($pendingDeliveries as $delivery): ?>
                 <tr id="delivery-<?php echo (int) $delivery['delivery_id']; ?>">
                     <td class="delivery-route-cell" title="<?php echo htmlspecialchars($delivery['pickup_address'] . ' → ' . $delivery['delivery_address'], ENT_QUOTES, 'UTF-8'); ?>">
@@ -242,15 +282,53 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
                     <td><?php echo ['normal' => '一般', 'priority' => '優先', 'urgent' => '急件'][$delivery['urgency']] ?? '一般'; ?></td>
                     <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
-                    <td><span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ['open' => '待接單', 'claimed' => '已接單', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理'][$delivery['status']] ?? $delivery['status']; ?></span></td>
+                    <td>
+                        <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ['open' => '待接單', 'claimed' => '已接單', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']; ?></span>
+                    </td>
+                    <td class="delivery-exception-cell">
+                        <?php if ($delivery['status'] === 'exception' || !empty($delivery['exception_notes']) || !empty($delivery['exception_response'])): ?>
+                            <?php if ($isOfficial): ?>
+                                <form method="post" class="delivery-action-form delivery-exception-form">
+                                    <?php echo csrfField(); ?>
+                                    <input type="hidden" name="action" value="update_exception">
+                                    <input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>">
+                                    <textarea name="exception_notes" rows="2" placeholder="志工異常回報"><?php echo htmlspecialchars($delivery['exception_notes'] ?? ''); ?></textarea>
+                                    <textarea name="exception_response" rows="2" placeholder="官方處理回覆"><?php echo htmlspecialchars($delivery['exception_response'] ?? ''); ?></textarea>
+                                    <button class="btn btn-secondary btn-sm" type="submit">儲存異常回報</button>
+                                </form>
+                            <?php else: ?>
+                                <div class="delivery-exception-details"><?php echo htmlspecialchars($delivery['exception_notes'] ?? ''); ?></div>
+                            <?php endif; ?>
+                            <?php if ($isOfficial && in_array($delivery['status'], ['exception', 'cancelled'], true)): ?>
+                                <form method="post" class="delivery-action-form delivery-exception-form">
+                                    <?php echo csrfField(); ?>
+                                    <input type="hidden" name="action" value="<?php echo $delivery['status'] === 'cancelled' ? 'reject_exception' : 'resolve_exception'; ?>">
+                                    <input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>">
+                                    <textarea name="exception_response" rows="2" placeholder="填寫處理結果或給志工的回覆" required></textarea>
+                                    <?php if ($delivery['status'] === 'exception'): ?>
+                                        <select name="exception_next_status">
+                                            <option value="claimed">恢復配送</option>
+                                            <option value="cancelled">取消任務</option>
+                                        </select>
+                                        <button class="btn btn-warning btn-sm" type="submit">回覆並處理異常</button>
+                                    <?php else: ?>
+                                        <button class="btn btn-warning btn-sm" type="submit">駁回取消，恢復配送</button>
+                                    <?php endif; ?>
+                                </form>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <span class="text-muted">無異常回報</span>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <div class="delivery-action-stack">
-                            <?php if ($isVolunteer && ($delivery['delivery_method'] ?? 'volunteer') === 'volunteer' && $delivery['status'] === 'open'): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm">接單</button></form><?php endif; ?>
+                            <?php if ($isVolunteer && ($delivery['delivery_method'] ?? 'volunteer') === 'volunteer' && $delivery['status'] === 'open'): ?><form method="post" class="delivery-action-form"><?php echo csrfField(); ?><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm" type="submit">接單</button></form><?php endif; ?>
                             <?php if ($isVolunteer && $delivery['status'] === 'claimed' && (int) $delivery['volunteer_id'] === $currentUserId): ?><form method="post" class="delivery-action-form delivery-action-form-check"><input type="hidden" name="action" value="confirm_pickup"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><label><input type="checkbox" name="seal_intact" required> 防拆貼紙完整</label><label><input type="checkbox" name="item_count_confirmed" required> 已清點物資</label><button class="btn btn-primary btn-sm">確認取貨</button></form><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="report_exception"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><input name="exception_notes" placeholder="異常原因" required><button class="btn btn-danger btn-sm">回報異常</button></form><?php endif; ?>
                             <?php if ($isOfficial && in_array($delivery['status'], ['claimed', 'picked_up'], true)): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm">確認收貨</button></form><?php endif; ?>
                             <?php if ($isOfficial): ?>
                                 <div class="inline-action-group">
                                     <form method="post" class="delivery-action-form">
+                                        <?php echo csrfField(); ?>
                                         <input type="hidden" name="action" value="load_edit_delivery">
                                         <input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>">
                                         <button class="btn btn-secondary btn-sm" type="submit">編輯</button>

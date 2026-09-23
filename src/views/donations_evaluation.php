@@ -171,7 +171,8 @@ $statusColors = [
     <div class="card-header"><h2>待評估捐贈</h2><p>共 <?php echo count($pendingDonations); ?> 筆待評估物資</p></div>
     <div class="card-body">
         <?php if ($pendingDonations): ?>
-            <table class="data-table">
+            <div class="donations-evaluation-table-body">
+            <table class="data-table donations-evaluation-table">
                 <thead>
                     <tr>
                         <th>捐贈者</th>
@@ -201,6 +202,7 @@ $statusColors = [
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-check-circle"></i><p>暫無待評估物資</p></div>
         <?php endif; ?>
@@ -214,7 +216,8 @@ $statusColors = [
         $allApproved = array_merge($approvedDonations, $approvedSelfDonations);
         if ($allApproved):
         ?>
-            <table class="data-table">
+            <div class="donations-evaluation-table-body">
+            <table class="data-table donations-evaluation-table">
                 <thead>
                     <tr>
                         <th>捐贈者</th>
@@ -253,6 +256,7 @@ $statusColors = [
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-inbox"></i><p>暫無已批准物資</p></div>
         <?php endif; ?>
@@ -263,7 +267,8 @@ $statusColors = [
     <div class="card-header"><h2>已發布物資配送追蹤</h2><p>監控志工配送進度</p></div>
     <div class="card-body">
         <?php if ($publishedDonations): ?>
-            <table class="data-table">
+            <div class="donations-evaluation-table-body">
+            <table class="data-table donations-evaluation-table">
                 <thead>
                     <tr>
                         <th>物資名稱</th>
@@ -303,6 +308,7 @@ $statusColors = [
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-package"></i><p>暫無已發布物資</p></div>
         <?php endif; ?>

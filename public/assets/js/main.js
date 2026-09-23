@@ -89,6 +89,36 @@
                 } else if (action === 'edit-inventory' && typeof openEditInventoryModal === 'function') {
                     openEditInventoryModal(btn);
                     event.preventDefault();
+                } else if (action === 'edit-reward') {
+                    const card = btn.closest('.reward-card');
+                    const form = card && card.querySelector('.reward-management-form');
+                    if (form) {
+                        form.hidden = false;
+                        btn.hidden = true;
+                    }
+                } else if (action === 'cancel-edit-reward') {
+                    const card = btn.closest('.reward-card');
+                    const form = card && card.querySelector('.reward-management-form');
+                    const editButton = card && card.querySelector('[data-action="edit-reward"]');
+                    if (form && editButton) {
+                        form.hidden = true;
+                        editButton.hidden = false;
+                    }
+                } else if (action === 'edit-donor-reward') {
+                    const displayRow = btn.closest('tr');
+                    const editRow = displayRow && displayRow.nextElementSibling;
+                    if (editRow) {
+                        editRow.hidden = false;
+                        btn.hidden = true;
+                    }
+                } else if (action === 'cancel-donor-reward-edit') {
+                    const editRow = btn.closest('tr');
+                    const displayRow = editRow && editRow.previousElementSibling;
+                    const editButton = displayRow && displayRow.querySelector('[data-action="edit-donor-reward"]');
+                    if (editRow && editButton) {
+                        editRow.hidden = true;
+                        editButton.hidden = false;
+                    }
                 }
             } catch (err) {
                 console.error('Table action handler error:', err);
@@ -104,7 +134,8 @@
 
         navItems.forEach(function (item) {
             const href = item.getAttribute('href') || '';
-            item.classList.toggle('active', href.indexOf('page=' + currentPage) !== -1);
+            const itemPage = new URL(href, window.location.href).searchParams.get('page') || 'dashboard';
+            item.classList.toggle('active', itemPage === currentPage);
         });
     }
 
@@ -838,9 +869,6 @@
     window.openAddDonationModal = openAddDonationModal;
     window.openAddInventoryModal = openAddInventoryModal;
     window.openAddBeneficiaryModal = openAddBeneficiaryModal;
-    window.openAddSupplierModal = openAddSupplierModal;
-    window.openEditSupplierModal = openEditSupplierModal;
-    window.confirmDeleteSupplier = confirmDeleteSupplier;
     window.openViewInventoryModal = openViewInventoryModal;
     window.openEditInventoryModal = openEditInventoryModal;
     window.closeModal = closeModal;

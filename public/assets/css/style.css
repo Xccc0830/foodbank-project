@@ -608,6 +608,14 @@ body {
     box-shadow: var(--shadow-sm);
 }
 
+.activity-publish-layout {
+    width: min(100%, 860px);
+}
+
+.activity-publish-layout > .card {
+    width: 100%;
+}
+
 .feature-list {
     list-style: none;
     padding: 0;
@@ -774,9 +782,123 @@ body {
     color: var(--primary-color);
 }
 
+.reward-verification-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin: 20px 0;
+    padding: 18px 22px;
+    border: 2px solid;
+    border-radius: 12px;
+    font-size: 16px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+.reward-verification-notice strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 18px;
+}
+
+.reward-verification-notice p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.reward-verification-notice-icon {
+    display: inline-flex;
+    flex: 0 0 30px;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: #FFFFFF;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.reward-verification-notice-success {
+    border-color: #059669;
+    background: #ECFDF5;
+    color: #065F46;
+}
+
+.reward-verification-notice-success .reward-verification-notice-icon {
+    background: #059669;
+}
+
+.reward-verification-notice-error {
+    border-color: #DC2626;
+    background: #FEF2F2;
+    color: #991B1B;
+}
+
+.reward-verification-notice-error .reward-verification-notice-icon {
+    background: #DC2626;
+}
+
+.redemptions-table-body {
+    overflow-x: auto;
+}
+
+.data-table.redemptions-table {
+    min-width: 640px;
+}
+
+.data-table.redemptions-table th,
+.data-table.redemptions-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.data-table.redemptions-table th:first-child,
+.data-table.redemptions-table td:first-child {
+    width: auto;
+    min-width: 220px;
+    text-align: left;
+}
+
+.data-table.redemptions-table th:last-child,
+.data-table.redemptions-table td:last-child {
+    min-width: 180px;
+}
+
+.categories-table-body {
+    overflow-x: auto;
+    width: 100%;
+}
+
+.data-table.categories-table {
+    min-width: 760px;
+}
+
+.data-table.categories-table th,
+.data-table.categories-table td {
+    white-space: nowrap;
+    word-break: keep-all;
+    vertical-align: middle;
+}
+
+.data-table.categories-table th:first-child,
+.data-table.categories-table td:first-child {
+    min-width: 140px;
+}
+
+.data-table.categories-table th:nth-child(2),
+.data-table.categories-table td:nth-child(2) {
+    min-width: 180px;
+}
+
+.data-table.categories-table th:nth-child(4),
+.data-table.categories-table td:nth-child(4) {
+    min-width: 72px;
+    text-align: center;
+}
+
 /* ============================================
-   按鈕樣式
-   ============================================ */
+    按鈕樣式
+    ============================================ */
 
 .btn {
     display: inline-flex;
@@ -910,14 +1032,38 @@ body {
 
 .delivery-action-form input[type="text"],
 .delivery-action-form input[name="exception_notes"],
+.delivery-action-form textarea[name="exception_notes"],
+.delivery-action-form textarea[name="exception_response"],
 .inline-action-group input[type="text"],
 .inline-action-group input[name="exception_notes"] {
    min-width: 120px;
    max-width: 170px;
+   min-height: 38px;
    padding: 8px 10px;
    border: 1px solid var(--gray-300);
    border-radius: 8px;
    background: var(--bg-primary);
+}
+
+.data-table.deliveries-table td.delivery-exception-cell {
+   min-width: 280px;
+   white-space: normal;
+}
+
+.delivery-exception-cell .delivery-exception-form {
+   flex-direction: column;
+   align-items: stretch;
+   margin-bottom: 8px;
+}
+
+.delivery-exception-cell .delivery-exception-form:last-child {
+   margin-bottom: 0;
+}
+
+.delivery-exception-cell .delivery-exception-form textarea,
+.delivery-exception-cell .delivery-exception-form select {
+   width: 100%;
+   max-width: 280px;
 }
 
 .delivery-action-form-check {
@@ -1141,6 +1287,11 @@ form {
    min-width: 1120px;
 }
 
+.users-table-body {
+   overflow-x: auto;
+   width: 100%;
+}
+
 .data-table.users-table th,
 .data-table.users-table td {
    white-space: nowrap;
@@ -1202,6 +1353,34 @@ form {
    white-space: nowrap;
 }
 
+.vehicle-options {
+   display: flex;
+   flex-direction: row;
+   flex-wrap: nowrap;
+   align-items: center;
+   gap: 18px;
+   margin-top: 8px;
+   overflow-x: auto;
+   padding-bottom: 4px;
+}
+
+.vehicle-options label {
+   display: inline-flex;
+   align-items: center;
+   gap: 6px;
+   flex: 0 0 auto;
+   white-space: nowrap;
+}
+
+.participant-group + .participant-group {
+   margin-top: 20px;
+}
+
+.participant-group h4 {
+   margin: 0 0 10px;
+   color: var(--text-primary);
+}
+
 .data-table tr:target {
    background: rgba(99, 91, 255, 0.12);
    outline: 2px solid rgba(99, 91, 255, 0.35);
@@ -1258,12 +1437,39 @@ form {
    min-width: 140px;
 }
 
+.donations-evaluation-table-body {
+   overflow-x: auto;
+   width: 100%;
+}
+
+.data-table.donations-evaluation-table {
+   min-width: 760px;
+}
+
+.data-table.donations-evaluation-table th,
+.data-table.donations-evaluation-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+.data-table.donations-evaluation-table th:first-child,
+.data-table.donations-evaluation-table td:first-child {
+   min-width: 120px;
+}
+
+.data-table.donations-evaluation-table th:nth-child(2),
+.data-table.donations-evaluation-table td:nth-child(2) {
+   min-width: 140px;
+}
+
 .activities-table-body {
    overflow-x: auto;
 }
 
 .data-table.activities-table {
    min-width: 820px;
+    table-layout: fixed;
 }
 
 .data-table.activities-table th,
@@ -1275,8 +1481,115 @@ form {
 
 .data-table.activities-table th:first-child,
 .data-table.activities-table td:first-child {
+    width: 28%;
+    min-width: 220px;
+   text-align: left;
+}
+
+.data-table.activities-table th:nth-child(2),
+.data-table.activities-table td:nth-child(2) {
+    width: 13%;
+}
+
+.data-table.activities-table th:nth-child(3),
+.data-table.activities-table td:nth-child(3) {
+    width: 18%;
+}
+
+.data-table.activities-table th:nth-child(4),
+.data-table.activities-table td:nth-child(4) {
+    width: 12%;
+}
+
+.data-table.activities-table th:nth-child(5),
+.data-table.activities-table td:nth-child(5) {
+    width: 10%;
+}
+
+.data-table.activities-table th:last-child,
+.data-table.activities-table td:last-child {
+    width: 19%;
+    min-width: 250px;
+    white-space: normal;
+}
+
+.activity-description {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    word-break: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.activity-description-short {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.activity-description-button {
+    display: block;
+    margin-top: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.activity-description-button:hover {
+    text-decoration: underline;
+}
+
+.activity-description-full {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.activity-form-grid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.6fr);
+}
+
+.activity-form-grid .form-group {
+    min-width: 0;
+}
+
+.activity-form-grid input {
+    width: 100%;
+    min-width: 0;
+}
+
+@media (max-width: 900px) {
+    .activity-publish-layout {
+        width: 100%;
+    }
+
+    .activity-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.activities-assignments-table-body {
+   overflow-x: auto;
+}
+
+.data-table.activities-assignments-table {
+   min-width: 820px;
+}
+
+.data-table.activities-assignments-table th,
+.data-table.activities-assignments-table td {
+   white-space: nowrap;
+   word-break: keep-all;
+   vertical-align: middle;
+}
+
+.data-table.activities-assignments-table th:first-child,
+.data-table.activities-assignments-table td:first-child {
    width: auto;
-   min-width: 150px;
+   min-width: 220px;
    text-align: left;
 }
 
@@ -1389,6 +1702,11 @@ form {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
+    writing-mode: horizontal-tb;
+    min-width: max-content;
 }
 
 .status-pending {
@@ -1737,18 +2055,30 @@ form {
 .reward-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 16px;
+    gap: 24px;
 }
 
 .reward-card {
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);
-    padding: 18px;
+    padding: 24px;
     background: var(--bg-primary);
 }
 
 .reward-card h3 {
     margin-bottom: 6px;
+}
+
+.reward-card > [data-action="edit-reward"],
+.reward-card > form:not(.reward-management-form) {
+    display: block;
+    width: max-content;
+    min-width: 84px;
+    margin-top: 8px;
+}
+
+.reward-card > .reward-management-form {
+    margin-top: 12px;
 }
 
 .reward-cost {
@@ -1760,6 +2090,52 @@ form {
     color: var(--primary-color);
     font-weight: 700;
     font-size: 13px;
+}
+
+.reward-claims-list {
+    display: grid;
+    gap: 20px;
+}
+
+.reward-claim-card {
+    padding: 24px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+}
+
+.reward-claim-card h3 {
+    margin-bottom: 12px;
+}
+
+.reward-claim-card .toolbar-meta {
+    margin: 0 0 18px;
+}
+
+.reward-claim-detail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    text-align: center;
+}
+
+.reward-claim-detail #selected-reward-qr-code {
+    padding: 16px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    background: #fff;
+}
+
+.reward-claim-detail .toolbar-meta {
+    margin: 0;
+}
+
+.reward-claim-number {
+    margin: 0;
+    color: var(--text-primary);
+    font-weight: 700;
+    letter-spacing: 0.04em;
 }
 
 .consent-checklist label {
