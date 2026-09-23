@@ -29,25 +29,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '兌換品項已新增。']
             : ['type' => 'error', 'text' => '請填寫獎勵名稱與有效點數門檻。'];
     } elseif ($action === 'create_donor_reward' && $isDonor) {
-        $connection = $db->getConnection();
-        $donorId = (int) $currentUser['user_id'];
-        $title = $connection->real_escape_string(trim($_POST['title'] ?? ''));
-        $description = $connection->real_escape_string(trim($_POST['description'] ?? ''));
-        $costPoints = (int) ($_POST['cost_points'] ?? 0);
-        $stock = $_POST['stock'] !== '' ? (int) $_POST['stock'] : 'NULL';
-        $category = $connection->real_escape_string($_POST['category'] ?? 'other');
-
-        if ($title !== '' && $costPoints > 0) {
-            $sql = "INSERT INTO donor_reward_items (donor_id, title, description, cost_points, stock, category, status)
-                    VALUES ({$donorId}, '{$title}', '{$description}', {$costPoints}, {$stock}, '{$category}', 'active')";
-            if ($connection->query($sql)) {
-                $message = ['type' => 'success', 'text' => '獎勵方案已新增。'];
-            } else {
-                $message = ['type' => 'error', 'text' => '新增失敗，請稍後再試。'];
-            }
-        } else {
-            $message = ['type' => 'error', 'text' => '請填寫獎勵名稱與有效點數門檻。'];
-        }
+        $message = $rewardModel->createDonorReward((int) $currentUser['user_id'], [
+            'title' => $_POST['title'] ?? '',
+            'description' => $_POST['description'] ?? '',
+            'cost_points' => $_POST['cost_points'] ?? 0,
+            'stock' => $_POST['stock'] !== '' ? $_POST['stock'] : null,
+            'category' => $_POST['category'] ?? 'other',
+        ])
+            ? ['type' => 'success', 'text' => '獎勵方案已新增。']
+            : ['type' => 'error', 'text' => '新增失敗，請確認資料格式後再試。'];
+    } elseif ($action === 'update_donor_redemption' && $isDonor) {
+        $status = $_POST['status'] ?? '';
+        $message = $rewardModel->updateDonorRedemptionStatus(
+            (int) $currentUser['user_id'],
+            (int) ($_POST['redemption_id'] ?? 0),
+            $status
+        )
+            ? ['type' => 'success', 'text' => '兌換紀錄狀態已更新。']
+            : ['type' => 'error', 'text' => '狀態更新失敗，可能紀錄已處理或不存在。'];
     }
 }
 
@@ -55,17 +54,12 @@ $balance = $rewardModel->getBalance((int) $currentUser['user_id']);
 $catalog = $rewardModel->getActiveCatalog();
 $myRedemptions = $rewardModel->getRedemptionsByUser((int) $currentUser['user_id']);
 
-// 獲取商家的獎勵方案
 $donorRewards = [];
+$donorRedemptions = [];
 if ($isDonor) {
-    $connection = $db->getConnection();
     $donorId = (int) $currentUser['user_id'];
-    $result = $connection->query("SELECT * FROM donor_reward_items WHERE donor_id = {$donorId} ORDER BY created_at DESC");
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $donorRewards[] = $row;
-        }
-    }
+    $donorRewards = $rewardModel->getDonorRewards($donorId);
+    $donorRedemptions = $rewardModel->getDonorRedemptions($donorId);
 }
 ?>
 
@@ -141,6 +135,39 @@ if ($isDonor) {
 <?php endif; ?>
 
 <?php if ($isDonor): ?>
+<div class="card mt-32">
+    <div class="card-header"><h2>獎勵兌換紀錄</h2><p>查看志工兌換你提供的獎勵方案</p></div>
+    <div class="card-body">
+        <?php if ($donorRedemptions): ?>
+            <table class="data-table"><thead><tr><th>志工</th><th>獎勵方案</th><th>兌換點數</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <?php foreach ($donorRedemptions as $redemption): ?>
+                <tr>
+                    <td><?php echo htmlspecialchars($redemption['volunteer_name']); ?></td>
+                    <td><?php echo htmlspecialchars($redemption['title']); ?></td>
+                    <td><?php echo (int) $redemption['points_spent']; ?> 點</td>
+                    <td><?php echo htmlspecialchars($redemption['created_at']); ?></td>
+                    <td><?php echo ['pending' => '待處理', 'fulfilled' => '已完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></td>
+                    <td>
+                        <?php if ($redemption['status'] === 'pending'): ?>
+                            <form method="post" class="inline-form">
+                                <input type="hidden" name="action" value="update_donor_redemption">
+                                <input type="hidden" name="redemption_id" value="<?php echo (int) $redemption['redemption_id']; ?>">
+                                <button class="btn btn-primary btn-sm" type="submit" name="status" value="fulfilled">標記完成</button>
+                                <button class="btn btn-secondary btn-sm" type="submit" name="status" value="cancelled">取消</button>
+                            </form>
+                        <?php else: ?>
+                            <span class="toolbar-meta">無可用操作</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody></table>
+        <?php else: ?>
+            <div class="empty-state"><i class="fas fa-receipt"></i><p>目前沒有兌換紀錄</p></div>
+        <?php endif; ?>
+    </div>
+</div>
+
 <div class="card mt-32">
     <div class="card-header"><h2>我的獎勵方案</h2><p>設定志工可在貴店家兌換的獎勵與優惠</p></div>
     <div class="card-body">

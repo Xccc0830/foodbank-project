@@ -77,4 +77,77 @@ class RewardModel extends BaseModel {
     public function createReward($data) {
         return $this->insert($data);
     }
+
+    public function createDonorReward($donorId, $data) {
+        $donorId = (int) $donorId;
+        $title = trim((string) ($data['title'] ?? ''));
+        $description = trim((string) ($data['description'] ?? ''));
+        $costPoints = (int) ($data['cost_points'] ?? 0);
+        $stock = $data['stock'] === null || $data['stock'] === '' ? null : (int) $data['stock'];
+        $category = (string) ($data['category'] ?? 'other');
+        $allowedCategories = ['discount', 'product', 'experience', 'other'];
+
+        if ($donorId <= 0 || $title === '' || $costPoints <= 0 || ($stock !== null && $stock < 0) || !in_array($category, $allowedCategories, true)) {
+            return false;
+        }
+
+        return $this->insertInto('donor_reward_items', [
+            'donor_id' => $donorId,
+            'title' => $title,
+            'description' => $description,
+            'cost_points' => $costPoints,
+            'stock' => $stock,
+            'category' => $category,
+            'status' => 'active',
+        ]);
+    }
+
+    public function getDonorRewards($donorId) {
+        $donorId = (int) $donorId;
+        return $this->query("SELECT * FROM donor_reward_items WHERE donor_id = {$donorId} ORDER BY created_at DESC");
+    }
+
+    public function getDonorRedemptions($donorId) {
+        $donorId = (int) $donorId;
+        return $this->query(
+            "SELECT drr.*, dri.title, u.full_name AS volunteer_name
+             FROM donor_reward_redemptions drr
+             JOIN donor_reward_items dri ON dri.item_id = drr.item_id
+             JOIN users u ON u.user_id = drr.volunteer_id
+             WHERE drr.donor_id = {$donorId}
+             ORDER BY drr.created_at DESC"
+        );
+    }
+
+    public function updateDonorRedemptionStatus($donorId, $redemptionId, $status) {
+        $donorId = (int) $donorId;
+        $redemptionId = (int) $redemptionId;
+        $allowedStatuses = ['fulfilled', 'cancelled'];
+
+        if ($donorId <= 0 || $redemptionId <= 0 || !in_array($status, $allowedStatuses, true)) {
+            return false;
+        }
+
+        $statusEscaped = $this->db->real_escape_string($status);
+        $fulfilledAt = $status === 'fulfilled' ? 'NOW()' : 'NULL';
+        return (bool) $this->db->query(
+            "UPDATE donor_reward_redemptions
+             SET status = '{$statusEscaped}', fulfilled_at = {$fulfilledAt}
+             WHERE redemption_id = {$redemptionId} AND donor_id = {$donorId} AND status = 'pending'"
+        ) && $this->db->affected_rows === 1;
+    }
+
+    private function insertInto($table, $data) {
+        $columns = array_keys($data);
+        $values = [];
+
+        foreach ($data as $value) {
+            $values[] = $value === null
+                ? 'NULL'
+                : "'" . $this->db->real_escape_string((string) $value) . "'";
+        }
+
+        $sql = "INSERT INTO {$table} (" . implode(',', $columns) . ") VALUES (" . implode(',', $values) . ")";
+        return $this->db->query($sql) ? $this->db->insert_id : false;
+    }
 }
