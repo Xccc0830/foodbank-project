@@ -150,7 +150,7 @@ $donorRewards = [];
 if ($isDonor) {
     $connection = $db->getConnection();
     $donorId = (int) $currentUser['user_id'];
-    $result = $connection->query("SELECT * FROM donor_reward_items WHERE donor_id = {$donorId} ORDER BY created_at DESC");
+    $result = $connection->query("SELECT * FROM donor_reward_items WHERE donor_id = {$donorId} AND status = 'active' ORDER BY created_at DESC");
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $donorRewards[] = $row;
@@ -212,7 +212,7 @@ if ($isDonor) {
                                 <input type="hidden" name="reward_id" value="<?php echo (int) $reward['source_id']; ?>">
                                 <button class="btn btn-danger btn-sm" type="submit">刪除品項</button>
                             </form>
-                        <?php elseif ($currentRole === 'admin' && $reward['source_type'] === 'donor'): ?>
+                        <?php elseif ($reward['source_type'] === 'donor' && ($currentRole === 'admin' || ((int) ($reward['source_owner_id'] ?? 0) === (int) $currentUser['user_id']))): ?>
                             <button class="btn btn-secondary btn-sm" type="button" data-action="edit-reward">編輯品項</button>
                             <form method="post" class="reward-management-form" hidden>
                                 <?php echo csrfField(); ?>

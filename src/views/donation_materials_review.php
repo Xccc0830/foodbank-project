@@ -532,12 +532,10 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                     </form>
                 <?php elseif (($viewingDonation['status'] ?? '') === 'assessed'): ?>
                     <div class="assessment-summary">
-                        <?php $renderDetails($viewingDonation); ?>
                     </div>
                 <?php elseif (($viewingDonation['status'] ?? '') === 'published'): ?>
                     <div class="publish-summary">
                         <p><strong>發布時間：</strong><?php echo htmlspecialchars($formatDateTime($viewingDonation['published_at'] ?? null)); ?></p>
-                        <?php $renderDetails($viewingDonation); ?>
                         <?php $viewProgress = $deliveryModel->getDonationDeliveryProgress((int) $viewingDonation['donation_id']); ?>
                         <?php if ($viewProgress['accepted_tasks'] > 0 && $viewProgress['completed_tasks'] < $viewProgress['total_tasks']): ?>
                             <form method="post" class="review-decision-form">

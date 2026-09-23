@@ -55,11 +55,11 @@ class RewardModel extends BaseModel {
 
     public function getAvailableRewards() {
         return $this->query(
-            "SELECT reward_id AS source_id, 'foodbank' AS source_type, title, description, cost_points, stock
+            "SELECT reward_id AS source_id, 'foodbank' AS source_type, NULL AS source_owner_id, title, description, cost_points, stock
              FROM reward_catalog
              WHERE status = 'active'
              UNION ALL
-             SELECT item_id AS source_id, 'donor' AS source_type, title, description, cost_points, stock
+             SELECT item_id AS source_id, 'donor' AS source_type, donor_id AS source_owner_id, title, description, cost_points, stock
              FROM donor_reward_items
              WHERE status = 'active'
              ORDER BY cost_points ASC"

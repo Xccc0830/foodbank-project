@@ -380,11 +380,11 @@ $formatDateTime = static function ($value) {
 
             <div class="form-group">
                 <label>運送評估</label>
-                <div style="display:flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;">
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="vehicle_type[]" value="汽車"> 汽車</label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="vehicle_type[]" value="機車"> 機車</label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="vehicle_type[]" value="貨車"> 貨車</label>
-                    <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" name="vehicle_type[]" value="其他"> 其他</label>
+                <div class="vehicle-options" role="group" aria-label="運送評估選項">
+                    <label><input type="checkbox" name="vehicle_type[]" value="汽車"> <span>汽車</span></label>
+                    <label><input type="checkbox" name="vehicle_type[]" value="機車"> <span>機車</span></label>
+                    <label><input type="checkbox" name="vehicle_type[]" value="貨車"> <span>貨車</span></label>
+                    <label><input type="checkbox" name="vehicle_type[]" value="其他"> <span>其他</span></label>
                 </div>
             </div>
 

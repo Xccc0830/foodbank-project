@@ -217,7 +217,7 @@ $activityStatusLabels = [
                 <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
                 <button class="btn btn-secondary btn-sm" type="submit">編輯活動</button>
             </form>
-            <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與志工</button>
+            <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與者</button>
             <form method="post" class="delivery-action-form" onsubmit="return confirm('確定要刪除這個活動嗎？');"><?php echo csrfField(); ?>
                 <input type="hidden" name="action" value="delete_activity">
                 <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
@@ -225,7 +225,7 @@ $activityStatusLabels = [
             </form>
         </div>
     <?php elseif ($activity['can_view_participants']): ?>
-        <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與志工</button>
+        <button class="btn btn-secondary btn-sm view-participants-button" type="button" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">參與者</button>
     <?php elseif ($activity['can_register']): ?>
         <form method="post" class="delivery-action-form"><?php echo csrfField(); ?>
             <input type="hidden" name="action" value="register_activity">
@@ -330,7 +330,7 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
 <div id="participants-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="participants-modal-title" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 id="participants-modal-title">參與志工</h3>
+            <h3 id="participants-modal-title">參與者</h3>
             <button type="button" class="modal-close participants-modal-close" aria-label="關閉參與志工視窗">×</button>
         </div>
         <div class="modal-body" id="participants-modal-body"></div>
@@ -367,15 +367,27 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
     document.querySelectorAll('.view-participants-button').forEach(function (button) {
         button.addEventListener('click', function () {
             const participants = participantData[button.dataset.activityId] || [];
-            title.textContent = '參與志工：' + (button.dataset.activityTitle || '');
-            body.innerHTML = participants.length
-                ? '<div class="participants-list">' + participants.map(function (participant) {
+            title.textContent = '參與者：' + (button.dataset.activityTitle || '');
+            const companies = participants.filter(function (participant) {
+                return participant.assignment_type === 'company';
+            });
+            const volunteers = participants.filter(function (participant) {
+                return participant.assignment_type !== 'company';
+            });
+            function renderParticipant(participant) {
                     const name = escapeHtml(participant.full_name || participant.username || '');
                     const type = participant.assignment_type === 'company' ? '企業認領' : '個人／志工';
                     const organization = participant.organization_name ? ' · ' + escapeHtml(participant.organization_name) : '';
                     const phone = participant.phone ? '<small>電話：' + escapeHtml(participant.phone) + '</small>' : '';
                     return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + '</span>' + phone + '</div>';
-                }).join('') + '</div>'
+            }
+            function renderGroup(titleText, group) {
+                return group.length
+                    ? '<section class="participant-group"><h4>' + titleText + '</h4><div class="participants-list">' + group.map(renderParticipant).join('') + '</div></section>'
+                    : '';
+            }
+            body.innerHTML = participants.length
+                ? renderGroup('愛心商家', companies) + renderGroup('志工', volunteers)
                 : '<div class="empty-state"><i class="fas fa-users-slash"></i><p>目前沒有參與志工</p></div>';
             modal.style.display = 'flex';
         });
