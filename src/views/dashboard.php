@@ -3,10 +3,8 @@
  * 儀表板視圖 - 精修版
  */
 
-require_once BASE_PATH . '/src/models/BeneficiaryModel.php';
 require_once BASE_PATH . '/src/models/DonationModel.php';
 
-$beneficiaryModel = new BeneficiaryModel();
 $donationModel = new DonationModel();
 
 $recentDonations = array_slice($donationModel->getAllDonations(null), 0, 5);
@@ -37,7 +35,7 @@ $dashboardRoleLabels = [
             <h2>你的公益任務</h2><p>前往配送任務接單，或認領公益活動；完成配送後會記錄公益點數。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
-            <h2>官方人員工作台</h2><p>處理物資審查、受益者服務與公益活動，確保物資完成媒合。</p>
+            <h2>官方人員工作台</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
             <a href="?page=rewards" class="btn btn-secondary btn-sm">管理公益點數兌換</a>
         <?php elseif ($dashboardRole === 'donor'): ?>
             <h2>店家捐贈工作台</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
@@ -49,20 +47,6 @@ $dashboardRoleLabels = [
             <h2>忠信食物銀行管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
             <a href="?page=settings" class="btn btn-primary btn-sm">前往系統設置</a>
         <?php endif; ?>
-    </div>
-</div>
-
-<div class="stats-grid">
-    <div class="stat-card">
-        <h3>活躍受益者</h3>
-        <div class="stat-number"><?php echo number_format($beneficiaryModel->countActiveBeneficiaries()); ?></div>
-        <p class="stat-label">位受益者</p>
-    </div>
-
-    <div class="stat-card">
-        <h3>家庭成員</h3>
-        <div class="stat-number"><?php echo number_format($beneficiaryModel->getTotalFamilyMembers()); ?></div>
-        <p class="stat-label">位家庭成員</p>
     </div>
 </div>
 
@@ -132,9 +116,6 @@ $dashboardRoleLabels = [
         <div class="grid-4">
             <?php if ($dashboardRole === 'donor'): ?>
             <button class="btn btn-primary" onclick="openAddDonationModal()"><i class="fas fa-gift"></i> 新增捐贈</button>
-            <?php endif; ?>
-            <?php if ($dashboardRole === 'admin'): ?>
-            <button class="btn btn-primary" onclick="openAddBeneficiaryModal()"><i class="fas fa-user-plus"></i> 新增受益者</button>
             <?php endif; ?>
             <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
             <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>

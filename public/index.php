@@ -288,7 +288,7 @@ $roleLabels = [
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'material_transport', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'material_transport', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'foodbank_staff' => ['dashboard', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'donor' => ['dashboard', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate'],
@@ -309,7 +309,6 @@ $menu_items = [
     'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
     'activities' => ['label' => in_array($role, ['volunteer', 'donor'], true) ? '活動認領' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
-    'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
     'carbon_report' => ['label' => '永續報表', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
