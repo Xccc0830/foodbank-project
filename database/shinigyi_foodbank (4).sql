@@ -804,8 +804,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`, `department`, `status`, `created_at`, `updated_at`, `created_by`, `phone_verified`, `is_enterprise_verified`, `enterprise_name`, `enterprise_verified_at`) VALUES
-(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '系統管理員', NULL, 'admin', NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
-(2, 'manager', '$2y$10$iL8M6sR5fDEijHGLU/dWqeHTuSusk4IjCJ5VAsz.OytAgc/2Dc7QG', 'manager@foodbank.local', '食物銀行主管', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
+(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '忠信食物銀行', NULL, 'admin', NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
+(2, 'manager', '$2y$10$iL8M6sR5fDEijHGLU/dWqeHTuSusk4IjCJ5VAsz.OytAgc/2Dc7QG', 'manager@foodbank.local', '忠信食物銀行', NULL, 'admin', NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
 (3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
 (4, 'volunteer', '$2y$10$ZWwCxo.mGqgE5GvPiR5nH.WhufmwuBbGPtJ0TEmEcqveablDm8uCK', 'volunteer@foodbank.local', '平台志工', NULL, 'volunteer', NULL, 'active', '2026-08-18 16:46:44', '2026-09-18 07:05:20', NULL, 0, 0, NULL, NULL),
 (6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'volunteer', NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL),

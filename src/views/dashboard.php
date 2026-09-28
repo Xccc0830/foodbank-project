@@ -12,7 +12,7 @@ $donationModel = new DonationModel();
 $recentDonations = array_slice($donationModel->getAllDonations(null), 0, 5);
 $dashboardRole = $currentUser['role'] ?? 'foodbank_staff';
 $dashboardRoleLabels = [
-    'admin' => '系統管理總覽',
+    'admin' => '忠信食物銀行管理總覽',
     'foodbank_staff' => '食物銀行官方工作台',
     'volunteer' => '志工／外送員工作台',
     'donor' => '店家捐贈工作台',
@@ -46,7 +46,7 @@ $dashboardRoleLabels = [
             <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看配送進度</a>
         <?php else: ?>
-            <h2>系統管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
+            <h2>忠信食物銀行管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
             <a href="?page=settings" class="btn btn-primary btn-sm">前往系統設置</a>
         <?php endif; ?>
     </div>

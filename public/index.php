@@ -25,6 +25,11 @@ getCsrfToken();
 $connection = $db->getConnection();
 $action = $_GET['action'] ?? '';
 
+// 將既有食物銀行主管帳號併入最高權限管理者角色，保留帳號與歷史資料。
+$connection->query(
+    "UPDATE users SET role = 'admin', full_name = '忠信食物銀行' WHERE username IN ('admin', 'manager')"
+);
+
 // 修復舊版初始化資料曾以錯誤編碼寫入的示範帳號資料。
 $demoPasswordHashes = [
     'manager' => '866485796cfa8d7c0cf7111640205b83076433547577511d81f8030ae99ecea5',
@@ -39,7 +44,7 @@ foreach ($demoPasswordHashes as $demoUsername => $demoPasswordHash) {
 $connection->query(
     "UPDATE users SET full_name = CASE username
         WHEN 'official' THEN '食物銀行官方人員'
-        WHEN 'manager' THEN '食物銀行官方人員'
+        WHEN 'manager' THEN '忠信食物銀行'
         WHEN 'staff' THEN '食物銀行官方人員'
         WHEN 'volunteer' THEN '平台志工／外送員'
         WHEN 'donor' THEN '捐贈剩食店家'
@@ -277,13 +282,13 @@ if (isset($currentUser['user_id'])) {
 }
 $role = $currentUser['role'];
 $roleLabels = [
-    'admin' => '系統管理者',
-    'foodbank_staff' => '食物銀行官方人員',
+    'admin' => '忠信食物銀行',
+    'foodbank_staff' => '忠信食物銀行',
     'volunteer' => '平台志工／外送員',
     'donor' => '捐贈剩食店家',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'material_transport', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
     'foodbank_staff' => ['dashboard', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'donor' => ['dashboard', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate'],
