@@ -10,22 +10,22 @@ $donationModel = new DonationModel();
 $recentDonations = array_slice($donationModel->getAllDonations(null), 0, 5);
 $dashboardRole = $currentUser['role'] ?? 'foodbank_staff';
 $dashboardRoleLabels = [
-    'admin' => '忠信食物銀行管理總覽',
-    'foodbank_staff' => '食物銀行官方工作台',
-    'volunteer' => '志工／外送員工作台',
-    'donor' => '店家捐贈工作台',
+    'admin' => '管理介面',
+    'foodbank_staff' => '管理介面',
+    'volunteer' => '管理介面',
+    'donor' => '管理介面',
 ];
 ?>
 
 <div class="view-header">
     <div>
-        <h1 class="view-title"><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '工作台'); ?></h1>
+        <h1 class="view-title"><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '管理介面'); ?></h1>
         <p class="view-subtitle"><?php echo date('Y-m-d'); ?>，歡迎 <?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?></p>
     </div>
     <?php if ($dashboardRole === 'donor'): ?>
-    <button class="btn btn-primary" onclick="openAddDonationModal()">
+    <a class="btn btn-primary" href="?page=donation_materials">
         <i class="fas fa-plus"></i> 新增捐贈
-    </button>
+    </a>
     <?php endif; ?>
 </div>
 
@@ -35,10 +35,10 @@ $dashboardRoleLabels = [
             <h2>你的公益任務</h2><p>前往配送任務接單，或認領公益活動；完成配送後會記錄公益點數。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
-            <h2>官方人員工作台</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
+            <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
             <a href="?page=rewards" class="btn btn-secondary btn-sm">管理公益點數兌換</a>
         <?php elseif ($dashboardRole === 'donor'): ?>
-            <h2>店家捐贈工作台</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
+            <h2>管理介面</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
             <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>
         <?php elseif ($dashboardRole === 'manager'): ?>
             <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
@@ -80,7 +80,7 @@ $dashboardRoleLabels = [
                                 'pending' => '待評估',
                                 'approved' => '已批准',
                                 'received' => '已收貨',
-                                'rejected' => '已拒絕',
+                                'rejected' => '已婉拒',
                             ];
                             ?>
                             <tr>
@@ -115,7 +115,7 @@ $dashboardRoleLabels = [
     <div class="card-body">
         <div class="grid-4">
             <?php if ($dashboardRole === 'donor'): ?>
-            <button class="btn btn-primary" onclick="openAddDonationModal()"><i class="fas fa-gift"></i> 新增捐贈</button>
+            <a class="btn btn-primary" href="?page=donation_materials"><i class="fas fa-gift"></i> 新增捐贈</a>
             <?php endif; ?>
             <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
             <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>

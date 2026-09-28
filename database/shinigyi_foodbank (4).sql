@@ -788,6 +788,7 @@ CREATE TABLE `users` (
   `full_name` varchar(100) NOT NULL,
   `phone` varchar(20) DEFAULT NULL,
   `role` enum('admin','foodbank_staff','volunteer','donor') NOT NULL DEFAULT 'foodbank_staff',
+  `member_type` enum('general','enterprise') NOT NULL DEFAULT 'general',
   `department` varchar(50) DEFAULT NULL,
   `status` enum('active','inactive','suspended') DEFAULT 'active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -814,6 +815,8 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `p
 (11, 'store_demo', '$2y$10$RUndnqZIN/Nw5FJx/X059eW0ZsjRovylNN8kt7k2HioHPuiQEGKMu', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'donor', '零售部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
 (12, 'courier_demo', '$2y$10$v16TT2Uetokuln3OeVD7PuY0ZCqMM/nwKnFUFtJg1SzFmJhjknZjC', 'courier_demo@foodbank.local', '配送志工A', '0923456789', 'volunteer', '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
 (13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'donor', NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, NULL, NULL);
+
+UPDATE `users` SET `member_type` = 'enterprise' WHERE `role` = 'donor';
 
 -- --------------------------------------------------------
 

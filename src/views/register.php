@@ -32,7 +32,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
                 <div class="form-group"><label for="username">帳號</label><div class="input-with-icon"><i class="fa-regular fa-user"></i><input id="username" name="username" required autocomplete="username" placeholder="設定登入帳號"></div></div>
                 <div class="form-group"><label for="email">電子郵件</label><div class="input-with-icon"><i class="fa-regular fa-envelope"></i><input id="email" name="email" type="email" required placeholder="name@example.com"></div></div>
                 <div class="form-group"><label for="phone">手機號碼</label><div class="input-with-icon"><i class="fa-solid fa-mobile-screen"></i><input id="phone" name="phone" type="tel" pattern="09\d{8}" required placeholder="09xxxxxxxx"></div></div>
-                <div class="form-group"><label for="role">申請角色</label><select id="role" name="role" required><option value="foodbank_staff">食物銀行官方人員</option><option value="volunteer">平台志工／外送員</option><option value="donor">捐贈剩食店家</option></select></div>
+                <div class="form-group"><label for="member_type">會員類型</label><select id="member_type" name="member_type" required><option value="general">一般會員（可參與公益活動與志工服務）</option><option value="enterprise">企業會員（可捐贈物資與參與企業公益）</option></select></div>
                 <div class="form-group"><label for="password">設定密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" minlength="8" required placeholder="至少 8 個字元"></div></div>
                 <button class="btn btn-primary login-submit" type="submit">送出申請 <i class="fa-solid fa-arrow-right"></i></button>
             </form>

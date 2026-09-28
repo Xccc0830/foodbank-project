@@ -51,7 +51,7 @@ if ($result) {
         $users[] = $user;
     }
 }
-$roleLabels = ['admin' => '忠信食物銀行', 'foodbank_staff' => '忠信食物銀行', 'volunteer' => '平台志工／外送員', 'donor' => '捐贈剩食店家'];
+$roleLabels = ['admin' => '忠信食物銀行', 'foodbank_staff' => '忠信食物銀行', 'volunteer' => '一般會員', 'donor' => '企業會員'];
 $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended' => '已停用'];
 ?>
 

@@ -265,13 +265,17 @@ class DonationModel extends BaseModel {
             return false;
         }
 
+        $deliveryOption = $existingDonation['delivery_option'] ?? '';
+        if (!in_array($deliveryOption, ['donor_delivery', 'food_bank_pickup', 'volunteer_delivery'], true)) {
+            return false;
+        }
+
         $this->db->begin_transaction();
         if (!$this->db->query("UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE donation_id = {$donation_id} AND status = 'assessed'")) {
             $this->db->rollback();
             return false;
         }
 
-        $deliveryOption = $existingDonation['delivery_option'] ?? 'volunteer_delivery';
         $deliveryMethod = $deliveryOption === 'donor_delivery' ? 'donor' : 'volunteer';
         $vehicleType = in_array(($existingDonation['vehicle_type'] ?? ''), ['car', 'motorcycle'], true)
             ? $existingDonation['vehicle_type']

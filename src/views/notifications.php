@@ -13,6 +13,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_
 $notifications = $notificationModel->getForUser($userId);
 
 function getNotificationTarget($notification) {
+    $materialReviewTitles = ['新的物資待評估'];
+    if (in_array($notification['title'], $materialReviewTitles, true)) {
+        return '?page=donation_materials_review';
+    }
+
+    $materialResultTitles = ['物資已接受', '物資已婉拒', '物資已發布'];
+    if (in_array($notification['title'], $materialResultTitles, true)) {
+        return '?page=donation_materials';
+    }
+
     $deliveryTitles = ['新的配送任務', '配送任務已接單', '配送異常回報'];
     if (in_array($notification['title'], $deliveryTitles, true)) {
         $deliveryId = null;

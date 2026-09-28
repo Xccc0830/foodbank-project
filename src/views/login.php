@@ -22,7 +22,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="showcase-copy">
                 <p class="eyebrow">FOODBANK PLATFORM / 2026</p>
                 <h1>把每一份惜食，<em>送到需要的地方。</em></h1>
-                <p>從商家上架、食物銀行評估，到志工配送與公益點數，讓每一步都清楚、可靠、可追蹤。</p>
+                <p>從商家上架、食物銀行評估，到志工派車與公益點數，讓每一步都清楚、可靠、可追蹤。</p>
             </div>
             <div class="showcase-features">
                 <div><span><i class="fa-solid fa-box-open"></i></span><strong>物資媒合</strong><small>掌握每批物資的期限與狀態</small></div>

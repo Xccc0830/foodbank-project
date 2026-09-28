@@ -25,6 +25,13 @@ getCsrfToken();
 $connection = $db->getConnection();
 $action = $_GET['action'] ?? '';
 
+// 以會員類型承載一般會員與企業會員，role 保留給既有功能相容使用。
+$memberTypeColumn = $connection->query("SHOW COLUMNS FROM users LIKE 'member_type'");
+if ($memberTypeColumn && $memberTypeColumn->num_rows === 0) {
+    $connection->query("ALTER TABLE users ADD COLUMN member_type ENUM('general', 'enterprise') NOT NULL DEFAULT 'general' AFTER role");
+}
+$connection->query("UPDATE users SET member_type = 'enterprise' WHERE role = 'donor' AND member_type <> 'enterprise'");
+
 // 將既有食物銀行主管帳號併入最高權限管理者角色，保留帳號與歷史資料。
 $connection->query(
     "UPDATE users SET role = 'admin', full_name = '忠信食物銀行' WHERE username IN ('admin', 'manager')"
@@ -55,7 +62,7 @@ $connection->query(
 );
 if (!empty($_SESSION['user']['username'])) {
     $sessionUsername = $connection->real_escape_string($_SESSION['user']['username']);
-    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
+    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
     if ($sessionUserResult && ($sessionUser = $sessionUserResult->fetch_assoc())) {
         $_SESSION['user'] = $sessionUser;
     }
@@ -81,7 +88,7 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $usernameEscaped = $connection->real_escape_string($username);
-    $result = $connection->query("SELECT user_id, username, full_name, role, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
+    $result = $connection->query("SELECT user_id, username, full_name, role, member_type, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
     $user = $result ? $result->fetch_assoc() : null;
     $passwordValid = $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
 
@@ -106,10 +113,11 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
-    $requestedRole = $_POST['role'] ?? 'volunteer';
-    $allowedRegistrationRoles = ['foodbank_staff', 'volunteer', 'donor'];
+    $requestedMemberType = $_POST['member_type'] ?? 'general';
+    $allowedMemberTypes = ['general', 'enterprise'];
+    $requestedRole = $requestedMemberType === 'enterprise' ? 'donor' : 'volunteer';
 
-    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($requestedRole, $allowedRegistrationRoles, true)) {
+    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($requestedMemberType, $allowedMemberTypes, true)) {
         $registrationError = '請完整填寫資料，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
     } else {
         $fullNameEscaped = $connection->real_escape_string($fullName);
@@ -117,13 +125,14 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $emailEscaped = $connection->real_escape_string($email);
         $phoneEscaped = $connection->real_escape_string($phone);
         $roleEscaped = $connection->real_escape_string($requestedRole);
+        $memberTypeEscaped = $connection->real_escape_string($requestedMemberType);
             $passwordHash = password_hash($password, PASSWORD_DEFAULT);
         $exists = $connection->query("SELECT user_id FROM users WHERE username = '{$usernameEscaped}' OR email = '{$emailEscaped}' LIMIT 1");
 
         if ($exists && $exists->num_rows > 0) {
             $registrationError = '帳號或電子郵件已經被使用。';
         } else {
-            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', '{$roleEscaped}', 'inactive')");
+            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', '{$roleEscaped}', '{$memberTypeEscaped}', 'inactive')");
             $newUserId = (int) $connection->insert_id;
 
             if ($newUserId > 0) {
@@ -284,8 +293,8 @@ $role = $currentUser['role'];
 $roleLabels = [
     'admin' => '忠信食物銀行',
     'foodbank_staff' => '忠信食物銀行',
-    'volunteer' => '平台志工／外送員',
-    'donor' => '捐贈剩食店家',
+    'volunteer' => '一般會員',
+    'donor' => '企業會員',
 ];
 $rolePages = [
     'admin' => ['dashboard', 'donations', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'material_transport', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
