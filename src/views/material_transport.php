@@ -17,12 +17,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $accepted = $task && $deliveryModel->claimDelivery($deliveryId, $currentUserId);
         $transportMessage = $accepted
             ? ['type' => 'success', 'text' => '運送任務已接受，請依任務資訊前往取貨。']
-            : ['type' => 'error', 'text' => '任務接受失敗，可能已被其他志工接受。'];
+            : ['type' => 'error', 'text' => '任務接受失敗，可能已被其他會員接受。'];
         $viewingTask = $deliveryModel->getMaterialTransportTask($deliveryId);
     } elseif ($action === 'cancel_material_transport' && $deliveryId > 0) {
         $cancelled = $deliveryModel->cancelClaimedDelivery($deliveryId, $currentUserId);
         $transportMessage = $cancelled
-            ? ['type' => 'success', 'text' => '運送任務已取消，已重新開放給其他志工接受。']
+            ? ['type' => 'success', 'text' => '運送任務已取消，已重新開放給其他會員接受。']
             : ['type' => 'error', 'text' => '取消失敗，只能取消自己尚未取貨的運送任務。'];
         $viewingTask = $deliveryModel->getMaterialTransportTask($deliveryId);
     }
@@ -108,7 +108,7 @@ $photoUrl = static function ($photoPath) {
     <div class="card-body">
         <?php if (!empty($historyTasks)): ?>
             <table class="data-table">
-                <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類別</th><th>名稱</th><th>數量</th><th>完成時間</th><th>操作</th></tr></thead>
+                <thead><tr><th>狀態</th><th>捐贈企業／組織</th><th>物資類別</th><th>名稱</th><th>數量</th><th>完成時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($historyTasks as $task): ?>
                     <tr>
@@ -145,7 +145,7 @@ $photoUrl = static function ($photoPath) {
                 <?php $imageUrl = $photoUrl($viewingTask['photo_path'] ?? null); ?>
                 <?php if ($imageUrl): ?><img class="material-transport-detail-photo" src="<?php echo htmlspecialchars($imageUrl); ?>" alt="物資照片"><?php endif; ?>
                 <div class="material-transport-details">
-                    <p><strong>店家名稱：</strong><?php echo htmlspecialchars($viewingTask['donor_name'] ?? '未提供'); ?></p>
+                    <p><strong>捐贈企業／組織：</strong><?php echo htmlspecialchars($viewingTask['donor_name'] ?? '未提供'); ?></p>
                     <p><strong>店家地址：</strong><?php echo htmlspecialchars($viewingTask['donor_address'] ?? $viewingTask['pickup_address'] ?? '未提供'); ?></p>
                     <p><strong>物資類別：</strong><?php echo htmlspecialchars($donationTypeLabels[$viewingTask['donation_type'] ?? 'other'] ?? '其他'); ?></p>
                     <p><strong>物資名稱：</strong><?php echo htmlspecialchars($viewingTask['item_name'] ?? '未提供'); ?></p>
@@ -171,7 +171,7 @@ $photoUrl = static function ($photoPath) {
                         <button type="submit" class="btn btn-danger">取消運送任務</button>
                     </form>
                 <?php else: ?>
-                    <div class="alert alert-info">此任務已被其他志工接受。</div>
+                    <div class="alert alert-info">此任務已被其他會員接受。</div>
                 <?php endif; ?>
             </div>
         </div>

@@ -787,7 +787,8 @@ CREATE TABLE `users` (
   `email` varchar(100) NOT NULL,
   `full_name` varchar(100) NOT NULL,
   `phone` varchar(20) DEFAULT NULL,
-  `role` enum('admin','foodbank_staff','volunteer','donor') NOT NULL DEFAULT 'foodbank_staff',
+  `role` enum('admin','foodbank_staff','member','volunteer','donor') NOT NULL DEFAULT 'foodbank_staff',
+  `member_type` enum('general','enterprise') DEFAULT NULL,
   `department` varchar(50) DEFAULT NULL,
   `status` enum('active','inactive','suspended') DEFAULT 'active',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -803,17 +804,17 @@ CREATE TABLE `users` (
 -- 傾印資料表的資料 `users`
 --
 
-INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`, `department`, `status`, `created_at`, `updated_at`, `created_by`, `phone_verified`, `is_enterprise_verified`, `enterprise_name`, `enterprise_verified_at`) VALUES
-(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '系統管理員', NULL, 'admin', NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
-(2, 'manager', '$2y$10$iL8M6sR5fDEijHGLU/dWqeHTuSusk4IjCJ5VAsz.OytAgc/2Dc7QG', 'manager@foodbank.local', '食物銀行主管', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
-(3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(4, 'volunteer', '$2y$10$ZWwCxo.mGqgE5GvPiR5nH.WhufmwuBbGPtJ0TEmEcqveablDm8uCK', 'volunteer@foodbank.local', '平台志工', NULL, 'volunteer', NULL, 'active', '2026-08-18 16:46:44', '2026-09-18 07:05:20', NULL, 0, 0, NULL, NULL),
-(6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'volunteer', NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL),
-(7, 'official', '3fae19dadf1a05245ffa9cd28f3e4530dc42d16511f743883da4e0f5c70fdc12', 'official@foodbank.local', '官方審核人員', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(8, 'donor', '0df8b21212b360c2862c2cce12a4f3d883f13acdc4b59f43cf5b2fcfd2c30954', 'donor@foodbank.local', '捐贈店家', NULL, 'donor', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(11, 'store_demo', '$2y$10$RUndnqZIN/Nw5FJx/X059eW0ZsjRovylNN8kt7k2HioHPuiQEGKMu', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'donor', '零售部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
-(12, 'courier_demo', '$2y$10$v16TT2Uetokuln3OeVD7PuY0ZCqMM/nwKnFUFtJg1SzFmJhjknZjC', 'courier_demo@foodbank.local', '配送志工A', '0923456789', 'volunteer', '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
-(13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'donor', NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, NULL, NULL);
+INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`, `member_type`, `department`, `status`, `created_at`, `updated_at`, `created_by`, `phone_verified`, `is_enterprise_verified`, `enterprise_name`, `enterprise_verified_at`) VALUES
+(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '系統管理員', NULL, 'admin', NULL, NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
+(2, 'manager', '$2y$10$iL8M6sR5fDEijHGLU/dWqeHTuSusk4IjCJ5VAsz.OytAgc/2Dc7QG', 'manager@foodbank.local', '食物銀行主管', NULL, 'foodbank_staff', NULL, NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
+(3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', NULL, NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
+(4, 'volunteer', '$2y$10$ZWwCxo.mGqgE5GvPiR5nH.WhufmwuBbGPtJ0TEmEcqveablDm8uCK', 'volunteer@foodbank.local', '平台志工', NULL, 'member', 'general', NULL, 'active', '2026-08-18 16:46:44', '2026-09-18 07:05:20', NULL, 0, 0, NULL, NULL),
+(6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'member', 'general', NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL),
+(7, 'official', '3fae19dadf1a05245ffa9cd28f3e4530dc42d16511f743883da4e0f5c70fdc12', 'official@foodbank.local', '官方審核人員', NULL, 'foodbank_staff', NULL, NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
+(8, 'donor', '0df8b21212b360c2862c2cce12a4f3d883f13acdc4b59f43cf5b2fcfd2c30954', 'donor@foodbank.local', '捐贈店家', NULL, 'member', 'enterprise', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, '捐贈店家', NULL),
+(11, 'store_demo', '$2y$10$RUndnqZIN/Nw5FJx/X059eW0ZsjRovylNN8kt7k2HioHPuiQEGKMu', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'member', 'enterprise', '零售部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, '幸福超市', NULL),
+(12, 'courier_demo', '$2y$10$v16TT2Uetokuln3OeVD7PuY0ZCqMM/nwKnFUFtJg1SzFmJhjknZjC', 'courier_demo@foodbank.local', '配送志工A', '0923456789', 'member', 'general', '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
+(13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'member', 'enterprise', NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, '愛心商家001', NULL);
 
 -- --------------------------------------------------------
 

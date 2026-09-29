@@ -50,7 +50,7 @@ $connection->query(
 );
 if (!empty($_SESSION['user']['username'])) {
     $sessionUsername = $connection->real_escape_string($_SESSION['user']['username']);
-    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
+    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, enterprise_name, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
     if ($sessionUserResult && ($sessionUser = $sessionUserResult->fetch_assoc())) {
         $_SESSION['user'] = $sessionUser;
     }
@@ -76,7 +76,7 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $usernameEscaped = $connection->real_escape_string($username);
-    $result = $connection->query("SELECT user_id, username, full_name, role, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
+    $result = $connection->query("SELECT user_id, username, full_name, role, member_type, enterprise_name, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
     $user = $result ? $result->fetch_assoc() : null;
     $passwordValid = $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
 
@@ -101,24 +101,26 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
-    $requestedRole = $_POST['role'] ?? 'volunteer';
-    $allowedRegistrationRoles = ['foodbank_staff', 'volunteer', 'donor'];
+    $memberType = $_POST['member_type'] ?? '';
+    $enterpriseName = trim($_POST['enterprise_name'] ?? '');
+    $allowedMemberTypes = ['general', 'enterprise'];
 
-    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($requestedRole, $allowedRegistrationRoles, true)) {
-        $registrationError = '請完整填寫資料，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
+    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && $enterpriseName === '')) {
+        $registrationError = '請完整填寫資料；企業會員須填寫企業／組織名稱，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
     } else {
         $fullNameEscaped = $connection->real_escape_string($fullName);
         $usernameEscaped = $connection->real_escape_string($username);
         $emailEscaped = $connection->real_escape_string($email);
         $phoneEscaped = $connection->real_escape_string($phone);
-        $roleEscaped = $connection->real_escape_string($requestedRole);
-            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        $memberTypeEscaped = $connection->real_escape_string($memberType);
+        $enterpriseNameEscaped = $connection->real_escape_string($enterpriseName);
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
         $exists = $connection->query("SELECT user_id FROM users WHERE username = '{$usernameEscaped}' OR email = '{$emailEscaped}' LIMIT 1");
 
         if ($exists && $exists->num_rows > 0) {
             $registrationError = '帳號或電子郵件已經被使用。';
         } else {
-            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', '{$roleEscaped}', 'inactive')");
+            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", 'inactive')");
             $newUserId = (int) $connection->insert_id;
 
             if ($newUserId > 0) {
@@ -150,10 +152,10 @@ if ($action === 'verify_phone') {
             $connection->query("UPDATE users SET phone_verified = 1 WHERE user_id = {$pendingUserId}");
             unset($_SESSION['pending_verification_user_id'], $_SESSION['dev_otp_code']);
 
-            $roleResult = $connection->query("SELECT role FROM users WHERE user_id = {$pendingUserId} LIMIT 1");
-            $verifiedUser = $roleResult ? $roleResult->fetch_assoc() : null;
+            $memberResult = $connection->query("SELECT role, member_type FROM users WHERE user_id = {$pendingUserId} LIMIT 1");
+            $verifiedUser = $memberResult ? $memberResult->fetch_assoc() : null;
 
-            if ($verifiedUser && $verifiedUser['role'] === 'volunteer') {
+            if ($verifiedUser && $verifiedUser['role'] === 'member' && $verifiedUser['member_type'] === 'general') {
                 $_SESSION['consent_pending_user_id'] = $pendingUserId;
                 header('Location: ?action=volunteer_consent');
                 exit;
@@ -276,17 +278,20 @@ if (isset($currentUser['user_id'])) {
     $unreadNotificationCount = (int) $notificationModel->getUnreadCount((int) $currentUser['user_id']);
 }
 $role = $currentUser['role'];
+$memberType = $currentUser['member_type'] ?? null;
 $roleLabels = [
     'admin' => '系統管理者',
     'foodbank_staff' => '食物銀行官方人員',
-    'volunteer' => '平台志工／外送員',
-    'donor' => '捐贈剩食店家',
+    'member' => $memberType === 'enterprise' ? '企業會員' : ($memberType === 'general' ? '一般會員' : '會員'),
 ];
 $rolePages = [
     'admin' => ['dashboard', 'donations', 'donations_evaluation', 'deliveries', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
     'foodbank_staff' => ['dashboard', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
-    'volunteer' => ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'donor' => ['dashboard', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate'],
+    'member' => $memberType === 'enterprise'
+        ? ['dashboard', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate', 'activity_certificate']
+        : ($memberType === 'general'
+            ? ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate']
+            : ['dashboard']),
 ];
 
 // 簡單的路由系統
@@ -302,7 +307,7 @@ $menu_items = [
     'donations_evaluation' => ['label' => '評估派車', 'icon' => 'fa-solid fa-clipboard-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
     'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
-    'activities' => ['label' => in_array($role, ['volunteer', 'donor'], true) ? '活動認領' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
+    'activities' => ['label' => $role === 'member' ? '活動報名' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
     'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
@@ -313,7 +318,7 @@ $menu_items = [
     'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
-    'volunteer_management' => ['label' => '志工管理', 'icon' => 'fa-solid fa-people-group'],
+    'volunteer_management' => ['label' => '一般會員管理', 'icon' => 'fa-solid fa-people-group'],
 ];
 $allowedPages = $rolePages[$role] ?? ['dashboard'];
 if (!in_array($page, $allowedPages, true)) {
@@ -352,7 +357,7 @@ ob_start();
                     }
                     $is_active = ($page === $key) ? 'active' : '';
                     $icon = $item['icon'];
-                    $label = ($key === 'reports' && $role === 'volunteer') ? '榮譽榜' : $item['label'];
+                    $label = ($key === 'reports' && $role === 'member') ? '榮譽榜' : $item['label'];
                     ?>
                     <a href="?page=<?php echo $key; ?>" class="nav-item <?php echo $is_active; ?>" title="<?php echo $label; ?>">
                         <span class="nav-icon"><i class="<?php echo $icon; ?>"></i></span>

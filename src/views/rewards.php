@@ -8,10 +8,11 @@ require_once BASE_PATH . '/src/models/RewardModel.php';
 $rewardModel = new RewardModel();
 $message = null;
 $currentRole = $currentUser['role'] ?? '';
+$memberType = $currentUser['member_type'] ?? null;
 $canCreateCatalogReward = in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff'], true);
-$isDonor = ($currentUser['role'] ?? '') === 'donor';
-$isVolunteer = $currentRole === 'volunteer';
-$canVerify = in_array($currentRole, ['admin', 'foodbank_staff', 'donor'], true);
+$isDonor = ($currentRole === 'member' && $memberType === 'enterprise') || $currentRole === 'donor';
+$isVolunteer = ($currentRole === 'member' && $memberType === 'general') || $currentRole === 'volunteer';
+$canVerify = in_array($currentRole, ['admin', 'foodbank_staff'], true) || $isDonor;
 $message = $_SESSION['rewards_flash_message'] ?? null;
 unset($_SESSION['rewards_flash_message']);
 
@@ -546,10 +547,11 @@ if ($isDonor) {
     <div class="card-header"><h2>我的獎勵方案</h2><p>設定志工可在貴店家兌換的獎勵與優惠</p></div>
     <div class="card-body">
         <?php if ($donorRewards): ?>
-            <table class="data-table"><thead><tr><th>方案名稱</th><th>所需點數</th><th>分類</th><th>庫存</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <div class="rewards-table-wrapper">
+            <table class="data-table donor-rewards-table"><thead><tr><th>方案名稱</th><th>所需點數</th><th>分類</th><th>庫存</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($donorRewards as $reward): ?>
                 <tr>
-                    <td><strong><?php echo htmlspecialchars($reward['title']); ?></strong><br><small><?php echo htmlspecialchars($reward['description'] ?? ''); ?></small></td>
+                    <td><strong class="donor-reward-title"><?php echo htmlspecialchars($reward['title']); ?></strong><br><small><?php echo htmlspecialchars($reward['description'] ?? ''); ?></small></td>
                     <td><?php echo (int) $reward['cost_points']; ?> 點</td>
                     <td><?php echo ['discount' => '折扣', 'product' => '商品', 'experience' => '體驗', 'other' => '其他'][$reward['category']] ?? $reward['category']; ?></td>
                     <td><?php echo $reward['stock'] !== null ? (int) $reward['stock'] . ' 份' : '不限量'; ?></td>
@@ -592,6 +594,7 @@ if ($isDonor) {
                 </tr>
             <?php endforeach; ?>
             </tbody></table>
+            </div>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-gifts"></i><p>尚未設定任何獎勵方案</p></div>
         <?php endif; ?>

@@ -10,7 +10,7 @@ $formMessage = null;
 $viewingDonation = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_material_donation') {
-    $donorName = trim((string) ($_POST['donor_name'] ?? ''));
+    $donorName = trim((string) ($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? ''));
     $itemName = trim((string) ($_POST['item_name'] ?? ''));
     $quantity = (float) ($_POST['quantity'] ?? 0);
     $rawUnit = trim((string) ($_POST['quantity_unit'] ?? '件'));
@@ -118,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
 
     $donationData = [
         'donor_id' => $currentUserId,
-        'donor_name' => $donorName !== '' ? $donorName : ($currentUser['full_name'] ?? '未命名商家'),
+        'donor_name' => $donorName,
             'donor_address' => trim((string) ($_POST['donor_address'] ?? '')) ?: null,
         'donation_type' => $donationType,
         'quantity' => $quantity,
@@ -155,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     ];
 
     if ($donorName === '' || $itemName === '' || $quantity <= 0) {
-        $formMessage = ['type' => 'error', 'text' => '請完整填寫店家名稱、物資名稱與數量。'];
+        $formMessage = ['type' => 'error', 'text' => '請完整填寫企業／組織名稱、物資名稱與數量。'];
     } else {
         $insertedId = $donationModel->addDonation($donationData);
         $formMessage = $insertedId
@@ -274,8 +274,8 @@ $formatDateTime = static function ($value) {
             <input type="hidden" name="action" value="add_material_donation">
 
             <div class="form-group">
-                <label>店家名稱</label>
-                <input type="text" name="donor_name" placeholder="例如：愛心商家001" required>
+                <label>企業／組織名稱</label>
+                <input type="text" name="donor_name" value="<?php echo htmlspecialchars($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly required>
             </div>
 
             <div class="form-group">
@@ -407,7 +407,7 @@ $formatDateTime = static function ($value) {
                 <thead>
                     <tr>
                         <th>狀態</th>
-                        <th>店家名稱</th>
+                        <th>企業／組織</th>
                         <th>物資類型</th>
                         <th>名稱</th>
                         <th>配送選擇</th>

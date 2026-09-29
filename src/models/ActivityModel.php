@@ -46,7 +46,7 @@ class ActivityModel extends BaseModel {
         $creatorRole = $activity['creator_role'] ?? 'foodbank_staff';
         $role = $userRole ?? 'foodbank_staff';
 
-        if ($role === 'donor') {
+        if (in_array($role, ['member', 'donor'], true)) {
             return false;
         }
 
@@ -116,22 +116,24 @@ class ActivityModel extends BaseModel {
     public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
-        $userResult = $this->db->query("SELECT role, is_enterprise_verified, full_name FROM users WHERE user_id = {$userId} AND status = 'active' LIMIT 1");
+        $userResult = $this->db->query("SELECT role, member_type, enterprise_name, full_name FROM users WHERE user_id = {$userId} AND status = 'active' LIMIT 1");
         $userInfo = $userResult ? $userResult->fetch_assoc() : null;
         if (!$userInfo) {
             return false;
         }
 
-        if (!in_array($userInfo['role'] ?? '', ['volunteer', 'donor'], true)) {
+        if (!in_array($userInfo['role'] ?? '', ['member', 'volunteer', 'donor'], true)) {
             return false;
         }
 
-        $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
-        if (($userInfo['role'] ?? '') === 'donor') {
-            $assignmentType = 'company';
-            $organizationName = trim((string) ($organizationName ?: $userInfo['full_name']));
-        } elseif ($assignmentType === 'company' && (int) ($userInfo['is_enterprise_verified'] ?? 0) !== 1) {
+        if (($userInfo['role'] ?? '') === 'member' && !in_array($userInfo['member_type'] ?? '', ['general', 'enterprise'], true)) {
             return false;
+        }
+
+        $isEnterpriseMember = ($userInfo['member_type'] ?? '') === 'enterprise' || ($userInfo['role'] ?? '') === 'donor';
+        $assignmentType = $isEnterpriseMember ? 'company' : 'individual';
+        if ($isEnterpriseMember) {
+            $organizationName = trim((string) ($userInfo['enterprise_name'] ?: $organizationName ?: $userInfo['full_name']));
         }
 
         if ($assignmentType === 'company') {

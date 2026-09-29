@@ -750,6 +750,25 @@ body {
     letter-spacing: 0.5px;
 }
 
+.rewards-table-wrapper {
+    overflow-x: auto;
+}
+
+.data-table.donor-rewards-table {
+    min-width: 820px;
+}
+
+.data-table.donor-rewards-table th:first-child,
+.data-table.donor-rewards-table td:first-child {
+    width: 220px;
+    min-width: 220px;
+    text-align: left;
+}
+
+.donor-reward-title {
+    white-space: nowrap;
+}
+
 .data-table td {
     padding: 14px 16px;
     border-bottom: 1px solid var(--gray-200);

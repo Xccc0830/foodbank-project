@@ -1,6 +1,6 @@
 <?php
 /**
- * 公益活動發布與認領
+ * 公益活動發布與會員報名
  */
 
 require_once BASE_PATH . '/src/models/ActivityModel.php';
@@ -9,17 +9,14 @@ require_once BASE_PATH . '/src/models/NotificationModel.php';
 $activityModel = new ActivityModel();
 $notificationModel = new NotificationModel();
 $currentRole = $currentUser['role'] ?? 'foodbank_staff';
+$isEnterpriseMember = ($currentUser['member_type'] ?? null) === 'enterprise';
 $canCreateActivity = in_array($currentRole, ['admin', 'foodbank_staff'], true);
-$canRegisterActivities = in_array($currentRole, ['volunteer', 'donor'], true);
+$canRegisterActivities = in_array($currentRole, ['member', 'volunteer', 'donor'], true);
 $message = null;
 $editingActivity = null;
 $participantLists = [];
 
 $connection = $db->getConnection();
-$userIdEscaped = $connection->real_escape_string((string) $currentUser['user_id']);
-$userResult = $connection->query("SELECT is_enterprise_verified FROM users WHERE user_id = {$userIdEscaped} LIMIT 1");
-$userInfo = $userResult ? $userResult->fetch_assoc() : ['is_enterprise_verified' => 0];
-$isEnterpriseVerified = (int) ($userInfo['is_enterprise_verified'] ?? 0) === 1;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['action'] ?? '') === 'create_activity') {
         if (!$canCreateActivity) {
@@ -45,35 +42,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (($_POST['action'] ?? '') === 'register_activity') {
-        $assignmentType = ($_POST['assignment_type'] ?? 'individual') === 'company' ? 'company' : 'individual';
-        $organizationName = $assignmentType === 'company' ? trim($_POST['organization_name'] ?? '') : null;
+        $assignmentType = $isEnterpriseMember ? 'company' : 'individual';
+        $organizationName = $assignmentType === 'company'
+            ? (string) ($currentUser['enterprise_name'] ?? '')
+            : null;
 
-        if ($assignmentType === 'company' && $currentRole !== 'donor' && $organizationName === '') {
-            $message = ['type' => 'error', 'text' => '企業認領請填寫企業／組織名稱。'];
+        if ($assignmentType === 'company' && trim($organizationName) === '') {
+            $message = ['type' => 'error', 'text' => '請先補齊企業會員的企業／組織名稱。'];
         } else {
             $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName)
-                ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業認領已送出，活動結束後可下載永續認證證書。' : '已完成活動認領，預計可獲得 5 點榮譽點數。']
-                : ['type' => 'error', 'text' => '認領失敗，可能已經認領過此活動，或活動名額已滿。'];
+                ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業會員活動報名已送出。' : '活動報名完成，預計可獲得 5 點公益點數。']
+                : ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或活動名額已滿。'];
         }
     }
 
     if (($_POST['action'] ?? '') === 'cancel_activity_registration') {
         $cancellationReason = trim($_POST['cancellation_reason'] ?? '');
         if ($cancellationReason === '') {
-            $message = ['type' => 'error', 'text' => '請填寫取消認領原因。'];
+            $message = ['type' => 'error', 'text' => '請填寫取消報名原因。'];
         } else {
             $cancelled = $activityModel->cancelRegistration((int) $_POST['activity_id'], (int) $currentUser['user_id'], $cancellationReason);
             $cancelledActivity = $activityModel->getActivityById((int) $_POST['activity_id']);
             $message = $cancelled
-                ? ['type' => 'success', 'text' => '已取消此活動認領，現在即可再次認領。']
-                : ['type' => 'error', 'text' => '取消失敗，或該活動並非您的認領記錄。'];
+                ? ['type' => 'success', 'text' => '已取消此活動報名，現在即可再次報名。']
+                : ['type' => 'error', 'text' => '取消失敗，或該活動並非您的報名記錄。'];
 
             if ($cancelled && $cancelledActivity) {
                 $officialUsers = $connection->query("SELECT user_id FROM users WHERE role IN ('admin', 'foodbank_staff') AND status = 'active'");
-                $volunteerName = trim((string) ($currentUser['full_name'] ?? $currentUser['username'] ?? '志工'));
-                $notificationTitle = '志工取消活動認領';
+                $volunteerName = trim((string) ($currentUser['full_name'] ?? $currentUser['username'] ?? '會員'));
+                $notificationTitle = '會員取消活動報名';
                 $notificationMessage = sprintf(
-                    '%s 取消認領活動「%s」，原因：%s',
+                    '%s 取消報名活動「%s」，原因：%s',
                     $volunteerName,
                     $cancelledActivity['title'],
                     $cancellationReason
@@ -157,7 +156,7 @@ $activityStatusLabels = [
 ];
 ?>
 
-<div class="view-header"><div><h1 class="view-title"><?php echo in_array($currentRole, ['volunteer', 'donor'], true) ? '活動認領' : '活動發布'; ?></h1><p class="view-subtitle"><?php echo $currentRole === 'volunteer' ? '認領公益活動，參與在地行動' : ($currentRole === 'donor' ? '以愛心商家身分認領公益活動，參與在地行動' : '發布公益活動，讓企業與志工參與在地行動'); ?></p></div></div>
+<div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '以企業會員身分報名活動，參與在地公益行動' : '報名公益活動，參與在地行動並累積公益貢獻') : '發布公益活動，邀請會員參與在地行動'; ?></p></div></div>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
@@ -230,18 +229,11 @@ $activityStatusLabels = [
         <form method="post" class="delivery-action-form"><?php echo csrfField(); ?>
             <input type="hidden" name="action" value="register_activity">
             <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
-            <?php if ($currentRole === 'donor'): ?>
-            <input type="hidden" name="assignment_type" value="company">
-            <?php elseif ($isEnterpriseVerified): ?>
-            <select name="assignment_type" class="assignment-type-select" aria-label="認領身分"><option value="individual">個人／志工</option><option value="company">企業認領</option></select>
-            <?php else: ?>
-            <input type="hidden" name="assignment_type" value="individual">
-            <?php endif; ?>
-            <span class="organization-name-field" hidden><input type="text" name="organization_name" placeholder="企業／組織名稱（企業認領填寫）"></span>
-            <button class="btn btn-primary btn-sm" type="submit">認領活動</button>
+            <input type="hidden" name="assignment_type" value="<?php echo $isEnterpriseMember ? 'company' : 'individual'; ?>">
+            <button class="btn btn-primary btn-sm" type="submit">報名活動</button>
         </form>
     <?php else: ?>
-        <span class="status status-warning">已認領或已逾期</span>
+        <span class="status status-warning">已報名或已逾期</span>
     <?php endif; ?>
 </td></tr><?php endforeach; ?></tbody></table>
 <?php else: ?><div class="empty-state"><i class="fas fa-calendar"></i><p>目前沒有公開活動</p></div><?php endif; ?></div></div>
@@ -291,26 +283,6 @@ $activityStatusLabels = [
 </script>
 
 <script>
-document.querySelectorAll('.assignment-type-select').forEach(function (select) {
-    const field = select.form.querySelector('.organization-name-field');
-    const input = field.querySelector('input');
-
-    function updateOrganizationField() {
-        const isCompany = select.value === 'company';
-        field.hidden = !isCompany;
-        input.disabled = !isCompany;
-        input.required = isCompany;
-        if (!isCompany) {
-            input.value = '';
-        }
-    }
-
-    select.addEventListener('change', updateOrganizationField);
-    updateOrganizationField();
-});
-</script>
-
-<script>
 document.querySelectorAll('.activity-type-select').forEach(function (select) {
     const field = select.form.querySelector('.other-activity-type-field');
     const input = field.querySelector('input');
@@ -331,7 +303,7 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="participants-modal-title">參與者</h3>
-            <button type="button" class="modal-close participants-modal-close" aria-label="關閉參與志工視窗">×</button>
+            <button type="button" class="modal-close participants-modal-close" aria-label="關閉活動參與者視窗">×</button>
         </div>
         <div class="modal-body" id="participants-modal-body"></div>
     </div>
@@ -376,7 +348,7 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
             });
             function renderParticipant(participant) {
                     const name = escapeHtml(participant.full_name || participant.username || '');
-                    const type = participant.assignment_type === 'company' ? '企業認領' : '個人／志工';
+                    const type = participant.assignment_type === 'company' ? '企業會員報名' : '一般會員報名';
                     const organization = participant.organization_name ? ' · ' + escapeHtml(participant.organization_name) : '';
                     const phone = participant.phone ? '<small>電話：' + escapeHtml(participant.phone) + '</small>' : '';
                     return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + '</span>' + phone + '</div>';
@@ -387,8 +359,8 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
                     : '';
             }
             body.innerHTML = participants.length
-                ? renderGroup('愛心商家', companies) + renderGroup('志工', volunteers)
-                : '<div class="empty-state"><i class="fas fa-users-slash"></i><p>目前沒有參與志工</p></div>';
+                ? renderGroup('企業會員', companies) + renderGroup('一般會員', volunteers)
+                : '<div class="empty-state"><i class="fas fa-users-slash"></i><p>目前沒有活動報名</p></div>';
             modal.style.display = 'flex';
         });
     });
@@ -402,36 +374,36 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
 })();
 </script>
 
-<?php if (in_array($currentRole, ['volunteer', 'donor'], true)): ?>
-<div class="card mt-32"><div class="card-header"><h2>我的認領紀錄</h2><p>活動結束後可下載企業永續認證證書</p></div><div class="card-body">
-<?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>認領身分</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
+<?php if ($canRegisterActivities): ?>
+<div class="card mt-32"><div class="card-header"><h2>我的活動報名</h2><p>活動結束後可查看參與證明</p></div><div class="card-body">
+<?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>會員類型</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
 <?php foreach ($myAssignments as $assignment): ?><tr>
     <td><?php echo htmlspecialchars($assignment['title']); ?></td>
-    <td><?php echo $assignment['assignment_type'] === 'company' ? '企業認領' : '個人／志工'; ?></td>
+    <td><?php echo $assignment['assignment_type'] === 'company' ? '企業會員' : '一般會員'; ?></td>
     <td><?php echo htmlspecialchars($assignment['organization_name'] ?? '-'); ?></td>
     <td><span class="status status-<?php echo htmlspecialchars($assignment['activity_status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$assignment['activity_status']] ?? $assignment['activity_status']); ?></span></td>
     <td>
         <?php if (($assignment['assignment_status'] ?? 'registered') === 'cancelled'): ?>
-            <span class="status status-warning">已取消，可再次認領</span>
+            <span class="status status-warning">已取消，可再次報名</span>
         <?php elseif ($assignment['activity_status'] === 'completed'): ?>
             <a class="btn btn-secondary btn-sm" href="?page=activity_certificate&assignment_id=<?php echo (int) $assignment['assignment_id']; ?>" target="_blank">查看證書</a>
         <?php else: ?>
-            <button class="btn btn-secondary btn-sm cancel-activity-button" type="button" data-activity-id="<?php echo (int) $assignment['activity_id']; ?>">取消認領</button>
+            <button class="btn btn-secondary btn-sm cancel-activity-button" type="button" data-activity-id="<?php echo (int) $assignment['activity_id']; ?>">取消報名</button>
         <?php endif; ?>
     </td>
 </tr><?php endforeach; ?></tbody></table></div>
-<?php else: ?><div class="empty-state"><i class="fas fa-clipboard-list"></i><p>尚未認領任何活動</p></div><?php endif; ?>
+<?php else: ?><div class="empty-state"><i class="fas fa-clipboard-list"></i><p>尚未報名任何活動</p></div><?php endif; ?>
 </div></div>
 <?php endif; ?>
 
 <div id="cancel-activity-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cancel-activity-modal-title" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 id="cancel-activity-modal-title">取消活動認領</h3>
-            <button type="button" class="modal-close" aria-label="關閉取消認領視窗">×</button>
+            <h3 id="cancel-activity-modal-title">取消活動報名</h3>
+            <button type="button" class="modal-close" aria-label="關閉取消報名視窗">×</button>
         </div>
         <div class="modal-body">
-            <p>請填寫取消此活動認領的原因。</p>
+            <p>請填寫取消此活動報名的原因。</p>
             <form method="post" id="cancel-activity-form"><?php echo csrfField(); ?>
                 <input type="hidden" name="action" value="cancel_activity_registration">
                 <input type="hidden" name="activity_id" id="cancel-activity-id">

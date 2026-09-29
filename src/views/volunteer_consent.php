@@ -8,14 +8,14 @@ $consentCssVersion = file_exists($consentCssPath) ? filemtime($consentCssPath) :
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>志工教育訓練 | <?php echo htmlspecialchars(APP_NAME); ?></title>
+    <title>一般會員配送教育訓練 | <?php echo htmlspecialchars(APP_NAME); ?></title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(APP_URL . '/assets/css/style.css?v=' . $consentCssVersion); ?>">
 </head>
 <body class="login-page">
     <main class="login-shell single-panel">
         <section class="login-panel">
-            <div class="login-panel-heading"><p class="eyebrow">VOLUNTEER ONBOARDING</p><h2>志工教育訓練與條款同意</h2><p class="login-subtitle">開通志工帳號前，請觀看食安運送短片並同意以下條款。</p></div>
+            <div class="login-panel-heading"><p class="eyebrow">MEMBER DELIVERY ONBOARDING</p><h2>一般會員配送教育訓練與條款同意</h2><p class="login-subtitle">開通一般會員帳號前，請觀看食安運送短片並同意以下條款。</p></div>
             <?php if ($error): ?><div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><span><?php echo htmlspecialchars($error); ?></span></div><?php endif; ?>
 
             <video id="safetyVideo" class="consent-video" controls preload="metadata">

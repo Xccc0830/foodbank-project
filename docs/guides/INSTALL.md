@@ -9,6 +9,12 @@
 
 ## 🚀 安裝步驟
 
+### 既有資料庫升級：統一會員
+
+既有安裝請先備份資料庫，再於 `shinigyi_foodbank` 資料庫執行
+`database/migrations/20260928_unified_members.sql`。此遷移會將志工帳號轉為一般會員、
+捐贈者帳號轉為企業會員，並保留帳號、活動、捐贈及點數資料。
+
 ### 第 1 步：獲取項目文件
 
 本項目應已位於以下位置：
@@ -48,13 +54,13 @@ CREATE DATABASE shinigyi_foodbank CHARACTER SET utf8mb4 COLLATE utf8mb4_general_
 
 1. 在 phpMyAdmin 中，選擇 `shinigyi_foodbank` 數據庫
 2. 點擊 **導入** 選項卡
-3. 選擇文件：`database/schema.sql`
+3. 選擇文件：`database/shinigyi_foodbank (4).sql`
 4. 點擊 **執行**
 
 **或者** 使用命令行：
 
 ```bash
-mysql -u root shinigyi_foodbank < C:\xampp\htdocs\foodbank-project\database\schema.sql
+mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\foodbank-project\database\shinigyi_foodbank (4).sql"
 ```
 
 ### 第 5 步：驗證安裝
@@ -75,12 +81,12 @@ http://localhost/foodbank-project/foodbank-project/public
 #### 店家身份（捐贈店家）
 - **用戶名**: `store_demo`
 - **密碼**: `store123`
-- **角色**: 捐贈剩食店家
+- **會員類型**: 企業會員
 
 #### 運送者身份（志工／外送員）
 - **用戶名**: `courier_demo`
 - **密碼**: `courier123`
-- **角色**: 平台志工／外送員
+- **會員類型**: 一般會員
 
 > 這些帳號已經在資料庫中建立好，可直接用於測試捐贈與配送流程。
 

@@ -3,12 +3,12 @@
  * 數據分析與報表
  */
 
-if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff', 'volunteer'], true)) {
+if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff', 'member', 'volunteer'], true) || (($currentUser['role'] ?? '') === 'member' && ($currentUser['member_type'] ?? '') !== 'general')) {
     echo '<div class="alert alert-error">只有食物銀行官方人員可以查看數據分析。</div>';
     return;
 }
 
-$isVolunteer = ($currentUser['role'] ?? '') === 'volunteer';
+$isVolunteer = in_array(($currentUser['role'] ?? ''), ['member', 'volunteer'], true) && (($currentUser['member_type'] ?? 'general') === 'general');
 $connection = $db->getConnection();
 $startDate = $_GET['start_date'] ?? date('Y-m-d', strtotime('-30 days'));
 $endDate = $_GET['end_date'] ?? date('Y-m-d');
@@ -39,7 +39,7 @@ $result = $connection->query(
      FROM users u
      LEFT JOIN deliveries d ON d.volunteer_id = u.user_id AND d.status = 'delivered'
      LEFT JOIN point_transactions pt ON pt.user_id = u.user_id AND pt.transaction_type = 'earned'
-     WHERE u.role = 'volunteer'
+     WHERE (u.role = 'volunteer' OR (u.role = 'member' AND u.member_type = 'general'))
      GROUP BY u.user_id
      ORDER BY total_points DESC
      LIMIT 10"
@@ -75,7 +75,7 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="view-header">
     <div>
         <h1 class="view-title"><?php echo $isVolunteer ? '榮譽榜' : '數據分析'; ?></h1>
-        <p class="view-subtitle"><?php echo $isVolunteer ? '查看平台志工公益點數與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與志工排行'; ?></p>
+        <p class="view-subtitle"><?php echo $isVolunteer ? '查看一般會員公益點數與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與會員排行'; ?></p>
     </div>
 </div>
 

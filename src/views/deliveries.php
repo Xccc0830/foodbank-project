@@ -9,9 +9,10 @@ $deliveryModel = new DeliveryModel();
 $message = null;
 $editingDelivery = null;
 $currentRole = $currentUser['role'] ?? 'volunteer';
+$memberType = $currentUser['member_type'] ?? null;
 $currentUserId = (int) ($currentUser['user_id'] ?? 0);
 $isOfficial = in_array($currentRole, ['admin', 'foodbank_staff'], true);
-$isVolunteer = $currentRole === 'volunteer';
+$isVolunteer = ($currentRole === 'member' && $memberType === 'general') || $currentRole === 'volunteer';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';

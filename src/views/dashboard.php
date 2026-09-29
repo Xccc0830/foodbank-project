@@ -9,13 +9,20 @@ require_once BASE_PATH . '/src/models/DonationModel.php';
 $beneficiaryModel = new BeneficiaryModel();
 $donationModel = new DonationModel();
 
-$recentDonations = array_slice($donationModel->getAllDonations(null), 0, 5);
 $dashboardRole = $currentUser['role'] ?? 'foodbank_staff';
+$dashboardMemberType = $currentUser['member_type'] ?? null;
+$isEnterpriseMember = $dashboardRole === 'member' && $dashboardMemberType === 'enterprise';
+$canViewDonations = in_array($dashboardRole, ['admin', 'foodbank_staff'], true) || $isEnterpriseMember;
+$recentDonations = $canViewDonations
+    ? array_slice($donationModel->getAllDonations(null, $isEnterpriseMember ? (int) $currentUser['user_id'] : null), 0, 5)
+    : [];
+$donationListPage = $dashboardRole === 'admin'
+    ? 'donations'
+    : ($isEnterpriseMember ? 'donation_materials' : 'donation_materials_review');
 $dashboardRoleLabels = [
     'admin' => '系統管理總覽',
     'foodbank_staff' => '食物銀行官方工作台',
-    'volunteer' => '志工／外送員工作台',
-    'donor' => '店家捐贈工作台',
+    'member' => $isEnterpriseMember ? '企業會員工作台' : '一般會員工作台',
 ];
 ?>
 
@@ -24,23 +31,23 @@ $dashboardRoleLabels = [
         <h1 class="view-title"><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '工作台'); ?></h1>
         <p class="view-subtitle"><?php echo date('Y-m-d'); ?>，歡迎 <?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?></p>
     </div>
-    <?php if ($dashboardRole === 'donor'): ?>
-    <button class="btn btn-primary" onclick="openAddDonationModal()">
+    <?php if ($isEnterpriseMember): ?>
+    <a class="btn btn-primary" href="?page=donation_materials">
         <i class="fas fa-plus"></i> 新增捐贈
-    </button>
+    </a>
     <?php endif; ?>
 </div>
 
 <div class="card role-intro mb-20">
     <div class="card-body">
-        <?php if ($dashboardRole === 'volunteer'): ?>
-            <h2>你的公益任務</h2><p>前往配送任務接單，或認領公益活動；完成配送後會記錄公益點數。</p>
+        <?php if ($dashboardRole === 'member' && !$isEnterpriseMember): ?>
+            <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄公益點數。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
             <h2>官方人員工作台</h2><p>處理物資審查、受益者服務與公益活動，確保物資完成媒合。</p>
             <a href="?page=rewards" class="btn btn-secondary btn-sm">管理公益點數兌換</a>
-        <?php elseif ($dashboardRole === 'donor'): ?>
-            <h2>店家捐贈工作台</h2><p>上架剩食物資、填寫保存期限與配送需求，等待食物銀行評估。</p>
+        <?php elseif ($isEnterpriseMember): ?>
+            <h2>企業惜食行動</h2><p>報名公益活動，也可將企業剩餘食物或物資捐贈給食物銀行。</p>
             <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>
         <?php elseif ($dashboardRole === 'manager'): ?>
             <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
@@ -67,6 +74,7 @@ $dashboardRoleLabels = [
 </div>
 
 <div class="grid-2 mt-32">
+    <?php if ($canViewDonations): ?>
     <div class="card">
         <div class="card-header">
             <h2>最近捐贈</h2>
@@ -85,7 +93,6 @@ $dashboardRoleLabels = [
                     </thead>
                     <tbody>
                         <?php foreach ($recentDonations as $donation): ?>
-                            <?php $statusClass = 'status-' . strtolower(str_replace(' ', '_', (string) $donation['status'])); ?>
                             <?php
                             $donationTypeLabels = [
                                 'food' => '食物',
@@ -94,22 +101,27 @@ $dashboardRoleLabels = [
                             ];
                             $donationStatusLabels = [
                                 'pending' => '待評估',
+                                'assessed' => '已評估',
                                 'approved' => '已批准',
                                 'received' => '已收貨',
                                 'rejected' => '已拒絕',
+                                'published' => '已發布',
+                                'archived' => '已封存',
                             ];
+                            $donationStatus = strtolower((string) ($donation['status'] ?? ''));
+                            $donationStatusLabel = $donationStatusLabels[$donationStatus] ?? '其他狀態';
                             ?>
                             <tr>
                                 <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
                                 <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type']] ?? $donation['donation_type']); ?></td>
                                 <td><?php echo htmlspecialchars($donation['quantity']); ?> <?php echo htmlspecialchars($donation['unit']); ?></td>
-                                <td><span class="status <?php echo $statusClass; ?>"><?php echo htmlspecialchars($donationStatusLabels[$donation['status']] ?? $donation['status']); ?></span></td>
+                                <td><span class="status <?php echo htmlspecialchars('status-' . str_replace(' ', '_', $donationStatus)); ?>"><?php echo htmlspecialchars($donationStatusLabel); ?></span></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
                 <div class="mt-20">
-                    <a href="?page=donations" class="btn btn-secondary btn-sm">查看全部</a>
+                    <a href="?page=<?php echo htmlspecialchars($donationListPage, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-secondary btn-sm">查看全部</a>
                 </div>
             <?php else: ?>
                 <div class="empty-state">
@@ -119,6 +131,7 @@ $dashboardRoleLabels = [
             <?php endif; ?>
         </div>
     </div>
+    <?php endif; ?>
 
     <div class="card">
 </div>
@@ -130,8 +143,8 @@ $dashboardRoleLabels = [
     </div>
     <div class="card-body">
         <div class="grid-4">
-            <?php if ($dashboardRole === 'donor'): ?>
-            <button class="btn btn-primary" onclick="openAddDonationModal()"><i class="fas fa-gift"></i> 新增捐贈</button>
+            <?php if ($isEnterpriseMember): ?>
+            <a class="btn btn-primary" href="?page=donation_materials"><i class="fas fa-gift"></i> 新增捐贈</a>
             <?php endif; ?>
             <?php if ($dashboardRole === 'admin'): ?>
             <button class="btn btn-primary" onclick="openAddBeneficiaryModal()"><i class="fas fa-user-plus"></i> 新增受益者</button>

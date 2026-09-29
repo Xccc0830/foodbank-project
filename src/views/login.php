@@ -22,11 +22,11 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="showcase-copy">
                 <p class="eyebrow">FOODBANK PLATFORM / 2026</p>
                 <h1>把每一份惜食，<em>送到需要的地方。</em></h1>
-                <p>從商家上架、食物銀行評估，到志工配送與公益點數，讓每一步都清楚、可靠、可追蹤。</p>
+                <p>從企業捐贈、食物銀行評估，到會員配送與公益點數，讓每一步都清楚、可靠、可追蹤。</p>
             </div>
             <div class="showcase-features">
                 <div><span><i class="fa-solid fa-box-open"></i></span><strong>物資媒合</strong><small>掌握每批物資的期限與狀態</small></div>
-                <div><span><i class="fa-solid fa-route"></i></span><strong>公益配送</strong><small>讓志工自由接取配送任務</small></div>
+                <div><span><i class="fa-solid fa-route"></i></span><strong>公益配送</strong><small>讓一般會員自由接取配送任務</small></div>
                 <div><span><i class="fa-solid fa-chart-line"></i></span><strong>社會成效</strong><small>累積點數與可量化的影響力</small></div>
             </div>
             <div class="showcase-orbit orbit-one"></div><div class="showcase-orbit orbit-two"></div>
@@ -42,8 +42,8 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
                 <div class="form-group"><label for="password">密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" autocomplete="current-password" placeholder="輸入你的密碼" required></div></div>
                 <button class="btn btn-primary login-submit" type="submit">登入系統 <i class="fa-solid fa-arrow-right"></i></button>
             </form>
-            <div class="login-divider"><span>角色入口</span></div>
-            <div class="login-roles" aria-label="角色快捷登入">
+            <div class="login-divider"><span>測試帳號</span></div>
+            <div class="login-roles" aria-label="測試帳號快捷登入">
                 <button type="button" class="login-role-button" data-username="admin" data-password="admin123">管理者</button>
                 <button type="button" class="login-role-button" data-username="manager" data-password="manager123">工作人員</button>
                 <button type="button" class="login-role-button" data-username="love_store_001" data-password="love123">愛心商家</button>
@@ -55,8 +55,8 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
                 <strong>開發測試帳號</strong>
                 <span>管理者：admin / admin123</span>
                 <span>忠信食物銀行：manager / manager123</span>
-                <span>愛心商家：love_store_001 / love123</span>
-                <span>志工：volunteer / volunteer123</span>
+                <span>企業會員：love_store_001 / love123</span>
+                <span>一般會員：volunteer / volunteer123</span>
             </div>
         </section>
     </main>
@@ -64,6 +64,10 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
         document.querySelectorAll('.login-role-button').forEach(function (button) {
             if (button.dataset.username === 'manager') {
                 button.textContent = '忠信食物銀行';
+            } else if (button.dataset.username === 'volunteer') {
+                button.textContent = '一般會員';
+            } else if (button.dataset.username === 'love_store_001') {
+                button.textContent = '企業會員';
             }
             button.addEventListener('click', function () {
                 document.getElementById('username').value = button.dataset.username;
