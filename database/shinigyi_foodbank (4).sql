@@ -27,6 +27,7 @@ SET time_zone = "+00:00";
 -- 資料表結構 `activities`
 --
 
+DROP TABLE IF EXISTS `activities`;
 CREATE TABLE `activities` (
   `activity_id` int(11) NOT NULL,
   `title` varchar(150) NOT NULL,
@@ -56,6 +57,7 @@ INSERT INTO `activities` (`activity_id`, `title`, `activity_type`, `activity_typ
 -- 資料表結構 `activity_assignments`
 --
 
+DROP TABLE IF EXISTS `activity_assignments`;
 CREATE TABLE `activity_assignments` (
   `assignment_id` int(11) NOT NULL,
   `activity_id` int(11) NOT NULL,
@@ -86,6 +88,7 @@ INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `
 -- 資料表結構 `audit_logs`
 --
 
+DROP TABLE IF EXISTS `audit_logs`;
 CREATE TABLE `audit_logs` (
   `log_id` int(11) NOT NULL,
   `user_id` int(11) DEFAULT NULL,
@@ -104,6 +107,7 @@ CREATE TABLE `audit_logs` (
 -- 資料表結構 `beneficiaries`
 --
 
+DROP TABLE IF EXISTS `beneficiaries`;
 CREATE TABLE `beneficiaries` (
   `beneficiary_id` int(11) NOT NULL,
   `beneficiary_code` varchar(50) NOT NULL,
@@ -135,26 +139,10 @@ INSERT INTO `beneficiaries` (`beneficiary_id`, `beneficiary_code`, `first_name`,
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `beneficiary_distributions`
---
-
-CREATE TABLE `beneficiary_distributions` (
-  `distribution_id` int(11) NOT NULL,
-  `beneficiary_id` int(11) NOT NULL,
-  `distribution_date` datetime NOT NULL,
-  `approved_by` int(11) DEFAULT NULL,
-  `status` enum('pending','approved','completed','cancelled') DEFAULT 'pending',
-  `notes` text DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `deliveries`
 --
 
+DROP TABLE IF EXISTS `deliveries`;
 CREATE TABLE `deliveries` (
   `delivery_id` int(11) NOT NULL,
   `donation_id` int(11) DEFAULT NULL,
@@ -203,6 +191,7 @@ INSERT INTO `deliveries` (`delivery_id`, `donation_id`, `delivery_method`, `crea
 -- 資料表結構 `departments`
 --
 
+DROP TABLE IF EXISTS `departments`;
 CREATE TABLE `departments` (
   `department_id` int(11) NOT NULL,
   `department_code` varchar(50) NOT NULL,
@@ -217,23 +206,10 @@ CREATE TABLE `departments` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `distribution_items`
---
-
-CREATE TABLE `distribution_items` (
-  `detail_id` int(11) NOT NULL,
-  `distribution_id` int(11) NOT NULL,
-  `inventory_id` int(11) NOT NULL,
-  `quantity` decimal(10,2) NOT NULL,
-  `notes` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `donations`
 --
 
+DROP TABLE IF EXISTS `donations`;
 CREATE TABLE `donations` (
   `donation_id` int(11) NOT NULL,
   `order_number` varchar(30) DEFAULT NULL,
@@ -272,7 +248,14 @@ CREATE TABLE `donations` (
   `need_inspection` tinyint(1) DEFAULT 1,
   `inspection_notes` text DEFAULT NULL,
   `donor_address` varchar(255) DEFAULT NULL,
-  `reward_options` text DEFAULT NULL
+  `reward_options` text DEFAULT NULL,
+  `delivery_date` date DEFAULT NULL,
+  `delivery_time` time DEFAULT NULL,
+  `delivery_address` varchar(255) DEFAULT NULL,
+  `beneficiary_id` int(11) DEFAULT NULL,
+  `dispatch_contact_name` varchar(100) DEFAULT NULL,
+  `dispatch_contact_phone` varchar(30) DEFAULT NULL,
+  `dispatch_vehicle_info` varchar(150) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -302,6 +285,7 @@ WHERE `order_number` IS NULL OR `order_number` = '';
 -- 資料表結構 `donation_allocations`
 --
 
+DROP TABLE IF EXISTS `donation_allocations`;
 CREATE TABLE `donation_allocations` (
   `allocation_id` int(11) NOT NULL,
   `donation_id` int(11) NOT NULL,
@@ -318,30 +302,10 @@ CREATE TABLE `donation_allocations` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `donors`
---
-
-CREATE TABLE `donors` (
-  `donor_id` int(11) NOT NULL,
-  `donor_code` varchar(50) NOT NULL,
-  `donor_name` varchar(100) NOT NULL,
-  `donor_type` enum('individual','company','organization') NOT NULL,
-  `email` varchar(100) DEFAULT NULL,
-  `phone` varchar(20) DEFAULT NULL,
-  `address` text DEFAULT NULL,
-  `contact_person` varchar(100) DEFAULT NULL,
-  `status` enum('active','inactive') DEFAULT 'active',
-  `total_donations` decimal(12,2) DEFAULT 0.00,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `donor_reward_items`
 --
 
+DROP TABLE IF EXISTS `donor_reward_items`;
 CREATE TABLE `donor_reward_items` (
   `item_id` int(11) NOT NULL,
   `donor_id` int(11) NOT NULL,
@@ -369,6 +333,7 @@ INSERT INTO `donor_reward_items` (`item_id`, `donor_id`, `title`, `description`,
 -- 資料表結構 `donor_reward_redemptions`
 --
 
+DROP TABLE IF EXISTS `donor_reward_redemptions`;
 CREATE TABLE `donor_reward_redemptions` (
   `redemption_id` int(11) NOT NULL,
   `item_id` int(11) NOT NULL,
@@ -387,6 +352,7 @@ CREATE TABLE `donor_reward_redemptions` (
 -- 資料表結構 `enterprise_verification_requests`
 --
 
+DROP TABLE IF EXISTS `enterprise_verification_requests`;
 CREATE TABLE `enterprise_verification_requests` (
   `request_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -403,57 +369,10 @@ CREATE TABLE `enterprise_verification_requests` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `inventory`
---
-
-CREATE TABLE `inventory` (
-  `inventory_id` int(11) NOT NULL,
-  `item_code` varchar(50) NOT NULL,
-  `item_name` varchar(100) NOT NULL,
-  `category` varchar(50) NOT NULL,
-  `description` text DEFAULT NULL,
-  `quantity_on_hand` decimal(10,2) NOT NULL DEFAULT 0.00,
-  `reorder_level` decimal(10,2) DEFAULT NULL,
-  `unit` varchar(20) DEFAULT NULL,
-  `location` varchar(100) DEFAULT NULL,
-  `expiry_date` date DEFAULT NULL,
-  `last_updated` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `status` enum('available','low_stock','expired','removed') DEFAULT 'available'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- 傾印資料表的資料 `inventory`
---
-
-INSERT INTO `inventory` (`inventory_id`, `item_code`, `item_name`, `category`, `description`, `quantity_on_hand`, `reorder_level`, `unit`, `location`, `expiry_date`, `last_updated`, `status`) VALUES
-(1, 'DEMO-RICE-001', '白米', '乾糧', NULL, 42.00, 10.00, '袋', 'A-01', '2027-03-14', '2026-09-15 06:02:07', 'available'),
-(2, 'DEMO-VEG-001', '新鮮蔬菜', '蔬果', NULL, 6.00, 10.00, '箱', '冷藏區', '2026-09-18', '2026-09-15 06:02:07', 'low_stock'),
-(3, 'DEMO-MILK-001', '鮮奶', '乳品', NULL, 18.00, 8.00, '瓶', '冷藏區', '2026-09-25', '2026-09-15 06:02:07', 'available');
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `inventory_transactions`
---
-
-CREATE TABLE `inventory_transactions` (
-  `transaction_id` int(11) NOT NULL,
-  `inventory_id` int(11) NOT NULL,
-  `transaction_type` enum('in','out','adjustment','loss') NOT NULL,
-  `quantity` decimal(10,2) NOT NULL,
-  `reference_type` varchar(50) DEFAULT NULL,
-  `reference_id` int(11) DEFAULT NULL,
-  `notes` text DEFAULT NULL,
-  `performed_by` int(11) DEFAULT NULL,
-  `transaction_date` datetime DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `item_categories`
 --
 
+DROP TABLE IF EXISTS `item_categories`;
 CREATE TABLE `item_categories` (
   `category_id` int(11) NOT NULL,
   `category_name` varchar(50) NOT NULL,
@@ -486,6 +405,7 @@ INSERT INTO `item_categories` (`category_id`, `category_name`, `description`, `i
 -- 資料表結構 `notifications`
 --
 
+DROP TABLE IF EXISTS `notifications`;
 CREATE TABLE `notifications` (
   `notification_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -533,6 +453,7 @@ INSERT INTO `notifications` (`notification_id`, `user_id`, `title`, `message`, `
 -- 資料表結構 `otp_codes`
 --
 
+DROP TABLE IF EXISTS `otp_codes`;
 CREATE TABLE `otp_codes` (
   `otp_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -551,6 +472,7 @@ CREATE TABLE `otp_codes` (
 -- 資料表結構 `password_resets`
 --
 
+DROP TABLE IF EXISTS `password_resets`;
 CREATE TABLE `password_resets` (
   `reset_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -566,6 +488,7 @@ CREATE TABLE `password_resets` (
 -- 資料表結構 `point_transactions`
 --
 
+DROP TABLE IF EXISTS `point_transactions`;
 CREATE TABLE `point_transactions` (
   `transaction_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -594,6 +517,7 @@ INSERT INTO `point_transactions` (`transaction_id`, `user_id`, `delivery_id`, `p
 -- 資料表結構 `public_relations`
 --
 
+DROP TABLE IF EXISTS `public_relations`;
 CREATE TABLE `public_relations` (
   `pr_id` int(11) NOT NULL,
   `event_name` varchar(150) NOT NULL,
@@ -614,6 +538,7 @@ CREATE TABLE `public_relations` (
 -- 資料表結構 `purchases`
 --
 
+DROP TABLE IF EXISTS `purchases`;
 CREATE TABLE `purchases` (
   `purchase_id` int(11) NOT NULL,
   `purchase_code` varchar(50) NOT NULL,
@@ -644,6 +569,7 @@ INSERT INTO `purchases` (`purchase_id`, `purchase_code`, `supplier_id`, `supplie
 -- 資料表結構 `purchase_items`
 --
 
+DROP TABLE IF EXISTS `purchase_items`;
 CREATE TABLE `purchase_items` (
   `purchase_item_id` int(11) NOT NULL,
   `purchase_id` int(11) NOT NULL,
@@ -659,6 +585,7 @@ CREATE TABLE `purchase_items` (
 -- 資料表結構 `reward_catalog`
 --
 
+DROP TABLE IF EXISTS `reward_catalog`;
 CREATE TABLE `reward_catalog` (
   `reward_id` int(11) NOT NULL,
   `title` varchar(150) NOT NULL,
@@ -683,6 +610,7 @@ INSERT INTO `reward_catalog` (`reward_id`, `title`, `description`, `cost_points`
 -- 資料表結構 `reward_claims`
 --
 
+DROP TABLE IF EXISTS `reward_claims`;
 CREATE TABLE `reward_claims` (
   `claim_id` bigint(20) UNSIGNED NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -706,6 +634,7 @@ CREATE TABLE `reward_claims` (
 -- 資料表結構 `reward_redemptions`
 --
 
+DROP TABLE IF EXISTS `reward_redemptions`;
 CREATE TABLE `reward_redemptions` (
   `redemption_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -721,6 +650,7 @@ CREATE TABLE `reward_redemptions` (
 -- 資料表結構 `sales`
 --
 
+DROP TABLE IF EXISTS `sales`;
 CREATE TABLE `sales` (
   `sale_id` int(11) NOT NULL,
   `sale_code` varchar(50) NOT NULL,
@@ -741,6 +671,7 @@ CREATE TABLE `sales` (
 -- 資料表結構 `sale_items`
 --
 
+DROP TABLE IF EXISTS `sale_items`;
 CREATE TABLE `sale_items` (
   `sale_item_id` int(11) NOT NULL,
   `sale_id` int(11) NOT NULL,
@@ -756,6 +687,7 @@ CREATE TABLE `sale_items` (
 -- 資料表結構 `suppliers`
 --
 
+DROP TABLE IF EXISTS `suppliers`;
 CREATE TABLE `suppliers` (
   `supplier_id` int(11) NOT NULL,
   `supplier_code` varchar(50) NOT NULL,
@@ -785,6 +717,7 @@ INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `conta
 -- 資料表結構 `users`
 --
 
+DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `user_id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
@@ -839,6 +772,7 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `p
 -- 資料表結構 `volunteer_consents`
 --
 
+DROP TABLE IF EXISTS `volunteer_consents`;
 CREATE TABLE `volunteer_consents` (
   `user_id` int(11) NOT NULL,
   `agreed_disclaimer` tinyint(1) NOT NULL DEFAULT 0,
@@ -861,6 +795,7 @@ INSERT INTO `volunteer_consents` (`user_id`, `agreed_disclaimer`, `agreed_mutual
 -- 資料表結構 `warehouses`
 --
 
+DROP TABLE IF EXISTS `warehouses`;
 CREATE TABLE `warehouses` (
   `warehouse_id` int(11) NOT NULL,
   `warehouse_code` varchar(50) NOT NULL,
@@ -917,16 +852,6 @@ ALTER TABLE `beneficiaries`
   ADD KEY `idx_beneficiaries_status` (`status`);
 
 --
--- 資料表索引 `beneficiary_distributions`
---
-ALTER TABLE `beneficiary_distributions`
-  ADD PRIMARY KEY (`distribution_id`),
-  ADD KEY `beneficiary_id` (`beneficiary_id`),
-  ADD KEY `approved_by` (`approved_by`),
-  ADD KEY `distribution_date` (`distribution_date`),
-  ADD KEY `status` (`status`);
-
---
 -- 資料表索引 `deliveries`
 --
 ALTER TABLE `deliveries`
@@ -943,14 +868,6 @@ ALTER TABLE `departments`
   ADD UNIQUE KEY `department_code` (`department_code`),
   ADD KEY `manager_id` (`manager_id`),
   ADD KEY `status` (`status`);
-
---
--- 資料表索引 `distribution_items`
---
-ALTER TABLE `distribution_items`
-  ADD PRIMARY KEY (`detail_id`),
-  ADD KEY `inventory_id` (`inventory_id`),
-  ADD KEY `distribution_id` (`distribution_id`);
 
 --
 -- 資料表索引 `donations`
@@ -972,15 +889,6 @@ ALTER TABLE `donations`
 ALTER TABLE `donation_allocations`
   ADD PRIMARY KEY (`allocation_id`),
   ADD KEY `donation_id` (`donation_id`),
-  ADD KEY `status` (`status`);
-
---
--- 資料表索引 `donors`
---
-ALTER TABLE `donors`
-  ADD PRIMARY KEY (`donor_id`),
-  ADD UNIQUE KEY `donor_code` (`donor_code`),
-  ADD KEY `donor_type` (`donor_type`),
   ADD KEY `status` (`status`);
 
 --
@@ -1008,27 +916,6 @@ ALTER TABLE `enterprise_verification_requests`
   ADD PRIMARY KEY (`request_id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `status` (`status`);
-
---
--- 資料表索引 `inventory`
---
-ALTER TABLE `inventory`
-  ADD PRIMARY KEY (`inventory_id`),
-  ADD UNIQUE KEY `item_code` (`item_code`),
-  ADD KEY `category` (`category`),
-  ADD KEY `status` (`status`),
-  ADD KEY `expiry_date` (`expiry_date`),
-  ADD KEY `idx_inventory_category` (`category`);
-
---
--- 資料表索引 `inventory_transactions`
---
-ALTER TABLE `inventory_transactions`
-  ADD PRIMARY KEY (`transaction_id`),
-  ADD KEY `inventory_id` (`inventory_id`),
-  ADD KEY `performed_by` (`performed_by`),
-  ADD KEY `transaction_date` (`transaction_date`),
-  ADD KEY `transaction_type` (`transaction_type`);
 
 --
 -- 資料表索引 `item_categories`
@@ -1205,12 +1092,6 @@ ALTER TABLE `beneficiaries`
   MODIFY `beneficiary_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `beneficiary_distributions`
---
-ALTER TABLE `beneficiary_distributions`
-  MODIFY `distribution_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `deliveries`
 --
 ALTER TABLE `deliveries`
@@ -1223,12 +1104,6 @@ ALTER TABLE `departments`
   MODIFY `department_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `distribution_items`
---
-ALTER TABLE `distribution_items`
-  MODIFY `detail_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donations`
 --
 ALTER TABLE `donations`
@@ -1239,12 +1114,6 @@ ALTER TABLE `donations`
 --
 ALTER TABLE `donation_allocations`
   MODIFY `allocation_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- 使用資料表自動遞增(AUTO_INCREMENT) `donors`
---
-ALTER TABLE `donors`
-  MODIFY `donor_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donor_reward_items`
@@ -1263,18 +1132,6 @@ ALTER TABLE `donor_reward_redemptions`
 --
 ALTER TABLE `enterprise_verification_requests`
   MODIFY `request_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- 使用資料表自動遞增(AUTO_INCREMENT) `inventory`
---
-ALTER TABLE `inventory`
-  MODIFY `inventory_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
-
---
--- 使用資料表自動遞增(AUTO_INCREMENT) `inventory_transactions`
---
-ALTER TABLE `inventory_transactions`
-  MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `item_categories`
@@ -1389,24 +1246,10 @@ ALTER TABLE `beneficiaries`
   ADD CONSTRAINT `beneficiaries_ibfk_1` FOREIGN KEY (`case_worker_id`) REFERENCES `users` (`user_id`);
 
 --
--- 資料表的限制式 `beneficiary_distributions`
---
-ALTER TABLE `beneficiary_distributions`
-  ADD CONSTRAINT `beneficiary_distributions_ibfk_1` FOREIGN KEY (`beneficiary_id`) REFERENCES `beneficiaries` (`beneficiary_id`),
-  ADD CONSTRAINT `beneficiary_distributions_ibfk_2` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`);
-
---
 -- 資料表的限制式 `departments`
 --
 ALTER TABLE `departments`
   ADD CONSTRAINT `departments_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
-
---
--- 資料表的限制式 `distribution_items`
---
-ALTER TABLE `distribution_items`
-  ADD CONSTRAINT `distribution_items_ibfk_1` FOREIGN KEY (`distribution_id`) REFERENCES `beneficiary_distributions` (`distribution_id`),
-  ADD CONSTRAINT `distribution_items_ibfk_2` FOREIGN KEY (`inventory_id`) REFERENCES `inventory` (`inventory_id`);
 
 --
 -- 資料表的限制式 `donations`
@@ -1441,13 +1284,6 @@ ALTER TABLE `enterprise_verification_requests`
   ADD CONSTRAINT `enterprise_verification_requests_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
 
 --
--- 資料表的限制式 `inventory_transactions`
---
-ALTER TABLE `inventory_transactions`
-  ADD CONSTRAINT `inventory_transactions_ibfk_1` FOREIGN KEY (`inventory_id`) REFERENCES `inventory` (`inventory_id`),
-  ADD CONSTRAINT `inventory_transactions_ibfk_2` FOREIGN KEY (`performed_by`) REFERENCES `users` (`user_id`);
-
---
 -- 資料表的限制式 `public_relations`
 --
 ALTER TABLE `public_relations`
@@ -1476,8 +1312,7 @@ ALTER TABLE `sales`
 -- 資料表的限制式 `sale_items`
 --
 ALTER TABLE `sale_items`
-  ADD CONSTRAINT `sale_items_ibfk_1` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`),
-  ADD CONSTRAINT `sale_items_ibfk_2` FOREIGN KEY (`inventory_id`) REFERENCES `inventory` (`inventory_id`);
+  ADD CONSTRAINT `sale_items_ibfk_1` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`);
 
 --
 -- 資料表的限制式 `warehouses`
@@ -1485,35 +1320,44 @@ ALTER TABLE `sale_items`
 ALTER TABLE `warehouses`
   ADD CONSTRAINT `warehouses_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
 
-ALTER TABLE `sale_items` DROP FOREIGN KEY `sale_items_ibfk_2`;
-UPDATE `notifications` SET `message` = REPLACE(`message`, '志工', '忠信GO RIDER') WHERE `message` LIKE '%志工%';
-UPDATE `activities` SET `title` = REPLACE(`title`, '志工', '忠信GO RIDER') WHERE `title` LIKE '%志工%';
-UPDATE `donations` SET `delivery_option` = 'food_bank_pickup' WHERE `delivery_option` = 'donor_delivery';
-UPDATE `deliveries` SET `delivery_method` = 'food_bank' WHERE `delivery_method` = 'donor';
-ALTER TABLE `donations`
-  MODIFY `delivery_option` enum('food_bank_pickup','volunteer_delivery') NOT NULL DEFAULT 'volunteer_delivery';
-ALTER TABLE `deliveries`
-  MODIFY `delivery_method` enum('food_bank','volunteer') NOT NULL DEFAULT 'volunteer';
+--
+-- 資料表結構 `donation_items`
+--
+
+DROP TABLE IF EXISTS `donation_items`;
 CREATE TABLE `donation_items` (
   `item_id` int(11) NOT NULL AUTO_INCREMENT,
   `donation_id` int(11) NOT NULL,
   `item_name` varchar(100) NOT NULL,
-  `donation_type` varchar(50) NOT NULL DEFAULT 'other',
-  `quantity` decimal(10,2) DEFAULT NULL,
-  `unit` varchar(20) DEFAULT NULL,
-  `weight_kg` decimal(10,2) DEFAULT NULL,
-  `size_description` varchar(100) DEFAULT NULL,
+  `brand` varchar(100) DEFAULT NULL,
+  `specification` varchar(150) DEFAULT NULL,
+  `quantity` decimal(10,2) NOT NULL,
+  `unit` varchar(20) NOT NULL DEFAULT '件',
   `expiry_date` date DEFAULT NULL,
-  `photo_path` varchar(255) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`item_id`),
-  KEY `idx_donation_items_donation` (`donation_id`),
+  KEY `idx_donation_items_donation_id` (`donation_id`),
   CONSTRAINT `donation_items_ibfk_1` FOREIGN KEY (`donation_id`) REFERENCES `donations` (`donation_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-INSERT INTO `donation_items` (`donation_id`, `item_name`, `donation_type`, `quantity`, `unit`, `weight_kg`, `size_description`, `expiry_date`, `photo_path`)
-SELECT `donation_id`, COALESCE(NULLIF(`item_name`, ''), '未命名物資'), `donation_type`, `quantity`, `unit`, `weight_kg`, `size_description`, `expiry_date`, `photo_path`
+
+--
+-- 依既有捐贈資料回填單筆物資明細（舊資料相容用）
+--
+INSERT INTO `donation_items` (`donation_id`, `item_name`, `specification`, `quantity`, `unit`, `expiry_date`)
+SELECT `donation_id`, COALESCE(NULLIF(`item_name`, ''), '未命名物資'), `size_description`, COALESCE(`quantity`, 0), COALESCE(`unit`, '件'), `expiry_date`
 FROM `donations`;
-DROP TABLE `distribution_items`, `beneficiary_distributions`, `inventory_transactions`, `beneficiaries`, `inventory`, `donors`;
+
+--
+-- 資料表的限制式 `donations`
+--
+ALTER TABLE `donations`
+  ADD CONSTRAINT `donations_ibfk_2` FOREIGN KEY (`beneficiary_id`) REFERENCES `beneficiaries` (`beneficiary_id`) ON DELETE SET NULL;
+
+-- 修正舊資料殘留的「志工」字樣，統一顯示為「忠信GO RIDER」
+UPDATE `notifications` SET `message` = REPLACE(`message`, '志工', '忠信GO RIDER') WHERE `message` LIKE '%志工%';
+UPDATE `activities` SET `title` = REPLACE(`title`, '志工', '忠信GO RIDER') WHERE `title` LIKE '%志工%';
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
