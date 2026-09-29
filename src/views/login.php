@@ -22,12 +22,12 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="showcase-copy">
                 <p class="eyebrow">FOODBANK PLATFORM / 2026</p>
                 <h1>把每一份惜食，<em>送到需要的地方。</em></h1>
-                <p>從企業捐贈、食物銀行評估，到會員配送與公益點數，讓每一步都清楚、可靠、可追蹤。</p>
+                <p>從企業捐贈、食物銀行評估，到會員配送與興毅幣，讓每一步都清楚、可靠、可追蹤。</p>
             </div>
             <div class="showcase-features">
                 <div><span><i class="fa-solid fa-box-open"></i></span><strong>物資媒合</strong><small>掌握每批物資的期限與狀態</small></div>
                 <div><span><i class="fa-solid fa-route"></i></span><strong>公益配送</strong><small>讓一般會員自由接取配送任務</small></div>
-                <div><span><i class="fa-solid fa-chart-line"></i></span><strong>社會成效</strong><small>累積點數與可量化的影響力</small></div>
+                <div><span><i class="fa-solid fa-chart-line"></i></span><strong>社會成效</strong><small>累積興毅幣與可量化的影響力</small></div>
             </div>
             <div class="showcase-orbit orbit-one"></div><div class="showcase-orbit orbit-two"></div>
         </section>
@@ -44,18 +44,15 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             </form>
             <div class="login-divider"><span>測試帳號</span></div>
             <div class="login-roles" aria-label="測試帳號快捷登入">
-                <button type="button" class="login-role-button" data-username="admin" data-password="admin123">管理者</button>
-                <button type="button" class="login-role-button" data-username="manager" data-password="manager123">工作人員</button>
-                <button type="button" class="login-role-button" data-username="admin" data-password="admin123">忠信食物銀行</button>
+                <button type="button" class="login-role-button" data-username="manager" data-password="manager123">管理介面</button>
                 <button type="button" class="login-role-button" data-username="love_store_001" data-password="love123">愛心商家</button>
-                <button type="button" class="login-role-button" data-username="volunteer" data-password="volunteer123">志工</button>
+                <button type="button" class="login-role-button" data-username="volunteer" data-password="volunteer123">忠信GO RIDER</button>
             </div>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
             <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>
             <div class="login-hint">
                 <strong>開發測試帳號</strong>
-                <span>忠信食物銀行：admin / admin123</span>
-                <span>忠信食物銀行：manager / manager123</span>
+                <span>管理介面：manager / manager123</span>
                 <span>企業會員：love_store_001 / love123</span>
                 <span>一般會員：volunteer / volunteer123</span>
             </div>
@@ -63,19 +60,8 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
     </main>
     <script>
         document.querySelectorAll('.login-role-button').forEach(function (button) {
-            if (button.dataset.username === 'admin' || button.dataset.username === 'manager') {
-                button.textContent = '忠信食物銀行';
-            } else if (button.dataset.username === 'volunteer') {
-                button.textContent = '一般會員';
-            } else if (button.dataset.username === 'love_store_001') {
+            if (button.dataset.username === 'love_store_001') {
                 button.textContent = '企業會員';
-            }
-            if (button.dataset.username === 'admin') {
-                const earlierAdminButton = document.querySelector('.login-role-button[data-username="admin"]');
-                if (earlierAdminButton && earlierAdminButton !== button) {
-                    button.remove();
-                    return;
-                }
             }
             button.addEventListener('click', function () {
                 document.getElementById('username').value = button.dataset.username;

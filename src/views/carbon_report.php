@@ -3,7 +3,7 @@
  * 永續效益報表
  */
 
-if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff'], true)) {
+if (($currentUser['role'] ?? '') !== 'foodbank_staff') {
     echo '<div class="alert alert-error">只有食物銀行官方人員可以查看永續報表。</div>';
     return;
 }

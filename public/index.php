@@ -25,25 +25,6 @@ getCsrfToken();
 $connection = $db->getConnection();
 $action = $_GET['action'] ?? '';
 
-// Keep existing volunteer/donor roles during rollout while normalizing member types.
-$roleColumn = $connection->query("SHOW COLUMNS FROM users LIKE 'role'");
-$roleDefinition = $roleColumn ? $roleColumn->fetch_assoc() : null;
-if ($roleDefinition && strpos($roleDefinition['Type'], "'member'") === false) {
-    $connection->query("ALTER TABLE users MODIFY role ENUM('admin', 'foodbank_staff', 'member', 'volunteer', 'donor') NOT NULL DEFAULT 'foodbank_staff'");
-}
-$memberTypeColumn = $connection->query("SHOW COLUMNS FROM users LIKE 'member_type'");
-if ($memberTypeColumn && $memberTypeColumn->num_rows === 0) {
-    $connection->query("ALTER TABLE users ADD COLUMN member_type ENUM('general', 'enterprise') DEFAULT NULL AFTER role");
-}
-$connection->query("UPDATE users SET member_type = CASE WHEN role = 'donor' THEN 'enterprise' ELSE 'general' END WHERE role IN ('donor', 'volunteer')");
-$connection->query("UPDATE users SET enterprise_name = COALESCE(NULLIF(enterprise_name, ''), full_name) WHERE role = 'donor'");
-$connection->query("UPDATE users SET role = 'member' WHERE role IN ('volunteer', 'donor')");
-
-// 將既有食物銀行主管帳號併入最高權限管理者角色，保留帳號與歷史資料。
-$connection->query(
-    "UPDATE users SET role = 'admin', full_name = '忠信食物銀行' WHERE username IN ('admin', 'manager')"
-);
-
 // 修復舊版初始化資料曾以錯誤編碼寫入的示範帳號資料。
 $demoPasswordHashes = [
     'manager' => '866485796cfa8d7c0cf7111640205b83076433547577511d81f8030ae99ecea5',
@@ -60,7 +41,7 @@ $connection->query(
         WHEN 'official' THEN '食物銀行官方人員'
         WHEN 'manager' THEN '忠信食物銀行'
         WHEN 'staff' THEN '食物銀行官方人員'
-        WHEN 'volunteer' THEN '平台志工／外送員'
+        WHEN 'volunteer' THEN '忠信GO RIDER'
         WHEN 'donor' THEN '捐贈剩食店家'
         ELSE full_name
     END
@@ -299,13 +280,11 @@ if (isset($currentUser['user_id'])) {
 $role = $currentUser['role'];
 $memberType = $currentUser['member_type'] ?? null;
 $roleLabels = [
-    'admin' => '忠信食物銀行',
     'foodbank_staff' => '忠信食物銀行',
     'member' => $memberType === 'enterprise' ? '企業會員' : ($memberType === 'general' ? '一般會員' : '會員'),
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'order_tracking', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'material_transport', 'activities', 'item_categories', 'beneficiaries', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'donation_materials', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'member' => $memberType === 'enterprise'
         ? ['dashboard', 'order_tracking', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate', 'activity_certificate']
         : ($memberType === 'general'
@@ -322,14 +301,12 @@ $page = basename($page);
 // 菜單項配置
 $menu_items = [
     'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
-    'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
     'order_tracking' => ['label' => '訂單追蹤', 'icon' => 'fa-solid fa-list-check'],
-    'donations_evaluation' => ['label' => '評估派車', 'icon' => 'fa-solid fa-clipboard-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
     'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
     'activities' => ['label' => $role === 'member' ? '活動報名' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
-    'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
+    'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift'],
     'carbon_report' => ['label' => '永續報表', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell'],

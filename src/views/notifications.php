@@ -33,7 +33,7 @@ function getNotificationTarget($notification) {
         return '?page=deliveries' . ($deliveryId ? '#delivery-' . $deliveryId : '');
     }
 
-    $rewardTitles = ['新的公益點數兌換', '公益點數兌換已核銷'];
+    $rewardTitles = ['新的興毅幣兌換', '興毅幣兌換已核銷'];
     if (in_array($notification['title'], $rewardTitles, true)) {
         return '?page=rewards';
     }

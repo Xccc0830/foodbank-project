@@ -6,8 +6,8 @@
 require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
 
 $itemCategoryModel = new ItemCategoryModel();
-$currentRole = $currentUser['role'] ?? 'volunteer';
-$isOfficial = in_array($currentRole, ['admin', 'foodbank_staff'], true);
+$currentRole = $currentUser['role'] ?? 'member';
+$isOfficial = $currentRole === 'foodbank_staff';
 $message = null;
 $editingCategory = null;
 

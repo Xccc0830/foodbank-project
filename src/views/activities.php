@@ -10,8 +10,8 @@ $activityModel = new ActivityModel();
 $notificationModel = new NotificationModel();
 $currentRole = $currentUser['role'] ?? 'foodbank_staff';
 $isEnterpriseMember = ($currentUser['member_type'] ?? null) === 'enterprise';
-$canCreateActivity = in_array($currentRole, ['admin', 'foodbank_staff'], true);
-$canRegisterActivities = in_array($currentRole, ['member', 'volunteer', 'donor'], true);
+$canCreateActivity = $currentRole === 'foodbank_staff';
+$canRegisterActivities = $currentRole === 'member';
 $message = null;
 $editingActivity = null;
 $participantLists = [];
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = ['type' => 'error', 'text' => '請先補齊企業會員的企業／組織名稱。'];
         } else {
             $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName)
-                ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業會員活動報名已送出。' : '活動報名完成，預計可獲得 5 點公益點數。']
+                ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業會員活動報名已送出。' : '活動報名完成，預計可獲得 5 枚興毅幣。']
                 : ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或活動名額已滿。'];
         }
     }
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : ['type' => 'error', 'text' => '取消失敗，或該活動並非您的報名記錄。'];
 
             if ($cancelled && $cancelledActivity) {
-                $officialUsers = $connection->query("SELECT user_id FROM users WHERE role IN ('admin', 'foodbank_staff') AND status = 'active'");
+                $officialUsers = $connection->query("SELECT user_id FROM users WHERE role = 'foodbank_staff' AND status = 'active'");
                 $volunteerName = trim((string) ($currentUser['full_name'] ?? $currentUser['username'] ?? '會員'));
                 $notificationTitle = '會員取消活動報名';
                 $notificationMessage = sprintf(
@@ -127,7 +127,7 @@ $activities = $activityModel->getAllActivities();
 foreach ($activities as $index => $activity) {
     $activities[$index]['can_register'] = $canRegisterActivities && $activityModel->canUserRegisterActivity((int) $activity['activity_id'], (int) $currentUser['user_id']);
     $activities[$index]['can_manage'] = $activityModel->canManageActivity((int) $activity['activity_id'], (int) $currentUser['user_id'], $currentRole);
-    $activities[$index]['can_view_participants'] = $activities[$index]['can_manage'] || in_array($currentRole, ['admin', 'foodbank_staff'], true);
+    $activities[$index]['can_view_participants'] = $activities[$index]['can_manage'] || $currentRole === 'foodbank_staff';
     if ($activities[$index]['can_view_participants']) {
         $participantLists[(int) $activity['activity_id']] = $activityModel->getParticipants((int) $activity['activity_id']);
     }

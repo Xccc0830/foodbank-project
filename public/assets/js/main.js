@@ -59,35 +59,16 @@
             });
         });
 
-        // 事件委派：處理受益者清單中 view/assign/delete 按鈕（避免依賴 inline onclick）
         document.body.addEventListener('click', function (event) {
             const btn = event.target.closest && event.target.closest('button[data-action]');
             if (!btn) return;
             const action = btn.dataset.action;
             try {
-                if (action === 'view' && typeof openViewBeneficiaryModal === 'function') {
-                    openViewBeneficiaryModal(btn);
-                    event.preventDefault();
-                } else if (action === 'assign' && typeof openAssignBeneficiaryModal === 'function') {
-                    openAssignBeneficiaryModal(btn);
-                    event.preventDefault();
-                } else if (action === 'delete' && typeof confirmDeleteBeneficiary === 'function') {
-                    confirmDeleteBeneficiary(btn);
-                    event.preventDefault();
-                } else if (action === 'distribution-history' && typeof openDistributionHistoryModal === 'function') {
-                    openDistributionHistoryModal(btn);
-                    event.preventDefault();
-                } else if (action === 'edit-supplier' && typeof openEditSupplierModal === 'function') {
+                if (action === 'edit-supplier' && typeof openEditSupplierModal === 'function') {
                     openEditSupplierModal(btn);
                     event.preventDefault();
                 } else if (action === 'delete-supplier' && typeof confirmDeleteSupplier === 'function') {
                     confirmDeleteSupplier(btn);
-                    event.preventDefault();
-                } else if (action === 'view-inventory' && typeof openViewInventoryModal === 'function') {
-                    openViewInventoryModal(btn);
-                    event.preventDefault();
-                } else if (action === 'edit-inventory' && typeof openEditInventoryModal === 'function') {
-                    openEditInventoryModal(btn);
                     event.preventDefault();
                 } else if (action === 'edit-reward') {
                     const card = btn.closest('.reward-card');
@@ -255,8 +236,8 @@
                 <div class="form-group">
                     <label>配送方式*</label>
                     <select name="delivery_option" required>
-                        <option value="volunteer_delivery">志工派車</option>
-                        <option value="donor_delivery">忠信派車</option>
+                        <option value="food_bank_pickup">忠信派車</option>
+                        <option value="volunteer_delivery">忠信GO RIDER派車</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -865,31 +846,10 @@
     }
 
     // 將需要被全域呼叫的函式暴露到 window
-    window.openAddDonationModal = openAddDonationModal;
-    window.openAddInventoryModal = openAddInventoryModal;
-    window.openAddBeneficiaryModal = openAddBeneficiaryModal;
-    window.openViewInventoryModal = openViewInventoryModal;
-    window.openEditInventoryModal = openEditInventoryModal;
     window.closeModal = closeModal;
     window.switchTab = switchTab;
     window.exportToCSV = exportToCSV;
     window.printTable = printTable;
     window.showNotification = showNotification;
 
-    // 受益者相關全域函式（供 onclick 屬性使用）
-    if (typeof openViewBeneficiaryModal === 'function') {
-        window.openViewBeneficiaryModal = openViewBeneficiaryModal;
-    }
-    if (typeof openAssignBeneficiaryModal === 'function') {
-        window.openAssignBeneficiaryModal = openAssignBeneficiaryModal;
-    }
-    if (typeof openDistributionHistoryModal === 'function') {
-        window.openDistributionHistoryModal = openDistributionHistoryModal;
-    }
-    if (typeof escapeHtml === 'function') {
-        window.escapeHtml = escapeHtml;
-    }
-    if (typeof confirmDeleteBeneficiary === 'function') {
-        window.confirmDeleteBeneficiary = confirmDeleteBeneficiary;
-    }
 })();

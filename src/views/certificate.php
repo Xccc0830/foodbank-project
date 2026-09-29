@@ -9,7 +9,7 @@ $donationModel = new DonationModel();
 $donationId = (int) ($_GET['donation_id'] ?? 0);
 $donation = $donationId > 0 ? $donationModel->getDonationById($donationId) : null;
 
-$isOfficial = in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff'], true);
+$isOfficial = ($currentUser['role'] ?? '') === 'foodbank_staff';
 $isOwner = $donation && !empty($donation['donor_id']) && (int) $donation['donor_id'] === (int) $currentUser['user_id'];
 
 if (!$donation || (!$isOwner && !$isOfficial)) {

@@ -46,7 +46,7 @@ class ActivityModel extends BaseModel {
         $creatorRole = $activity['creator_role'] ?? 'foodbank_staff';
         $role = $userRole ?? 'foodbank_staff';
 
-        if (in_array($role, ['member', 'donor'], true)) {
+        if ($role === 'member') {
             return false;
         }
 
@@ -54,7 +54,7 @@ class ActivityModel extends BaseModel {
             return true;
         }
 
-        $foodbankRoles = ['admin', 'foodbank_staff'];
+        $foodbankRoles = ['foodbank_staff'];
         if (in_array($creatorRole, $foodbankRoles, true)) {
             return in_array($role, $foodbankRoles, true);
         }
@@ -122,7 +122,7 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        if (!in_array($userInfo['role'] ?? '', ['member', 'volunteer', 'donor'], true)) {
+        if (($userInfo['role'] ?? '') !== 'member') {
             return false;
         }
 
@@ -130,7 +130,7 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $isEnterpriseMember = ($userInfo['member_type'] ?? '') === 'enterprise' || ($userInfo['role'] ?? '') === 'donor';
+        $isEnterpriseMember = ($userInfo['member_type'] ?? '') === 'enterprise';
         $assignmentType = $isEnterpriseMember ? 'company' : 'individual';
         if ($isEnterpriseMember) {
             $organizationName = trim((string) ($userInfo['enterprise_name'] ?: $organizationName ?: $userInfo['full_name']));

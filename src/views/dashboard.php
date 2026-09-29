@@ -10,15 +10,36 @@ $donationModel = new DonationModel();
 $dashboardRole = $currentUser['role'] ?? 'foodbank_staff';
 $dashboardMemberType = $currentUser['member_type'] ?? null;
 $isEnterpriseMember = $dashboardRole === 'member' && $dashboardMemberType === 'enterprise';
-$canViewDonations = in_array($dashboardRole, ['admin', 'foodbank_staff'], true) || $isEnterpriseMember;
+$canViewDonations = $dashboardRole === 'foodbank_staff' || $isEnterpriseMember;
 $recentDonations = $canViewDonations
     ? array_slice($donationModel->getAllDonations(null, $isEnterpriseMember ? (int) $currentUser['user_id'] : null), 0, 5)
     : [];
-$donationListPage = $dashboardRole === 'admin'
-    ? 'donations'
-    : ($isEnterpriseMember ? 'donation_materials' : 'donation_materials_review');
+$enterpriseSustainability = [
+    'delivery_count' => 0,
+    'total_weight' => 0,
+    'total_distance' => 0,
+    'food_waste_avoided' => 0,
+];
+if ($isEnterpriseMember) {
+    $enterpriseUserId = (int) $currentUser['user_id'];
+    $sustainabilityResult = $connection->query(
+        "SELECT COUNT(DISTINCT d.delivery_id) AS delivery_count,
+                COALESCE(SUM(d.weight_kg), 0) AS total_weight,
+                COALESCE(SUM(d.total_distance_km), 0) AS total_distance
+         FROM deliveries d
+         INNER JOIN donations n ON n.donation_id = d.donation_id
+         WHERE n.donor_id = {$enterpriseUserId}
+           AND d.status = 'delivered'"
+    );
+    if ($sustainabilityResult && ($sustainabilityRow = $sustainabilityResult->fetch_assoc())) {
+        $enterpriseSustainability['delivery_count'] = (int) $sustainabilityRow['delivery_count'];
+        $enterpriseSustainability['total_weight'] = (float) $sustainabilityRow['total_weight'];
+        $enterpriseSustainability['total_distance'] = (float) $sustainabilityRow['total_distance'];
+        $enterpriseSustainability['food_waste_avoided'] = $enterpriseSustainability['total_weight'] * 2.5;
+    }
+}
+$donationListPage = $isEnterpriseMember ? 'donation_materials' : 'donation_materials_review';
 $dashboardRoleLabels = [
-    'admin' => '管理介面',
     'foodbank_staff' => '管理介面',
     'member' => $isEnterpriseMember ? '企業會員工作台' : '一般會員工作台',
 ];
@@ -39,17 +60,14 @@ $dashboardRoleLabels = [
 <div class="card role-intro mb-20">
     <div class="card-body">
         <?php if ($dashboardRole === 'member' && !$isEnterpriseMember): ?>
-            <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄公益點數。</p>
+            <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄興毅幣。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
             <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
-            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理公益點數兌換</a>
+            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理興毅幣兌換</a>
         <?php elseif ($isEnterpriseMember): ?>
             <h2>企業惜食行動</h2><p>報名公益活動，也可將企業剩餘食物或物資捐贈給食物銀行。</p>
             <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>
-        <?php elseif ($dashboardRole === 'manager'): ?>
-            <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
-            <a href="?page=deliveries" class="btn btn-primary btn-sm">查看配送進度</a>
         <?php else: ?>
             <h2>忠信食物銀行管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
             <a href="?page=settings" class="btn btn-primary btn-sm">前往系統設置</a>
@@ -117,6 +135,23 @@ $dashboardRoleLabels = [
     </div>
     <?php endif; ?>
 </div>
+
+<?php if ($isEnterpriseMember): ?>
+<div class="card mt-32">
+    <div class="card-header">
+        <h2>我的永續報告</h2>
+        <p>依企業會員已完成配送的物資估算公益與環境效益</p>
+    </div>
+    <div class="card-body">
+        <div class="stats-grid">
+            <div class="stat-card"><h3>完成配送</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['delivery_count']); ?></div><p class="stat-label">趟次</p></div>
+            <div class="stat-card"><h3>捐贈重量</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['total_weight'], 1); ?></div><p class="stat-label">公斤</p></div>
+            <div class="stat-card"><h3>避免浪費估算</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['food_waste_avoided'], 1); ?></div><p class="stat-label">kgCO2e</p></div>
+            <div class="stat-card"><h3>配送里程</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['total_distance'], 1); ?></div><p class="stat-label">公里</p></div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="card mt-32">
     <div class="card-header">

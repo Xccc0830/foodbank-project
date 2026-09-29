@@ -1,6 +1,6 @@
 <?php
 /**
- * 公益點數兌換模型
+ * 興毅幣兌換模型
  */
 
 require_once __DIR__ . '/BaseModel.php';
@@ -276,9 +276,9 @@ class RewardModel extends BaseModel {
             return ['success' => false, 'message' => '此兌換憑證已完成、已取消或不存在，請確認兌換編號或 QR Code。'];
         }
         if (strtotime($claim['token_expires_at']) <= time()) {
-            return ['success' => false, 'message' => 'QR Code 已逾時，請志工重新開啟兌換憑證。'];
+            return ['success' => false, 'message' => 'QR Code 已逾時，請忠信GO RIDER重新開啟兌換憑證。'];
         }
-        if ($claim['source_type'] === 'foodbank' && !in_array($verifierRole, ['admin', 'foodbank_staff'], true)) {
+        if ($claim['source_type'] === 'foodbank' && $verifierRole !== 'foodbank_staff') {
             return ['success' => false, 'message' => '此品項只能由食物銀行方核銷。'];
         }
         if ($claim['source_type'] === 'donor') {
@@ -286,7 +286,9 @@ class RewardModel extends BaseModel {
                 "SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $claim['donor_item_id'] . " LIMIT 1"
             );
             $owner = $ownerResult ? $ownerResult->fetch_assoc() : null;
-            if ($verifierRole !== 'donor' || !$owner || (int) $owner['donor_id'] !== $verifierId) {
+            $verifierResult = $this->db->query("SELECT role, member_type FROM users WHERE user_id = {$verifierId} LIMIT 1");
+            $verifier = $verifierResult ? $verifierResult->fetch_assoc() : null;
+            if (($verifier['role'] ?? '') !== 'member' || ($verifier['member_type'] ?? '') !== 'enterprise' || !$owner || (int) $owner['donor_id'] !== $verifierId) {
                 return ['success' => false, 'message' => '此優惠券只能由提供優惠的愛心商家核銷。'];
             }
         }
@@ -305,14 +307,14 @@ class RewardModel extends BaseModel {
 
     private function notifyRedemptionCreated($volunteerId, $sourceType, $sourceId, $title, $cost) {
         $title = $this->db->real_escape_string($title);
-        $message = $this->db->real_escape_string("志工已兌換「{$title}」，使用 {$cost} 點，請至公益點數兌換頁面查看並核銷。");
-        $roles = $sourceType === 'foodbank' ? "('admin', 'foodbank_staff')" : "('donor')";
+        $message = $this->db->real_escape_string("忠信GO RIDER已兌換「{$title}」，使用 {$cost} 枚興毅幣，請至興毅幣兌換頁面查看並核銷。");
+        $roles = $sourceType === 'foodbank' ? "('foodbank_staff')" : "('member')";
         $ownerCondition = $sourceType === 'donor'
-            ? " AND u.user_id = (SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $sourceId . " LIMIT 1)"
+            ? " AND u.member_type = 'enterprise' AND u.user_id = (SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $sourceId . " LIMIT 1)"
             : '';
         $this->db->query(
             "INSERT INTO notifications (user_id, title, message, type)
-             SELECT u.user_id, '新的公益點數兌換', '{$message}', 'info'
+             SELECT u.user_id, '新的興毅幣兌換', '{$message}', 'info'
              FROM users u
              WHERE u.role IN {$roles} AND u.status = 'active'{$ownerCondition}"
         );
@@ -322,7 +324,7 @@ class RewardModel extends BaseModel {
         $title = $this->db->real_escape_string($title);
         $this->db->query(
             "INSERT INTO notifications (user_id, title, message, type)
-             VALUES (" . (int) $volunteerId . ", '公益點數兌換已核銷', '「{$title}」已由食物銀行完成核銷。', 'success')"
+             VALUES (" . (int) $volunteerId . ", '興毅幣兌換已核銷', '「{$title}」已由食物銀行完成核銷。', 'success')"
         );
     }
 

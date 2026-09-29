@@ -11,10 +11,12 @@
 
 ### 既有資料庫升級：統一會員
 
-既有安裝請先備份資料庫，再於 `shinigyi_foodbank` 資料庫執行
-`database/migrations/20260928_unified_members.sql`。此遷移會將志工帳號轉為一般會員、
-捐贈者帳號轉為企業會員，並保留帳號、活動、捐贈及點數資料。若 `member_type` 欄位已存在，
-遷移會略過重複新增欄位並繼續更新既有角色。
+既有安裝請先備份資料庫，再依序於 `shinigyi_foodbank` 資料庫執行：
+
+1. `database/migrations/20260928_unified_members.sql`：將志工/捐贈者帳號轉為一般會員/企業會員。
+2. `database/migrations/20260930_phase0_cleanup.sql`：將管理員帳號併入食物銀行職員、移除舊角色與受益者/庫存相關資料表，並將配送方式收斂為兩種模式。
+
+第二個遷移會永久刪除受益者分配與庫存資料；執行前請確認備份可還原。新安裝直接匯入資料庫快照即可，不需再執行這兩個遷移。
 
 ### 第 1 步：獲取項目文件
 
@@ -75,16 +77,16 @@ http://localhost/foodbank-project/foodbank-project/public
 
 使用以下預設帳號登錄：
 
-#### 管理員
-- **用戶名**: `admin`
-- **密碼**: `admin123`
+#### 管理介面
+- **用戶名**: `manager`
+- **密碼**: `manager123`
 
 #### 店家身份（捐贈店家）
 - **用戶名**: `store_demo`
 - **密碼**: `store123`
 - **會員類型**: 企業會員
 
-#### 運送者身份（志工／外送員）
+#### 忠信GO RIDER
 - **用戶名**: `courier_demo`
 - **密碼**: `courier123`
 - **會員類型**: 一般會員
@@ -97,7 +99,7 @@ http://localhost/foodbank-project/foodbank-project/public
 
 1. **修改默認密碼**
    - 訪問設置頁面
-   - 更改 admin 用戶密碼
+   - 更改食物銀行職員帳號密碼
 
 2. **更新數據庫配置**
    - 編輯 `config/database.php`

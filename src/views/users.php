@@ -3,7 +3,7 @@
  * 會員帳號審核與一般會員管理
  */
 
-if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff'], true)) {
+if (($currentUser['role'] ?? '') !== 'foodbank_staff') {
     echo '<div class="alert alert-error">只有系統管理者或食物銀行主管可以管理會員帳號。</div>';
     return;
 }
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         $target = $targetResult ? $targetResult->fetch_assoc() : null;
         $consentDone = false;
 
-        $requiresVolunteerConsent = $target && (($target['role'] === 'volunteer') || ($target['role'] === 'member' && $target['member_type'] === 'general'));
+        $requiresVolunteerConsent = $target && $target['role'] === 'member' && $target['member_type'] === 'general';
         if ($requiresVolunteerConsent) {
             $consentResult = $connection->query("SELECT completed_at FROM volunteer_consents WHERE user_id = {$userId} LIMIT 1");
             $consent = $consentResult ? $consentResult->fetch_assoc() : null;
@@ -44,7 +44,7 @@ $result = $connection->query(
     "SELECT u.user_id, u.username, u.full_name, u.email, u.role, u.member_type, u.status, u.phone, u.phone_verified, u.created_at, vc.completed_at AS consent_completed_at
      FROM users u
      LEFT JOIN volunteer_consents vc ON vc.user_id = u.user_id
-    " . ($isVolunteerManagement ? "WHERE u.role = 'volunteer' OR (u.role = 'member' AND u.member_type = 'general')" : '') . "
+    " . ($isVolunteerManagement ? "WHERE u.role = 'member' AND u.member_type = 'general'" : '') . "
     ORDER BY FIELD(u.status, 'inactive', 'active', 'suspended'), u.created_at DESC"
 );
 if ($result) {
@@ -52,8 +52,7 @@ if ($result) {
         $users[] = $user;
     }
 }
-$roleLabels = ['admin' => '忠信食物銀行', 'foodbank_staff' => '忠信食物銀行', 'volunteer' => '一般會員', 'donor' => '企業會員'];
-$roleLabels['member'] = '會員';
+$roleLabels = ['foodbank_staff' => '忠信食物銀行', 'member' => '會員'];
 $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended' => '已停用'];
 ?>
 
@@ -74,8 +73,7 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
                     $memberLabel = $user['role'] === 'member'
                         ? ($user['member_type'] === 'enterprise' ? '企業會員' : '一般會員')
                         : ($roleLabels[$user['role']] ?? $user['role']);
-                    $requiresConsent = $user['role'] === 'volunteer'
-                        || ($user['role'] === 'member' && $user['member_type'] === 'general');
+                    $requiresConsent = $user['role'] === 'member' && $user['member_type'] === 'general';
                     ?>
                     <tr>
                         <td><strong><?php echo htmlspecialchars($user['full_name']); ?></strong></td>

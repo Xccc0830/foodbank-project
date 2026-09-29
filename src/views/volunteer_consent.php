@@ -26,8 +26,8 @@ $consentCssVersion = file_exists($consentCssPath) ? filemtime($consentCssPath) :
 
             <form method="post" action="?action=volunteer_consent" class="consent-checklist">
                 <?php echo csrfField(); ?>
-                <label><input type="checkbox" name="agreed_disclaimer" value="1" required> 我已閱讀並同意《志工免責聲明》，了解配送過程中的風險由本人自行承擔一般注意義務。</label>
-                <label><input type="checkbox" name="agreed_mutual_aid" value="1" required> 我同意《純志工互助條款》，了解本平台為公益互助性質，不具僱傭關係，僅提供公益點數作為回饋。</label>
+                <label><input type="checkbox" name="agreed_disclaimer" value="1" required> 我已閱讀並同意《忠信GO RIDER免責聲明》，了解配送過程中的風險由本人自行承擔一般注意義務。</label>
+                <label><input type="checkbox" name="agreed_mutual_aid" value="1" required> 我同意《忠信GO RIDER互助條款》，了解本平台為公益互助性質，不具僱傭關係，僅提供興毅幣作為回饋。</label>
                 <label><input type="checkbox" id="videoWatchedCheckbox" name="video_watched" value="1" required disabled> 我已完整觀看食安運送短片。</label>
                 <button class="btn btn-primary login-submit" type="submit">完成教育訓練並送出申請</button>
             </form>

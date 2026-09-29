@@ -53,12 +53,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
 
     $expiryDate = trim((string) ($_POST['expiry_date'] ?? '')) ?: null;
     $pickupDeadline = trim((string) ($_POST['pickup_deadline'] ?? '')) ?: null;
-    $deliveryOptionValue = (string) ($_POST['delivery_option'] ?? 'self_delivery');
+    $deliveryOptionValue = (string) ($_POST['delivery_option'] ?? '');
     $deliveryOptionMap = [
-        'self_delivery' => 'food_bank_pickup',
-        'need_dispatch' => 'volunteer_delivery',
+        'food_bank_pickup' => 'food_bank_pickup',
+        'volunteer_delivery' => 'volunteer_delivery',
     ];
-    $deliveryOption = $deliveryOptionMap[$deliveryOptionValue] ?? 'donor_delivery';
+    $deliveryOption = $deliveryOptionMap[$deliveryOptionValue] ?? '';
 
     $vehicleSelections = $_POST['vehicle_type'] ?? [];
     $vehicleTypes = is_array($vehicleSelections) ? array_map('trim', array_filter($vehicleSelections, 'strlen')) : [];
@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         'received_by' => null,
         'status' => 'pending',
         'evaluation_status' => 'pending',
-        'delivery_method' => $deliveryOption === 'food_bank_pickup' ? 'volunteer_assist' : 'self_delivery',
+        'delivery_method' => $deliveryOption === 'food_bank_pickup' ? 'self_delivery' : 'volunteer_assist',
         'approval_notes' => null,
         'approved_at' => null,
         'approved_by' => null,
@@ -157,12 +157,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         'inspection_notes' => null,
     ];
 
-    if ($donorName === '' || $itemName === '' || $quantity <= 0) {
+    if ($donorName === '' || $itemName === '' || $quantity <= 0 || $deliveryOption === '') {
         $formMessage = ['type' => 'error', 'text' => '請完整填寫企業／組織名稱、物資名稱與數量。'];
     } else {
         $insertedId = $donationModel->addDonation($donationData);
         if ($insertedId) {
-            $officialUsers = $connection->query("SELECT user_id FROM users WHERE role IN ('admin', 'foodbank_staff') AND status = 'active'");
+            $officialUsers = $connection->query("SELECT user_id FROM users WHERE role = 'foodbank_staff' AND status = 'active'");
             if ($officialUsers) {
                 while ($officialUser = $officialUsers->fetch_assoc()) {
                     $notificationModel->notify(
@@ -207,13 +207,11 @@ $donationTypeLabels = [
     'other' => '其他',
 ];
 $deliveryOptionLabels = [
-    'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => '忠信GO RIDER派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
-    'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => '忠信GO RIDER派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
@@ -289,6 +287,7 @@ $formatDateTime = static function ($value) {
         <form method="post" enctype="multipart/form-data">
             <input type="hidden" name="action" value="add_material_donation">
 
+            <h3 class="form-section-title">物流主表</h3>
             <div class="form-group">
                 <label>企業／組織名稱</label>
                 <input type="text" name="donor_name" value="<?php echo htmlspecialchars($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly required>
@@ -389,11 +388,13 @@ $formatDateTime = static function ($value) {
             <div class="form-group">
                 <label>配送選擇</label>
                 <select name="delivery_option" required>
-                    <option value="self_delivery">忠信派車</option>
-                    <option value="need_dispatch">志工派車</option>
+                    <option value="">請選擇配送方式</option>
+                    <option value="food_bank_pickup">忠信派車</option>
+                    <option value="volunteer_delivery">忠信GO RIDER派車</option>
                 </select>
             </div>
 
+            <h3 class="form-section-title">物資明細</h3>
             <div class="form-group">
                 <label>運送評估</label>
                 <div class="vehicle-options" role="group" aria-label="運送評估選項">

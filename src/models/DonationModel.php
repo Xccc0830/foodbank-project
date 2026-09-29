@@ -41,7 +41,6 @@ class DonationModel extends BaseModel {
     public function getAllDonations($status = null, $donorId = null) {
         $sql = "SELECT * FROM {$this->table}";
         $conditions = [];
-        $having = '';
         
         if ($status) {
             $status = $this->db->real_escape_string($status);
@@ -71,41 +70,43 @@ class DonationModel extends BaseModel {
     }
 
     /**
-     * 根據捐贈者 ID 取得捐贈記錄
-     */
-    public function getDonationsByDonor($donor_id) {
-        $donor_id = intval($donor_id);
-        $sql = "SELECT * FROM {$this->table} WHERE donor_id = {$donor_id} ORDER BY donation_date DESC";
-        return $this->query($sql);
-    }
-
-    /**
      * 新增捐贈記錄
      */
     public function addDonation($donor_data) {
         $donor_data['donation_date'] = date('Y-m-d H:i:s');
         $donor_data['order_number'] = $this->generateOrderNumber();
-        return $this->insert($donor_data);
+        $itemData = [
+            'item_name' => $donor_data['item_name'] ?? null,
+            'donation_type' => $donor_data['donation_type'] ?? 'other',
+            'quantity' => $donor_data['quantity'] ?? null,
+            'unit' => $donor_data['unit'] ?? null,
+            'weight_kg' => $donor_data['weight_kg'] ?? null,
+            'size_description' => $donor_data['size_description'] ?? null,
+            'expiry_date' => $donor_data['expiry_date'] ?? null,
+            'photo_path' => $donor_data['photo_path'] ?? null,
+        ];
+        $donationId = $this->insert($donor_data);
+        if ($donationId && $this->hasDonationItemsTable()) {
+            $columns = array_keys($itemData);
+            $values = array_map(function ($value) {
+                return $value === null ? 'NULL' : "'" . $this->db->real_escape_string((string) $value) . "'";
+            }, $itemData);
+            $this->db->query(
+                "INSERT INTO donation_items (donation_id, " . implode(', ', $columns) . ") VALUES (" . (int) $donationId . ", " . implode(', ', $values) . ")"
+            );
+        }
+        return $donationId;
     }
 
-    /**
-     * 更新食物銀行評估結果
-     */
-    public function updateEvaluation($donation_id, $status, $evaluation_notes = '') {
-        $donation_id = intval($donation_id);
-        $status = $this->db->real_escape_string($status);
-        $evaluation_notes = $this->db->real_escape_string($evaluation_notes);
-
-        $sql = "UPDATE {$this->table}
-                SET status = '{$status}', evaluation_notes = '{$evaluation_notes}'
-                WHERE donation_id = {$donation_id}";
-        return $this->db->query($sql);
+    private function hasDonationItemsTable() {
+        $result = $this->db->query("SHOW TABLES LIKE 'donation_items'");
+        return $result && $result->num_rows > 0;
     }
 
     /**
      * 審查商家物資捐贈，完成後移至已評估區塊
      */
-    public function reviewMaterialDonation($donation_id, $decision, $rejection_reason = '', $foodbankDeliveryOption = 'food_bank_pickup') {
+    public function reviewMaterialDonation($donation_id, $decision, $rejection_reason = '', $foodbankDeliveryOption = '') {
         $donation_id = (int) $donation_id;
         if (!in_array($decision, ['accepted', 'rejected'], true)) {
             return false;
@@ -115,6 +116,9 @@ class DonationModel extends BaseModel {
         $evaluationStatus = $this->db->real_escape_string($evaluationStatus);
         $rejectionReason = $this->db->real_escape_string($rejection_reason);
         $allowedDeliveryOptions = ['food_bank_pickup', 'volunteer_delivery'];
+        if ($decision === 'accepted' && !in_array($foodbankDeliveryOption, $allowedDeliveryOptions, true)) {
+            return false;
+        }
         if ($foodbankDeliveryOption !== '' && !in_array($foodbankDeliveryOption, $allowedDeliveryOptions, true)) {
             return false;
         }
@@ -123,7 +127,7 @@ class DonationModel extends BaseModel {
             $existingResult = $this->db->query("SELECT delivery_option, delivery_method FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'pending' LIMIT 1");
             $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
             $foodbankDeliveryOption = $existingDonation['delivery_option'] ?? 'volunteer_delivery';
-            $deliveryMethod = $existingDonation['delivery_method'] ?? 'volunteer_assist';
+            $deliveryMethod = $foodbankDeliveryOption === 'food_bank_pickup' ? 'self_delivery' : 'volunteer_assist';
         } else {
             $foodbankDeliveryOption = $this->db->real_escape_string($foodbankDeliveryOption);
             $deliveryMethod = $foodbankDeliveryOption === 'food_bank_pickup' ? 'self_delivery' : 'volunteer_assist';
@@ -159,99 +163,6 @@ class DonationModel extends BaseModel {
         $sql = "SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} LIMIT 1";
         $result = $this->db->query($sql);
         return $result ? $result->fetch_assoc() : null;
-    }
-
-    /**
-     * 批准物資時產生防拆貼紙編號（若尚未產生）
-     */
-    public function assignSealCodeIfMissing($donation_id) {
-        $donation_id = intval($donation_id);
-        $sealCode = 'FB-' . strtoupper(bin2hex(random_bytes(4)));
-        $sealCodeEscaped = $this->db->real_escape_string($sealCode);
-
-        $this->db->query("UPDATE {$this->table} SET seal_code = '{$sealCodeEscaped}' WHERE donation_id = {$donation_id} AND (seal_code IS NULL OR seal_code = '')");
-        return $sealCode;
-    }
-
-    /**
-     * 取得特定日期範圍的捐贈
-     */
-    public function getDonationsByDateRange($start_date, $end_date) {
-        $start_date = $this->db->real_escape_string($start_date);
-        $end_date = $this->db->real_escape_string($end_date);
-        
-        $sql = "SELECT * FROM {$this->table} 
-                WHERE donation_date BETWEEN '{$start_date}' AND '{$end_date}' 
-                ORDER BY donation_date DESC";
-        
-        return $this->query($sql);
-    }
-
-    /**
-     * 取得待處理的捐贈
-     */
-    public function getPendingDonations() {
-        $sql = "SELECT * FROM {$this->table} 
-                WHERE status = 'pending' 
-                ORDER BY donation_date ASC";
-        return $this->query($sql);
-    }
-
-    /**
-     * 更新捐贈狀態
-     */
-    public function updateDonationStatus($donation_id, $status) {
-        $donation_id = intval($donation_id);
-        $status = $this->db->real_escape_string($status);
-        
-        $sql = "UPDATE {$this->table} SET status = '{$status}' WHERE donation_id = {$donation_id}";
-        return $this->db->query($sql);
-    }
-
-    /**
-     * 統計捐贈總額
-     */
-    public function getTotalDonationAmount($start_date = null, $end_date = null) {
-        $sql = "SELECT SUM(quantity) as total FROM {$this->table} WHERE donation_type = 'money'";
-
-        if ($start_date && $end_date) {
-            $start_date = $this->db->real_escape_string($start_date);
-            $end_date = $this->db->real_escape_string($end_date);
-            $sql .= " AND donation_date BETWEEN '{$start_date}' AND '{$end_date}'";
-        }
-
-        $result = $this->db->query($sql);
-        $row = $result->fetch_assoc();
-        return $row['total'] ?? 0;
-    }
-
-    public function approveDonation($donation_id, $delivery_method = 'volunteer_assist') {
-        $donation_id = (int) $donation_id;
-        $delivery_method = $this->db->real_escape_string($delivery_method);
-
-        $status = $delivery_method === 'self_delivery' ? 'approved_self_delivery' : 'approved_volunteer';
-        $sealCode = 'FB-' . strtoupper(bin2hex(random_bytes(4)));
-        $sealCodeEscaped = $this->db->real_escape_string($sealCode);
-
-        $sql = "UPDATE {$this->table}
-                SET status = '{$status}',
-                    delivery_method = '{$delivery_method}',
-                    seal_code = '{$sealCodeEscaped}',
-                    approved_at = NOW()
-                WHERE donation_id = {$donation_id}";
-        return $this->db->query($sql);
-    }
-
-    public function rejectDonation($donation_id, $reason = '') {
-        $donation_id = (int) $donation_id;
-        $reason = $this->db->real_escape_string($reason);
-
-        $sql = "UPDATE {$this->table}
-                SET status = 'rejected',
-                    rejection_reason = '{$reason}',
-                    rejected_at = NOW()
-                WHERE donation_id = {$donation_id}";
-        return $this->db->query($sql);
     }
 
     public function publishDonation($donation_id, $publishData = []) {
@@ -294,7 +205,7 @@ class DonationModel extends BaseModel {
         }
 
         $deliveryOption = $existingDonation['delivery_option'] ?? '';
-        if (!in_array($deliveryOption, ['donor_delivery', 'food_bank_pickup', 'volunteer_delivery'], true)) {
+        if (!in_array($deliveryOption, ['food_bank_pickup', 'volunteer_delivery'], true)) {
             return false;
         }
 
@@ -304,7 +215,7 @@ class DonationModel extends BaseModel {
             return false;
         }
 
-        $deliveryMethod = $deliveryOption === 'donor_delivery' ? 'donor' : 'volunteer';
+        $deliveryMethod = $deliveryOption === 'food_bank_pickup' ? 'food_bank' : 'volunteer';
         $vehicleType = in_array(($existingDonation['vehicle_type'] ?? ''), ['car', 'motorcycle'], true)
             ? $existingDonation['vehicle_type']
             : 'motorcycle';
@@ -332,45 +243,9 @@ class DonationModel extends BaseModel {
         return true;
     }
 
-    public function updateDeliveryStatus($donation_id, $new_status) {
-        $donation_id = (int) $donation_id;
-        $validStatuses = [
-            'waiting_pickup',
-            'volunteer_received',
-            'in_transit',
-            'at_foodbank',
-            'inspection_complete'
-        ];
-
-        $new_status = $this->db->real_escape_string($new_status);
-        if (!in_array($new_status, $validStatuses)) {
-            return false;
-        }
-
-        $sql = "UPDATE {$this->table}
-                SET current_status = '{$new_status}',
-                    status_updated_at = NOW()
-                WHERE donation_id = {$donation_id}";
-        return $this->db->query($sql);
-    }
-
-    public function getDonationsByEvaluationStatus($status) {
-        $status = $this->db->real_escape_string($status);
-        $sql = "SELECT * FROM {$this->table}
-                WHERE status = '{$status}'
-                ORDER BY donation_date DESC";
-        return $this->query($sql);
-    }
-
-    public function getPublishedDonations() {
-        $sql = "SELECT * FROM {$this->table}
-                WHERE status IN ('published', 'waiting_pickup', 'volunteer_received', 'in_transit')
-                ORDER BY published_at DESC";
-        return $this->query($sql);
-    }
-
     public function getOrderTracking($donorId = null, $status = null) {
         $conditions = [];
+        $having = '';
         if ($donorId !== null) {
             $conditions[] = 'n.donor_id = ' . (int) $donorId;
         }

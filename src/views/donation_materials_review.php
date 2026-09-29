@@ -20,8 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $foodbankDeliveryOption = $_POST['foodbank_delivery_option'] ?? '';
 
         if (in_array($decision, ['accepted', 'rejected'], true) && $donationId > 0) {
-            if ($decision === 'accepted' && !empty($_POST['publish_now']) && !in_array($foodbankDeliveryOption, ['food_bank_pickup', 'volunteer_delivery'], true)) {
-                $reviewMessage = ['type' => 'error', 'text' => '請先選擇配送方式後再發布。'];
+            if ($decision === 'accepted' && !in_array($foodbankDeliveryOption, ['food_bank_pickup', 'volunteer_delivery'], true)) {
+                $reviewMessage = ['type' => 'error', 'text' => '請先選擇配送方式後再接受物資。'];
             } elseif ($decision === 'rejected' && $rejectionReason === '') {
                 $reviewMessage = ['type' => 'error', 'text' => '請填寫婉拒原因後再送出。'];
             } else {
@@ -118,13 +118,11 @@ $donationTypeLabels = [
     'other' => '其他',
 ];
 $deliveryOptionLabels = [
-    'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => '忠信GO RIDER派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
-    'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => '忠信GO RIDER派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
@@ -387,7 +385,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
 <div class="card mt-32">
     <div class="card-header">
         <h2>已發布</h2>
-        <p>已公開到平台、可供志工查看與配送的物資。</p>
+        <p>已公開到平台、可供忠信GO RIDER查看與配送的物資。</p>
     </div>
     <div class="card-body">
         <?php if (!empty($publishedDonations)): ?>
@@ -490,8 +488,8 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         </div>
                         <div class="foodbank-delivery-options">
                             <strong>配送方式</strong>
-                            <label><input type="checkbox" name="foodbank_delivery_option" value="food_bank_pickup" required> 忠信派車</label>
-                            <label><input type="checkbox" name="foodbank_delivery_option" value="volunteer_delivery"> 志工派車</label>
+                            <label><input type="radio" name="foodbank_delivery_option" value="food_bank_pickup" required> 忠信派車</label>
+                            <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery" required> 忠信GO RIDER派車</label>
                         </div>
                         <div class="modal-actions">
                             <button type="button" id="showRejectionReasonButton" class="btn btn-danger">婉拒</button>

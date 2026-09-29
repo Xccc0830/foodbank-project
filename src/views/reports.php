@@ -3,12 +3,12 @@
  * 數據分析與報表
  */
 
-if (!in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff', 'member', 'volunteer'], true) || (($currentUser['role'] ?? '') === 'member' && ($currentUser['member_type'] ?? '') !== 'general')) {
+if (!(($currentUser['role'] ?? '') === 'foodbank_staff' || (($currentUser['role'] ?? '') === 'member' && ($currentUser['member_type'] ?? '') === 'general'))) {
     echo '<div class="alert alert-error">只有食物銀行官方人員可以查看數據分析。</div>';
     return;
 }
 
-$isVolunteer = in_array(($currentUser['role'] ?? ''), ['member', 'volunteer'], true) && (($currentUser['member_type'] ?? 'general') === 'general');
+$isVolunteer = ($currentUser['role'] ?? '') === 'member' && ($currentUser['member_type'] ?? '') === 'general';
 $connection = $db->getConnection();
 $startDate = $_GET['start_date'] ?? date('Y-m-d', strtotime('-30 days'));
 $endDate = $_GET['end_date'] ?? date('Y-m-d');
@@ -39,7 +39,7 @@ $result = $connection->query(
      FROM users u
      LEFT JOIN deliveries d ON d.volunteer_id = u.user_id AND d.status = 'delivered'
      LEFT JOIN point_transactions pt ON pt.user_id = u.user_id AND pt.transaction_type = 'earned'
-     WHERE (u.role = 'volunteer' OR (u.role = 'member' AND u.member_type = 'general'))
+    WHERE u.role = 'member' AND u.member_type = 'general'
      GROUP BY u.user_id
      ORDER BY total_points DESC
      LIMIT 10"
@@ -50,20 +50,12 @@ if ($result) {
     }
 }
 
-$lowStock = [];
-$result = $connection->query("SELECT item_name, quantity_on_hand, reorder_level, unit FROM inventory WHERE quantity_on_hand <= reorder_level ORDER BY quantity_on_hand ASC LIMIT 10");
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $lowStock[] = $row;
-    }
-}
-
 if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="volunteer_ranking.csv"');
     $output = fopen('php://output', 'w');
     fwrite($output, "\xEF\xBB\xBF");
-    fputcsv($output, ['志工姓名', '完成配送次數', '累積公益點數']);
+    fputcsv($output, ['忠信GO RIDER姓名', '完成配送次數', '累積興毅幣']);
     foreach ($volunteerRanking as $row) {
         fputcsv($output, [$row['full_name'], $row['delivery_count'], $row['total_points']]);
     }
@@ -75,10 +67,9 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="view-header">
     <div>
         <h1 class="view-title"><?php echo $isVolunteer ? '榮譽榜' : '數據分析'; ?></h1>
-        <p class="view-subtitle"><?php echo $isVolunteer ? '查看一般會員公益點數與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與會員排行'; ?></p>
+        <p class="view-subtitle"><?php echo $isVolunteer ? '查看一般會員興毅幣與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與會員排行'; ?></p>
     </div>
 </div>
-
 <?php if (!$isVolunteer): ?>
 <div class="card">
     <div class="card-body">
@@ -104,14 +95,14 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="card mt-32">
     <div class="card-header">
         <div class="toolbar-row">
-            <div><h2>志工派車排行</h2><p class="toolbar-meta">依累積公益點數排序</p></div>
+            <div><h2>忠信GO RIDER派車排行</h2><p class="toolbar-meta">依累積興毅幣排序</p></div>
             <?php if (!$isVolunteer): ?><div class="toolbar-actions"><a class="btn btn-secondary btn-sm" href="?page=reports&amp;start_date=<?php echo urlencode($startDate); ?>&amp;end_date=<?php echo urlencode($endDate); ?>&amp;export=volunteers_csv"><i class="fas fa-download"></i> 匯出 CSV</a></div><?php endif; ?>
         </div>
     </div>
     <div class="card-body">
         <?php if ($volunteerRanking): ?>
             <table class="data-table">
-                <thead><tr><th>排名</th><th>志工姓名</th><th>完成配送次數</th><th>累積公益點數</th></tr></thead>
+                <thead><tr><th>排名</th><th>忠信GO RIDER</th><th>完成配送次數</th><th>累積興毅幣</th></tr></thead>
                 <tbody>
                 <?php foreach ($volunteerRanking as $index => $row): ?>
                     <?php $pos = $index + 1; $rankClass = $pos <= 3 ? 'rank-' . $pos : ''; ?>
@@ -185,31 +176,8 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
                 </tbody>
             </table>
         <?php else: ?>
-            <div class="empty-state"><i class="fas fa-ranking-star"></i><p>目前尚無志工點數紀錄</p></div>
+            <div class="empty-state"><i class="fas fa-ranking-star"></i><p>目前尚無忠信GO RIDER點數紀錄</p></div>
         <?php endif; ?>
     </div>
 </div>
 
-<?php if (!$isVolunteer): ?>
-<div class="card mt-32">
-    <div class="card-header"><h2>低庫存項目</h2><p>需優先補貨的物資</p></div>
-    <div class="card-body">
-        <?php if ($lowStock): ?>
-            <table class="data-table">
-                <thead><tr><th>物資名稱</th><th>現有數量</th><th>預定數量</th></tr></thead>
-                <tbody>
-                <?php foreach ($lowStock as $row): ?>
-                    <?php
-                    $quantityDisplay = rtrim(rtrim(number_format((float) $row['quantity_on_hand'], 2, '.', ''), '0'), '.');
-                    $reorderLevelDisplay = rtrim(rtrim(number_format((float) $row['reorder_level'], 2, '.', ''), '0'), '.');
-                    ?>
-                    <tr><td><?php echo htmlspecialchars($row['item_name']); ?></td><td><?php echo htmlspecialchars($quantityDisplay); ?> <?php echo htmlspecialchars($row['unit']); ?></td><td><?php echo htmlspecialchars($reorderLevelDisplay); ?> <?php echo htmlspecialchars($row['unit']); ?></td></tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <div class="empty-state"><i class="fas fa-boxes-stacked"></i><p>目前沒有低庫存項目</p></div>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-</div>

@@ -1,6 +1,6 @@
 <?php
 /**
- * 配送任務與公益點數模型
+ * 配送任務與興毅幣模型
  */
 
 require_once __DIR__ . '/BaseModel.php';
@@ -18,7 +18,7 @@ class DeliveryModel extends BaseModel {
         $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE 'delivery_method'");
         if ($result && $result->num_rows === 0) {
             $this->db->query(
-                "ALTER TABLE deliveries ADD delivery_method ENUM('food_bank', 'volunteer', 'donor') NOT NULL DEFAULT 'volunteer' AFTER donation_id"
+                "ALTER TABLE deliveries ADD delivery_method ENUM('food_bank', 'volunteer') NOT NULL DEFAULT 'volunteer' AFTER donation_id"
             );
         }
     }
@@ -76,9 +76,9 @@ class DeliveryModel extends BaseModel {
 
         if ($deliveryMethod === 'volunteer') {
             $notificationMessage = "新的配送任務 #{$deliveryId} 已發布，請至配送任務查看並接單。";
-            $notifiedCount = $this->notifyUsersByRole('volunteer', '新的配送任務', $notificationMessage, 'info');
+            $notifiedCount = $this->notifyGeneralMembers('新的配送任務', $notificationMessage, 'info');
             if ($notifiedCount === 0) {
-                error_log("配送任務發布後沒有可通知的志工：delivery_id={$deliveryId}");
+                error_log("配送任務發布後沒有可通知的忠信GO RIDER：delivery_id={$deliveryId}");
             }
         }
 
@@ -207,7 +207,7 @@ class DeliveryModel extends BaseModel {
             }
 
     public function canManageDelivery($deliveryId, $userId, $userRole) {
-        if (!in_array($userRole, ['admin', 'foodbank_staff'], true)) {
+        if ($userRole !== 'foodbank_staff') {
             return false;
         }
 
@@ -220,7 +220,7 @@ class DeliveryModel extends BaseModel {
 
         $delivery = $result->fetch_assoc();
         return (int) ($delivery['created_by'] ?? 0) === $userId
-            || in_array($userRole, ['admin', 'foodbank_staff'], true);
+            || $userRole === 'foodbank_staff';
     }
 
     public function canDeleteDelivery($deliveryId, $userId, $userRole) {
@@ -282,7 +282,7 @@ class DeliveryModel extends BaseModel {
     }
 
     private function normalizeDeliveryMethod($deliveryMethod) {
-        return in_array($deliveryMethod, ['food_bank', 'volunteer', 'donor'], true) ? $deliveryMethod : false;
+        return in_array($deliveryMethod, ['food_bank', 'volunteer'], true) ? $deliveryMethod : false;
     }
 
     private function normalizeDonationId($donationId) {
@@ -317,13 +317,13 @@ class DeliveryModel extends BaseModel {
         $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed' WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'open'");
         if ($updated && $this->db->affected_rows > 0) {
             $notifiedCount = $this->notifyUsersByRoles(
-                ['foodbank_staff', 'admin'],
+                ['foodbank_staff'],
                 '配送任務已接單',
-                "配送任務 #{$deliveryId} 已由志工接單。",
+                "配送任務 #{$deliveryId} 已由忠信GO RIDER接單。",
                 'info'
             );
             if ($notifiedCount === 0) {
-                error_log("志工接單通知沒有官方收件人：delivery_id={$deliveryId}");
+                error_log("忠信GO RIDER接單通知沒有官方收件人：delivery_id={$deliveryId}");
             }
         }
         return $updated && $this->db->affected_rows === 1;
@@ -362,7 +362,7 @@ class DeliveryModel extends BaseModel {
         $wasUpdated = $updated && $this->db->affected_rows > 0;
         if ($wasUpdated) {
             $notificationMessage = "配送任務 #{$deliveryId}：{$notes}";
-            $notifiedCount = $this->notifyUsersByRoles(['foodbank_staff', 'admin'], '配送異常回報', $notificationMessage, 'warning');
+            $notifiedCount = $this->notifyUsersByRoles(['foodbank_staff'], '配送異常回報', $notificationMessage, 'warning');
             if ($notifiedCount === 0) {
                 error_log("配送異常通知沒有收件人：delivery_id={$deliveryId}");
             }
@@ -495,7 +495,7 @@ class DeliveryModel extends BaseModel {
             }
             $this->db->commit();
             if ($volunteerId > 0) {
-                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 點公益點數。", 'success');
+                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚興毅幣。", 'success');
             }
             return true;
         } catch (Throwable $exception) {
@@ -509,9 +509,8 @@ class DeliveryModel extends BaseModel {
         return (new NotificationModel())->notify((int) $userId, $title, $message, $type);
     }
 
-    private function notifyUsersByRole($role, $title, $message, $type) {
-        $role = $this->db->real_escape_string($role);
-        $result = $this->db->query("SELECT user_id FROM users WHERE role = '{$role}' AND status = 'active'");
+    private function notifyGeneralMembers($title, $message, $type) {
+        $result = $this->db->query("SELECT user_id FROM users WHERE role = 'member' AND member_type = 'general' AND status = 'active'");
         $notifiedCount = 0;
         if ($result) {
             while ($user = $result->fetch_assoc()) {

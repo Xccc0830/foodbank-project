@@ -2,8 +2,8 @@
 require_once BASE_PATH . '/src/models/DonationModel.php';
 
 $trackingModel = new DonationModel();
-$currentRole = $currentUser['role'] ?? 'volunteer';
-$isOfficial = in_array($currentRole, ['admin', 'foodbank_staff'], true);
+$currentRole = $currentUser['role'] ?? 'member';
+$isOfficial = $currentRole === 'foodbank_staff';
 $trackingOrders = $trackingModel->getOrderTracking(
     $isOfficial ? null : (int) ($currentUser['user_id'] ?? 0),
     $_GET['status'] ?? null
@@ -75,7 +75,7 @@ $statusClasses = [
                             <td><?php echo (int) $order['delivery_count']; ?> 個任務</td>
                             <td><?php echo (int) $order['completed_delivery_count']; ?> / <?php echo (int) $order['delivery_count']; ?> 完成</td>
                             <td><span class="status status-<?php echo htmlspecialchars($statusClasses[$orderStatus] ?? 'approved'); ?>"><?php echo htmlspecialchars($statusLabels[$orderStatus] ?? $orderStatus); ?></span></td>
-                            <td><a href="?page=donations" class="btn btn-secondary btn-sm">查看捐贈</a></td>
+                            <td><a href="?page=<?php echo $isOfficial ? 'donation_materials_review' : 'donation_materials'; ?>" class="btn btn-secondary btn-sm">查看物資</a></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

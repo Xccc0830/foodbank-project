@@ -8,17 +8,17 @@ require_once BASE_PATH . '/src/models/DeliveryModel.php';
 $deliveryModel = new DeliveryModel();
 $message = null;
 $editingDelivery = null;
-$currentRole = $currentUser['role'] ?? 'volunteer';
+$currentRole = $currentUser['role'] ?? 'member';
 $memberType = $currentUser['member_type'] ?? null;
 $currentUserId = (int) ($currentUser['user_id'] ?? 0);
-$isOfficial = in_array($currentRole, ['admin', 'foodbank_staff'], true);
-$isVolunteer = ($currentRole === 'member' && $memberType === 'general') || $currentRole === 'volunteer';
+$isOfficial = $currentRole === 'foodbank_staff';
+$isVolunteer = $currentRole === 'member' && $memberType === 'general';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'create_delivery') {
         if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '志工只能選擇接單，無法發布配送任務。'];
+            $message = ['type' => 'error', 'text' => '忠信GO RIDER只能選擇接單，無法發布配送任務。'];
         } else {
         $data = [
             'donation_id' => $_POST['donation_id'] ?? null,
@@ -38,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'claim_delivery') {
         $message = $isVolunteer && $deliveryModel->claimDelivery((int) $_POST['delivery_id'], $currentUserId)
-            ? ['type' => 'success', 'text' => '任務已由目前志工接單。']
-            : ['type' => 'error', 'text' => '接單失敗，任務可能已被其他志工接取。'];
+            ? ['type' => 'success', 'text' => '任務已由目前忠信GO RIDER接單。']
+            : ['type' => 'error', 'text' => '接單失敗，任務可能已被其他忠信GO RIDER接取。'];
     } elseif ($action === 'confirm_pickup') {
         $message = $isVolunteer && $deliveryModel->confirmPickup((int) $_POST['delivery_id'], $currentUserId, isset($_POST['seal_intact']), isset($_POST['item_count_confirmed']))
             ? ['type' => 'success', 'text' => '取貨已確認，請將物資送往食物銀行。']
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['exception_next_status'] ?? 'claimed'
         );
         $message = $resolved
-            ? ['type' => 'success', 'text' => '異常已處理，回覆已通知志工。']
+            ? ['type' => 'success', 'text' => '異常已處理，回覆已通知忠信GO RIDER。']
             : ['type' => 'error', 'text' => '異常處理失敗，請填寫處理結果或確認任務狀態。'];
     } elseif ($action === 'reject_exception') {
         $rejected = $isOfficial && $deliveryModel->rejectException(
@@ -69,11 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ['type' => 'error', 'text' => '駁回異常回報失敗，請填寫回覆內容。'];
     } elseif ($action === 'complete_delivery') {
         $message = $isOfficial && $deliveryModel->completeDelivery((int) $_POST['delivery_id'])
-            ? ['type' => 'success', 'text' => '已確認送達，公益點數已記錄。']
+            ? ['type' => 'success', 'text' => '已確認送達，興毅幣已記錄。']
             : ['type' => 'error', 'text' => '送達確認失敗。'];
     } elseif ($action === 'load_edit_delivery') {
         if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '志工無法編輯配送任務。'];
+            $message = ['type' => 'error', 'text' => '忠信GO RIDER無法編輯配送任務。'];
         } else {
         $editingDelivery = $deliveryModel->getDeliveryById((int) $_POST['delivery_id']);
         if (!$editingDelivery || !$deliveryModel->canManageDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole)) {
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'update_delivery') {
         if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '志工無法更新配送任務。'];
+            $message = ['type' => 'error', 'text' => '忠信GO RIDER無法更新配送任務。'];
             $updated = false;
         } else {
         $updated = $deliveryModel->updateDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole, [
@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ['type' => 'error', 'text' => '異常回報更新失敗。'];
     } elseif ($action === 'delete_delivery') {
         if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '志工無法刪除配送任務。'];
+            $message = ['type' => 'error', 'text' => '忠信GO RIDER無法刪除配送任務。'];
         } else {
         $message = $deliveryModel->deleteDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole)
             ? ['type' => 'success', 'text' => '已刪除配送任務。']
@@ -147,12 +147,12 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
 <div class="grid-2">
     <?php if ($isOfficial): ?>
     <div class="card">
-        <div class="card-header"><h2>發布配送任務</h2><p>依規劃書公式預先計算公益點數</p></div>
+        <div class="card-header"><h2>發布配送任務</h2><p>依規劃書公式預先計算興毅幣</p></div>
         <div class="card-body">
             <form method="post">
                 <input type="hidden" name="action" value="create_delivery">
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" max="2147483647" placeholder="可留白"></div>
-                <div class="form-group"><label>運送方式*</label><select name="delivery_method" required><option value="food_bank">食物銀行方自行接單</option><option value="volunteer" selected>志工／外送員接單</option><option value="donor">捐贈方自行運送至食物銀行</option></select></div>
+                <div class="form-group"><label>運送方式*</label><select name="delivery_method" required><option value="food_bank">忠信派車</option><option value="volunteer" selected>忠信GO RIDER派車</option></select></div>
                 <div class="grid-2">
                     <div class="form-group"><label>交通工具</label><select name="vehicle_type"><option value="motorcycle">機車</option><option value="car">汽車</option></select></div>
                     <div class="form-group"><label>總配送距離（公里）*</label><input type="number" name="total_distance_km" min="0" step="0.1" required></div>
@@ -170,13 +170,13 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
     <?php endif; ?>
 
     <div class="card">
-        <div class="card-header"><h2>點數規則</h2><p>公益點數不具現金兌換功能</p></div>
+        <div class="card-header"><h2>興毅幣規則</h2><p>興毅幣不具現金兌換功能</p></div>
         <div class="card-body">
             <ul class="feature-list">
                 <li>汽車基本 10 點，機車基本 5 點</li>
-                <li>距離、重量與急件程度會增加點數</li>
+                <li>距離、重量與急件程度會增加興毅幣</li>
                 <li>總距離為接單位置至商家，加上商家至食物銀行</li>
-                <li>完成送達後才會記錄點數</li>
+                <li>完成送達後才會記錄興毅幣</li>
             </ul>
         </div>
     </div>
@@ -193,9 +193,8 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
             <div class="grid-2">
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" value="<?php echo (int) ($editingDelivery['donation_id'] ?? 0); ?>"></div>
                 <div class="form-group"><label>運送方式*</label><select name="delivery_method" required>
-                    <option value="food_bank" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'food_bank' ? 'selected' : ''; ?>>食物銀行方自行接單</option>
-                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>志工／外送員接單</option>
-                    <option value="donor" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'donor' ? 'selected' : ''; ?>>捐贈方自行運送至食物銀行</option>
+                    <option value="food_bank" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'food_bank' ? 'selected' : ''; ?>>忠信派車</option>
+                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>忠信GO RIDER派車</option>
                 </select></div>
                 <div class="form-group"><label>交通工具</label><select name="vehicle_type">
                     <option value="motorcycle" <?php echo $editingDelivery['vehicle_type'] === 'motorcycle' ? 'selected' : ''; ?>>機車</option>
@@ -239,7 +238,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
             <div style="flex: 1;">
                 <div style="font-size: 24px; margin-bottom: 8px;">📦</div>
                 <div style="font-weight: bold;">待收貨</div>
-                <div style="font-size: 12px; color: #666;">志工接單後</div>
+                <div style="font-size: 12px; color: #666;">忠信GO RIDER接單後</div>
             </div>
             <div style="flex: 0.2; text-align: center; color: #999;">→</div>
             <div style="flex: 1;">
@@ -278,7 +277,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                             <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
                         </div>
                     </td>
-                    <td><?php echo ['food_bank' => '食物銀行方自行接單', 'volunteer' => '志工／外送員接單', 'donor' => '捐贈方自行運送'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
+                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => '忠信GO RIDER派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
@@ -294,7 +293,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="update_exception">
                                     <input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>">
-                                    <textarea name="exception_notes" rows="2" placeholder="志工異常回報"><?php echo htmlspecialchars($delivery['exception_notes'] ?? ''); ?></textarea>
+                                    <textarea name="exception_notes" rows="2" placeholder="忠信GO RIDER異常回報"><?php echo htmlspecialchars($delivery['exception_notes'] ?? ''); ?></textarea>
                                     <textarea name="exception_response" rows="2" placeholder="官方處理回覆"><?php echo htmlspecialchars($delivery['exception_response'] ?? ''); ?></textarea>
                                     <button class="btn btn-secondary btn-sm" type="submit">儲存異常回報</button>
                                 </form>
@@ -306,7 +305,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="<?php echo $delivery['status'] === 'cancelled' ? 'reject_exception' : 'resolve_exception'; ?>">
                                     <input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>">
-                                    <textarea name="exception_response" rows="2" placeholder="填寫處理結果或給志工的回覆" required></textarea>
+                                    <textarea name="exception_response" rows="2" placeholder="填寫處理結果或給忠信GO RIDER的回覆" required></textarea>
                                     <?php if ($delivery['status'] === 'exception'): ?>
                                         <select name="exception_next_status">
                                             <option value="claimed">恢復配送</option>
@@ -365,7 +364,7 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                             <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
                         </div>
                     </td>
-                    <td><?php echo ['food_bank' => '食物銀行方自行接單', 'volunteer' => '志工／外送員接單', 'donor' => '捐贈方自行運送'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
+                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => '忠信GO RIDER派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
