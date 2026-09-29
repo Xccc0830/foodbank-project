@@ -46,6 +46,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="login-roles" aria-label="測試帳號快捷登入">
                 <button type="button" class="login-role-button" data-username="admin" data-password="admin123">管理者</button>
                 <button type="button" class="login-role-button" data-username="manager" data-password="manager123">工作人員</button>
+                <button type="button" class="login-role-button" data-username="admin" data-password="admin123">忠信食物銀行</button>
                 <button type="button" class="login-role-button" data-username="love_store_001" data-password="love123">愛心商家</button>
                 <button type="button" class="login-role-button" data-username="volunteer" data-password="volunteer123">志工</button>
             </div>
@@ -53,7 +54,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>
             <div class="login-hint">
                 <strong>開發測試帳號</strong>
-                <span>管理者：admin / admin123</span>
+                <span>忠信食物銀行：admin / admin123</span>
                 <span>忠信食物銀行：manager / manager123</span>
                 <span>企業會員：love_store_001 / love123</span>
                 <span>一般會員：volunteer / volunteer123</span>
@@ -62,12 +63,19 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
     </main>
     <script>
         document.querySelectorAll('.login-role-button').forEach(function (button) {
-            if (button.dataset.username === 'manager') {
+            if (button.dataset.username === 'admin' || button.dataset.username === 'manager') {
                 button.textContent = '忠信食物銀行';
             } else if (button.dataset.username === 'volunteer') {
                 button.textContent = '一般會員';
             } else if (button.dataset.username === 'love_store_001') {
                 button.textContent = '企業會員';
+            }
+            if (button.dataset.username === 'admin') {
+                const earlierAdminButton = document.querySelector('.login-role-button[data-username="admin"]');
+                if (earlierAdminButton && earlierAdminButton !== button) {
+                    button.remove();
+                    return;
+                }
             }
             button.addEventListener('click', function () {
                 document.getElementById('username').value = button.dataset.username;

@@ -129,7 +129,7 @@ $rejected = array_filter($donations, function ($d) {
                 <option value="">全部狀態</option>
                 <option value="pending">待審核</option>
                 <option value="approved">已批准</option>
-                <option value="rejected">已拒絕</option>
+                <option value="rejected">已婉拒</option>
             </select>
         </div>
     </div>
@@ -139,6 +139,7 @@ $rejected = array_filter($donations, function ($d) {
             <table class="data-table donations-table">
                 <thead>
                     <tr>
+                        <th>訂單編號</th>
                         <th>照片</th>
                         <th>捐贈者</th>
                         <th>物資</th>
@@ -162,7 +163,7 @@ $rejected = array_filter($donations, function ($d) {
                             'pending' => '待評估',
                             'assessed' => '已評估',
                             'approved' => '已批准',
-                            'rejected' => '已拒絕',
+                            'rejected' => '已婉拒',
                             'received' => '已收貨',
                             'archived' => '已封存',
                         ];
@@ -173,6 +174,7 @@ $rejected = array_filter($donations, function ($d) {
                         ];
                         ?>
                         <tr>
+                            <td><code><?php echo htmlspecialchars($donation['order_number'] ?? '待產生'); ?></code></td>
                             <td><?php if (!empty($donation['photo_path'])): ?><a href="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" target="_blank" rel="noopener"><img src="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" alt="包裝前合照" class="donation-thumb"></a><?php else: ?>－<?php endif; ?></td>
                             <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
                             <td><?php echo htmlspecialchars($donation['item_name'] ?? '-'); ?></td>
@@ -198,7 +200,7 @@ $rejected = array_filter($donations, function ($d) {
                                             <select name="evaluation_status" aria-label="評估結果">
                                                 <option value="assessed">已評估</option>
                                                 <option value="approved">批准接收</option>
-                                                <option value="rejected">拒絕接收</option>
+                                                <option value="rejected">婉拒接收</option>
                                             </select>
                                             <input type="text" name="evaluation_notes" placeholder="評估備註">
                                             <button type="submit" class="btn btn-primary btn-sm">送出評估</button>
@@ -232,8 +234,8 @@ $rejected = array_filter($donations, function ($d) {
         <p class="stat-label">筆捐贈完成審核</p>
     </div>
     <div class="stat-card">
-        <h3>已拒絕</h3>
+        <h3>已婉拒</h3>
         <div class="stat-number"><?php echo count($rejected); ?></div>
-        <p class="stat-label">筆捐贈被拒絕</p>
+        <p class="stat-label">筆捐贈被婉拒</p>
     </div>
 </div>

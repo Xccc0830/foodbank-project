@@ -2,9 +2,12 @@
 require_once BASE_PATH . '/src/models/DonationModel.php';
 require_once BASE_PATH . '/src/models/DeliveryModel.php';
 require_once BASE_PATH . '/src/helpers/UploadHelper.php';
+require_once BASE_PATH . '/src/models/NotificationModel.php';
 
 $donationModel = new DonationModel();
 $deliveryModel = new DeliveryModel();
+$notificationModel = new NotificationModel();
+$connection = $db->getConnection();
 $currentUserId = isset($currentUser['user_id']) ? (int) $currentUser['user_id'] : 0;
 $formMessage = null;
 $viewingDonation = null;
@@ -52,8 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $pickupDeadline = trim((string) ($_POST['pickup_deadline'] ?? '')) ?: null;
     $deliveryOptionValue = (string) ($_POST['delivery_option'] ?? 'self_delivery');
     $deliveryOptionMap = [
-        'self_delivery' => 'donor_delivery',
-        'need_dispatch' => 'food_bank_pickup',
+        'self_delivery' => 'food_bank_pickup',
+        'need_dispatch' => 'volunteer_delivery',
     ];
     $deliveryOption = $deliveryOptionMap[$deliveryOptionValue] ?? 'donor_delivery';
 
@@ -158,9 +161,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         $formMessage = ['type' => 'error', 'text' => '請完整填寫企業／組織名稱、物資名稱與數量。'];
     } else {
         $insertedId = $donationModel->addDonation($donationData);
-        $formMessage = $insertedId
-            ? ['type' => 'success', 'text' => '物資捐贈已送出，待食物銀行評估。']
-            : ['type' => 'error', 'text' => '送出失敗，請稍後再試。'];
+        if ($insertedId) {
+            $officialUsers = $connection->query("SELECT user_id FROM users WHERE role IN ('admin', 'foodbank_staff') AND status = 'active'");
+            if ($officialUsers) {
+                while ($officialUser = $officialUsers->fetch_assoc()) {
+                    $notificationModel->notify(
+                        (int) $officialUser['user_id'],
+                        '新的物資待評估',
+                        sprintf('商家 %s 已送出物資「%s」，請至物資捐贈審查處理。', $donationData['donor_name'], $itemName),
+                        'info'
+                    );
+                }
+            }
+            $formMessage = ['type' => 'success', 'text' => '物資捐贈已送出，待食物銀行評估。'];
+        } else {
+            $formMessage = ['type' => 'error', 'text' => '送出失敗，請稍後再試。'];
+        }
     }
 }
 
@@ -191,14 +207,14 @@ $donationTypeLabels = [
     'other' => '其他',
 ];
 $deliveryOptionLabels = [
-    'donor_delivery' => '商家自行運送',
-    'volunteer_delivery' => '他人協助運送',
-    'food_bank_pickup' => '自行派車',
+    'donor_delivery' => '忠信派車',
+    'volunteer_delivery' => '志工派車',
+    'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
-    'donor_delivery' => '商家自行運送',
-    'volunteer_delivery' => '需派車運送',
-    'food_bank_pickup' => '需派車運送',
+    'donor_delivery' => '忠信派車',
+    'volunteer_delivery' => '志工派車',
+    'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
     'car' => '汽車',
@@ -302,7 +318,7 @@ $formatDateTime = static function ($value) {
             <div class="grid-2">
                 <div class="form-group">
                     <label>數量</label>
-                    <input type="number" name="quantity" step="0.01" min="0.01" required>
+                    <input type="number" name="quantity" step="1" min="1" required>
                 </div>
                 <div class="form-group">
                     <label>單位</label>
@@ -330,7 +346,7 @@ $formatDateTime = static function ($value) {
             <div class="form-group">
                 <label>重量（單位）</label>
                 <div class="grid-2">
-                    <input type="number" name="weight_value" step="0.01" min="0" placeholder="數值">
+                    <input type="number" name="weight_value" step="1" min="0" placeholder="數值">
                     <select name="weight_unit">
                         <option value="kg">公斤</option>
                         <option value="g">公克</option>
@@ -342,9 +358,9 @@ $formatDateTime = static function ($value) {
             <div class="form-group">
                 <label>大小（長寬高）</label>
                 <div class="grid-3">
-                    <input type="number" name="size_length" step="0.01" min="0" placeholder="長">
-                    <input type="number" name="size_width" step="0.01" min="0" placeholder="寬">
-                    <input type="number" name="size_height" step="0.01" min="0" placeholder="高">
+                    <input type="number" name="size_length" step="1" min="0" placeholder="長">
+                    <input type="number" name="size_width" step="1" min="0" placeholder="寬">
+                    <input type="number" name="size_height" step="1" min="0" placeholder="高">
                 </div>
                 <div style="margin-top: 10px;">
                     <select name="size_unit">
@@ -373,8 +389,8 @@ $formatDateTime = static function ($value) {
             <div class="form-group">
                 <label>配送選擇</label>
                 <select name="delivery_option" required>
-                    <option value="self_delivery">商家自行運送</option>
-                    <option value="need_dispatch">需派車運送</option>
+                    <option value="self_delivery">忠信派車</option>
+                    <option value="need_dispatch">志工派車</option>
                 </select>
             </div>
 
@@ -550,11 +566,28 @@ $formatDateTime = static function ($value) {
             <div class="card-body">
                 <?php if (($viewingDonation['status'] ?? '') === 'assessed' && ($viewingDonation['evaluation_status'] ?? '') === 'rejected'): ?>
                     <div class="donation-rejection-reason">
-                        <strong>不接受的原因：</strong>
+                        <strong>婉拒的原因：</strong>
                         <span><?php echo nl2br(htmlspecialchars($viewingDonation['rejection_reason'] ?? '未填寫')); ?></span>
                     </div>
                 <?php endif; ?>
                 <?php $isViewingRejected = ($viewingDonation['evaluation_status'] ?? '') === 'rejected'; ?>
+                <?php
+                $viewingStatus = strtolower((string) ($viewingDonation['status'] ?? ''));
+                $viewingEvaluationStatus = strtolower((string) ($viewingDonation['evaluation_status'] ?? ''));
+                if ($viewingStatus === 'pending') {
+                    $viewingProcessTimeLabel = '送出時間';
+                    $viewingProcessTime = $viewingDonation['donation_date'] ?? null;
+                } elseif ($viewingStatus === 'assessed') {
+                    $viewingProcessTimeLabel = $isViewingRejected ? '婉拒時間' : '接受時間';
+                    $viewingProcessTime = $isViewingRejected ? ($viewingDonation['rejected_at'] ?? null) : ($viewingDonation['approved_at'] ?? null);
+                } elseif ($viewingStatus === 'published') {
+                    $viewingProcessTimeLabel = '發布時間';
+                    $viewingProcessTime = $viewingDonation['published_at'] ?? null;
+                } else {
+                    $viewingProcessTimeLabel = '更新時間';
+                    $viewingProcessTime = $viewingDonation['updated_at'] ?? null;
+                }
+                ?>
                 <?php if (($viewingDonation['status'] ?? '') === 'assessed' && !$isViewingRejected): ?>
                     <div class="donation-current-progress">
                         <strong>目前進度：</strong> 已接受物資捐贈，正在派車前往領取。
@@ -585,13 +618,9 @@ $formatDateTime = static function ($value) {
                             echo htmlspecialchars($detailDeliveryLabels[$viewingDonation['delivery_option'] ?? ''] ?? '未指定');
                         ?></p>
                         <p><strong>運送評估：</strong> <?php echo htmlspecialchars($formatVehicleTypes($viewingDonation)); ?></p>
+                        <p><strong><?php echo htmlspecialchars($viewingProcessTimeLabel); ?>：</strong> <?php echo htmlspecialchars($formatDateTime($viewingProcessTime)); ?></p>
                         <?php if (($viewingDonation['status'] ?? '') === 'assessed'): ?>
                             <p><strong>評估結果：</strong> <?php echo $isViewingRejected ? '未通過' : '接受'; ?></p>
-                            <?php if ($isViewingRejected): ?>
-                                <p><strong>食物銀行不接受時間：</strong> <?php echo htmlspecialchars($formatDateTime($viewingDonation['rejected_at'] ?? null)); ?></p>
-                            <?php else: ?>
-                            <p><strong>食物銀行接受時間：</strong> <?php echo htmlspecialchars($formatDateTime($viewingDonation['approved_at'] ?? null)); ?></p>
-                            <?php endif; ?>
                         <?php endif; ?>
                         <p><strong>照片上傳：</strong> <?php echo !empty($viewingDonation['photo_path']) ? '已上傳' : '未上傳'; ?></p>
                         <?php if (!empty($viewingDonation['photo_path'])): ?>

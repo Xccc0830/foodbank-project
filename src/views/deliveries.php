@@ -267,9 +267,10 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
     <div class="card-header"><h2>未完成任務</h2><p>目前共 <?php echo count($pendingDeliveries); ?> 筆任務</p></div>
     <div class="card-body deliveries-table-body">
         <?php if ($pendingDeliveries): ?>
-            <table class="data-table deliveries-table"><thead><tr><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>異常回報</th><th>編輯配送任務</th></tr></thead><tbody>
+            <table class="data-table deliveries-table"><thead><tr><th>訂單編號</th><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>異常回報</th><th>編輯配送任務</th></tr></thead><tbody>
             <?php foreach ($pendingDeliveries as $delivery): ?>
                 <tr id="delivery-<?php echo (int) $delivery['delivery_id']; ?>">
+                    <td><code><?php echo htmlspecialchars($delivery['order_number'] ?? '未關聯'); ?></code></td>
                     <td class="delivery-route-cell" title="<?php echo htmlspecialchars($delivery['pickup_address'] . ' → ' . $delivery['delivery_address'], ENT_QUOTES, 'UTF-8'); ?>">
                         <div class="delivery-route">
                             <span class="delivery-route-point"><strong>起點</strong><?php echo htmlspecialchars($delivery['pickup_address']); ?></span>

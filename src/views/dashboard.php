@@ -3,10 +3,8 @@
  * 儀表板視圖 - 精修版
  */
 
-require_once BASE_PATH . '/src/models/BeneficiaryModel.php';
 require_once BASE_PATH . '/src/models/DonationModel.php';
 
-$beneficiaryModel = new BeneficiaryModel();
 $donationModel = new DonationModel();
 
 $dashboardRole = $currentUser['role'] ?? 'foodbank_staff';
@@ -20,15 +18,15 @@ $donationListPage = $dashboardRole === 'admin'
     ? 'donations'
     : ($isEnterpriseMember ? 'donation_materials' : 'donation_materials_review');
 $dashboardRoleLabels = [
-    'admin' => '系統管理總覽',
-    'foodbank_staff' => '食物銀行官方工作台',
+    'admin' => '管理介面',
+    'foodbank_staff' => '管理介面',
     'member' => $isEnterpriseMember ? '企業會員工作台' : '一般會員工作台',
 ];
 ?>
 
 <div class="view-header">
     <div>
-        <h1 class="view-title"><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '工作台'); ?></h1>
+        <h1 class="view-title"><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '管理介面'); ?></h1>
         <p class="view-subtitle"><?php echo date('Y-m-d'); ?>，歡迎 <?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?></p>
     </div>
     <?php if ($isEnterpriseMember): ?>
@@ -44,7 +42,7 @@ $dashboardRoleLabels = [
             <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄公益點數。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
-            <h2>官方人員工作台</h2><p>處理物資審查、受益者服務與公益活動，確保物資完成媒合。</p>
+            <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
             <a href="?page=rewards" class="btn btn-secondary btn-sm">管理公益點數兌換</a>
         <?php elseif ($isEnterpriseMember): ?>
             <h2>企業惜食行動</h2><p>報名公益活動，也可將企業剩餘食物或物資捐贈給食物銀行。</p>
@@ -53,23 +51,9 @@ $dashboardRoleLabels = [
             <h2>營運管理</h2><p>掌握物資媒合、配送任務與公益活動的整體進度。</p>
             <a href="?page=deliveries" class="btn btn-primary btn-sm">查看配送進度</a>
         <?php else: ?>
-            <h2>系統管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
+            <h2>忠信食物銀行管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
             <a href="?page=settings" class="btn btn-primary btn-sm">前往系統設置</a>
         <?php endif; ?>
-    </div>
-</div>
-
-<div class="stats-grid">
-    <div class="stat-card">
-        <h3>活躍受益者</h3>
-        <div class="stat-number"><?php echo number_format($beneficiaryModel->countActiveBeneficiaries()); ?></div>
-        <p class="stat-label">位受益者</p>
-    </div>
-
-    <div class="stat-card">
-        <h3>家庭成員</h3>
-        <div class="stat-number"><?php echo number_format($beneficiaryModel->getTotalFamilyMembers()); ?></div>
-        <p class="stat-label">位家庭成員</p>
     </div>
 </div>
 
@@ -132,8 +116,6 @@ $dashboardRoleLabels = [
         </div>
     </div>
     <?php endif; ?>
-
-    <div class="card">
 </div>
 
 <div class="card mt-32">
@@ -145,9 +127,6 @@ $dashboardRoleLabels = [
         <div class="grid-4">
             <?php if ($isEnterpriseMember): ?>
             <a class="btn btn-primary" href="?page=donation_materials"><i class="fas fa-gift"></i> 新增捐贈</a>
-            <?php endif; ?>
-            <?php if ($dashboardRole === 'admin'): ?>
-            <button class="btn btn-primary" onclick="openAddBeneficiaryModal()"><i class="fas fa-user-plus"></i> 新增受益者</button>
             <?php endif; ?>
             <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
             <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>

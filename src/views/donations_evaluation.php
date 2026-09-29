@@ -4,8 +4,10 @@
  */
 
 require_once BASE_PATH . '/src/models/DonationModel.php';
+require_once BASE_PATH . '/src/models/NotificationModel.php';
 
 $donationModel = new DonationModel();
+$notificationModel = new NotificationModel();
 $currentRole = $currentUser['role'] ?? 'volunteer';
 $isOfficial = in_array($currentRole, ['admin', 'foodbank_staff'], true);
 $message = null;
@@ -24,6 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'approve_donation') {
         $donationId = (int) $_POST['donation_id'];
         $approved = $donationModel->approveDonation($donationId, $_POST['delivery_method'] ?? 'volunteer_assist');
+        if ($approved) {
+            $donation = $donationModel->getDonationById($donationId);
+            if ($donation && !empty($donation['donor_id'])) {
+                $notificationModel->notify((int) $donation['donor_id'], '物資已接受', '您的物資已接受，請留意後續配送安排。', 'success');
+            }
+        }
         $message = $approved
             ? ['type' => 'success', 'text' => '捐贈已批准，進入派車流程。']
             : ['type' => 'error', 'text' => '批准失敗。'];
@@ -31,13 +39,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $donationId = (int) $_POST['donation_id'];
         $reason = trim($_POST['rejection_reason'] ?? '');
         $rejected = $donationModel->rejectDonation($donationId, $reason);
+        if ($rejected) {
+            $donation = $donationModel->getDonationById($donationId);
+            if ($donation && !empty($donation['donor_id'])) {
+                $notificationModel->notify((int) $donation['donor_id'], '物資已婉拒', '您的物資已婉拒，請查看婉拒原因。', 'warning');
+            }
+        }
         $message = $rejected
-            ? ['type' => 'success', 'text' => '捐贈已拒絕，移至歷史紀錄。']
-            : ['type' => 'error', 'text' => '拒絕操作失敗。'];
+            ? ['type' => 'success', 'text' => '捐贈已婉拒，移至歷史紀錄。']
+            : ['type' => 'error', 'text' => '婉拒操作失敗。'];
     } elseif ($action === 'publish_donation') {
         $donationId = (int) $_POST['donation_id'];
         $splitCount = (int) ($_POST['split_count'] ?? 1);
         $published = $donationModel->publishDonation($donationId, $splitCount);
+        if ($published) {
+            $donation = $donationModel->getDonationById($donationId);
+            if ($donation && !empty($donation['donor_id'])) {
+                $notificationModel->notify((int) $donation['donor_id'], '物資已發布', '您的物資已通過審查並發布到平台。', 'success');
+            }
+        }
         $message = $published
             ? ['type' => 'success', 'text' => '物資已發布，志工可開始領取。']
             : ['type' => 'error', 'text' => '發布失敗。'];
@@ -58,15 +78,15 @@ $publishedDonations = $donationModel->getPublishedDonations();
 
 $statusLabels = [
     'pending' => '待評估',
-    'approved_volunteer' => '已批准(志工協助)',
-    'approved_self_delivery' => '已批准(商家自運)',
+    'approved_volunteer' => '已批准(志工派車)',
+    'approved_self_delivery' => '已批准(忠信派車)',
     'published' => '已發布',
     'waiting_pickup' => '待取貨',
     'volunteer_received' => '志工已領取',
     'in_transit' => '配送中',
     'at_foodbank' => '已送達食物銀行',
     'inspection_complete' => '檢查完成',
-    'rejected' => '已拒絕'
+    'rejected' => '已婉拒'
 ];
 
 $statusColors = [
@@ -114,7 +134,7 @@ $statusColors = [
                 <p><strong>領取期限：</strong> <?php echo htmlspecialchars($viewingDonation['pickup_deadline'] ?? '無'); ?></p>
                 <p><strong>捐贈日期：</strong> <?php echo htmlspecialchars($viewingDonation['donation_date'] ?? ''); ?></p>
                 <p><strong>捐贈選項：</strong>
-                    <?php echo ($viewingDonation['delivery_option'] ?? 'volunteer_delivery') === 'self_delivery' ? '商家自運' : '需派車運送'; ?>
+                    <?php echo ($viewingDonation['delivery_option'] ?? 'volunteer_delivery') === 'self_delivery' ? '忠信派車' : '志工派車'; ?>
                 </p>
             </div>
         </div>
@@ -141,20 +161,20 @@ $statusColors = [
                     <div class="form-group">
                         <label>派車方式*</label>
                         <select name="delivery_method" required>
-                            <option value="volunteer_assist">志工協助</option>
-                            <option value="self_delivery">食物銀行自行派車</option>
+                            <option value="volunteer_assist">志工派車</option>
+                            <option value="self_delivery">忠信派車</option>
                         </select>
                     </div>
                     <button class="btn btn-success" type="submit"><i class="fas fa-check"></i> 批准接受</button>
                 </form>
-                <form method="post" onsubmit="return confirm('確定要拒絕此捐贈嗎？');">
+                <form method="post" onsubmit="return confirm('確定要婉拒此捐贈嗎？');">
                     <input type="hidden" name="action" value="reject_donation">
                     <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
                     <div class="form-group">
-                        <label>拒絕原因</label>
-                        <textarea name="rejection_reason" placeholder="說明拒絕原因"></textarea>
+                        <label>婉拒原因</label>
+                        <textarea name="rejection_reason" placeholder="說明婉拒原因"></textarea>
                     </div>
-                    <button class="btn btn-danger" type="submit"><i class="fas fa-times"></i> 拒絕</button>
+                    <button class="btn btn-danger" type="submit"><i class="fas fa-times"></i> 婉拒</button>
                 </form>
             </div>
         </div>
@@ -233,7 +253,7 @@ $statusColors = [
                     <tr>
                         <td><?php echo htmlspecialchars($donation['donor_name']); ?></td>
                         <td><?php echo htmlspecialchars($donation['item_name']); ?></td>
-                        <td><?php echo ($donation['delivery_method'] ?? 'volunteer_assist') === 'self_delivery' ? '商家自運' : '志工協助'; ?></td>
+                        <td><?php echo ($donation['delivery_method'] ?? 'volunteer_assist') === 'self_delivery' ? '忠信派車' : '志工派車'; ?></td>
                         <td><?php echo htmlspecialchars($donation['quantity']); ?> <?php echo htmlspecialchars($donation['unit']); ?></td>
                         <td><code><?php echo htmlspecialchars($donation['seal_code'] ?? 'N/A'); ?></code></td>
                         <td>
@@ -264,7 +284,7 @@ $statusColors = [
 </div>
 
 <div class="card mt-32">
-    <div class="card-header"><h2>已發布物資配送追蹤</h2><p>監控志工配送進度</p></div>
+    <div class="card-header"><h2>已發布物資配送追蹤</h2><p>監控志工派車進度</p></div>
     <div class="card-body">
         <?php if ($publishedDonations): ?>
             <div class="donations-evaluation-table-body">
@@ -282,7 +302,7 @@ $statusColors = [
                     <?php foreach ($publishedDonations as $donation): ?>
                     <tr>
                         <td><?php echo htmlspecialchars($donation['item_name']); ?></td>
-                        <td><?php echo ($donation['delivery_method'] ?? 'volunteer_assist') === 'self_delivery' ? '商家自運' : '志工協助'; ?></td>
+                        <td><?php echo ($donation['delivery_method'] ?? 'volunteer_assist') === 'self_delivery' ? '忠信派車' : '志工派車'; ?></td>
                         <td><code><?php echo htmlspecialchars($donation['seal_code'] ?? 'N/A'); ?></code></td>
                         <td>
                             <span class="status status-<?php echo $statusColors[$donation['status']] ?? 'secondary'; ?>">

@@ -255,9 +255,8 @@
                 <div class="form-group">
                     <label>配送方式*</label>
                     <select name="delivery_option" required>
-                        <option value="volunteer_delivery">志工配送</option>
-                        <option value="donor_delivery">商家自行運送</option>
-                        <option value="food_bank_pickup">食物銀行派車</option>
+                        <option value="volunteer_delivery">志工派車</option>
+                        <option value="donor_delivery">忠信派車</option>
                     </select>
                 </div>
                 <div class="form-group">
