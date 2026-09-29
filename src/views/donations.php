@@ -139,6 +139,7 @@ $rejected = array_filter($donations, function ($d) {
             <table class="data-table donations-table">
                 <thead>
                     <tr>
+                        <th>訂單編號</th>
                         <th>照片</th>
                         <th>捐贈者</th>
                         <th>物資</th>
@@ -173,6 +174,7 @@ $rejected = array_filter($donations, function ($d) {
                         ];
                         ?>
                         <tr>
+                            <td><code><?php echo htmlspecialchars($donation['order_number'] ?? '待產生'); ?></code></td>
                             <td><?php if (!empty($donation['photo_path'])): ?><a href="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" target="_blank" rel="noopener"><img src="<?php echo htmlspecialchars(APP_URL . '/' . $donation['photo_path']); ?>" alt="包裝前合照" class="donation-thumb"></a><?php else: ?>－<?php endif; ?></td>
                             <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
                             <td><?php echo htmlspecialchars($donation['item_name'] ?? '-'); ?></td>

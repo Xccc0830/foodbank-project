@@ -236,6 +236,7 @@ CREATE TABLE `distribution_items` (
 
 CREATE TABLE `donations` (
   `donation_id` int(11) NOT NULL,
+  `order_number` varchar(30) DEFAULT NULL,
   `donor_id` int(11) DEFAULT NULL,
   `donor_name` varchar(100) NOT NULL,
   `donation_type` enum('food','supplies','money','other') NOT NULL,
@@ -290,6 +291,10 @@ INSERT INTO `donations` (`donation_id`, `donor_id`, `donor_name`, `donation_type
 (16, 13, '啊喔', 'food', 23.00, '包', '2026-09-19 18:41:58', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-20 00:45:29', NULL, NULL, NULL, '2026-09-22 14:15:53', 'waiting_pickup', NULL, 1, '運送評估選項：機車', '2026-09-19 10:41:58', '2026-09-22 06:15:53', '白米飯', 23.00, '23 × 23 × 23 cm', '2026-09-25', '2026-09-26 00:41:00', 'volunteer_delivery', 'motorcycle', NULL, NULL, NULL, 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
 (17, 13, 'test1', 'supplies', 1093.00, '件', '2026-09-22 14:42:23', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 14:43:46', NULL, NULL, NULL, '2026-09-22 14:48:12', 'waiting_pickup', NULL, 1, '運送評估選項：貨車', '2026-09-22 06:42:23', '2026-09-22 06:48:12', '1', 23.00, '23 × 23 × 23 箱', '2026-09-04', '2026-09-25 14:41:00', 'food_bank_pickup', 'none', NULL, NULL, NULL, 1, NULL, '台北', '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
 (18, 13, 'test2', 'food', 24.00, '件', '2026-09-22 14:43:04', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 14:43:23', NULL, NULL, NULL, '2026-09-22 15:18:33', 'waiting_pickup', NULL, 1, '運送評估選項：汽車', '2026-09-22 06:43:04', '2026-09-22 07:18:33', '衛生紙', 24.00, '24 × 24 × 24 cm', '2026-09-29', '2026-09-18 14:42:00', 'food_bank_pickup', 'car', NULL, NULL, NULL, 1, NULL, '台北', '[\"points\",\"goods\",\"free\",\"service_hours\"]');
+
+UPDATE `donations`
+SET `order_number` = CONCAT('FB-', DATE_FORMAT(`donation_date`, '%Y%m%d'), '-', LPAD(`donation_id`, 6, '0'))
+WHERE `order_number` IS NULL OR `order_number` = '';
 
 -- --------------------------------------------------------
 
@@ -942,6 +947,7 @@ ALTER TABLE `distribution_items`
 --
 ALTER TABLE `donations`
   ADD PRIMARY KEY (`donation_id`),
+  ADD UNIQUE KEY `unique_order_number` (`order_number`),
   ADD KEY `donation_date` (`donation_date`),
   ADD KEY `status` (`status`),
   ADD KEY `received_by` (`received_by`),

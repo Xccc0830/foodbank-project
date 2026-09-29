@@ -297,10 +297,10 @@ $roleLabels = [
     'donor' => '企業會員',
 ];
 $rolePages = [
-    'admin' => ['dashboard', 'donations', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'material_transport', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
+    'admin' => ['dashboard', 'donations', 'order_tracking', 'donations_evaluation', 'donation_materials_review', 'deliveries', 'material_transport', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
+    'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'volunteer_management', 'carbon_report', 'notifications', 'certificate', 'activity_certificate'],
     'volunteer' => ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'donor' => ['dashboard', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate'],
+    'donor' => ['dashboard', 'order_tracking', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate'],
 ];
 
 // 簡單的路由系統
@@ -313,6 +313,7 @@ $page = basename($page);
 $menu_items = [
     'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
     'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
+    'order_tracking' => ['label' => '訂單追蹤', 'icon' => 'fa-solid fa-list-check'],
     'donations_evaluation' => ['label' => '評估派車', 'icon' => 'fa-solid fa-clipboard-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
     'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],

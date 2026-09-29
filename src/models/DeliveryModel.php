@@ -38,8 +38,9 @@ class DeliveryModel extends BaseModel {
     }
 
     public function getAllDeliveries() {
-        $sql = "SELECT d.*, u.full_name AS volunteer_name
+        $sql = "SELECT d.*, n.order_number, u.full_name AS volunteer_name
                 FROM deliveries d
+            LEFT JOIN donations n ON n.donation_id = d.donation_id
                 LEFT JOIN users u ON u.user_id = d.volunteer_id
                 ORDER BY d.created_at DESC";
         return $this->query($sql);

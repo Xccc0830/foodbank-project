@@ -9,12 +9,39 @@ require_once 'BaseModel.php';
 class DonationModel extends BaseModel {
     protected $table = 'donations';
 
+    public function __construct() {
+        parent::__construct();
+        $this->ensureOrderNumberColumn();
+    }
+
+    private function ensureOrderNumberColumn() {
+        $result = $this->db->query("SHOW COLUMNS FROM donations LIKE 'order_number'");
+        if ($result && $result->num_rows === 0) {
+            $this->db->query("ALTER TABLE donations ADD order_number VARCHAR(30) NULL AFTER donation_id");
+        }
+
+        $this->db->query(
+            "UPDATE donations
+             SET order_number = CONCAT('FB-', DATE_FORMAT(donation_date, '%Y%m%d'), '-', LPAD(donation_id, 6, '0'))
+             WHERE order_number IS NULL OR order_number = ''"
+        );
+        $indexResult = $this->db->query("SHOW INDEX FROM donations WHERE Key_name = 'unique_order_number'");
+        if ($indexResult && $indexResult->num_rows === 0) {
+            $this->db->query("ALTER TABLE donations ADD UNIQUE KEY unique_order_number (order_number)");
+        }
+    }
+
+    private function generateOrderNumber() {
+        return 'FB-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
+    }
+
     /**
      * 取得所有捐贈記錄
      */
     public function getAllDonations($status = null, $donorId = null) {
         $sql = "SELECT * FROM {$this->table}";
         $conditions = [];
+        $having = '';
         
         if ($status) {
             $status = $this->db->real_escape_string($status);
@@ -57,6 +84,7 @@ class DonationModel extends BaseModel {
      */
     public function addDonation($donor_data) {
         $donor_data['donation_date'] = date('Y-m-d H:i:s');
+        $donor_data['order_number'] = $this->generateOrderNumber();
         return $this->insert($donor_data);
     }
 
@@ -338,6 +366,38 @@ class DonationModel extends BaseModel {
         $sql = "SELECT * FROM {$this->table}
                 WHERE status IN ('published', 'waiting_pickup', 'volunteer_received', 'in_transit')
                 ORDER BY published_at DESC";
+        return $this->query($sql);
+    }
+
+    public function getOrderTracking($donorId = null, $status = null) {
+        $conditions = [];
+        if ($donorId !== null) {
+            $conditions[] = 'n.donor_id = ' . (int) $donorId;
+        }
+        if ($status !== null && in_array($status, ['pending', 'processing', 'in_transit', 'completed', 'rejected'], true)) {
+            $status = $this->db->real_escape_string($status);
+            $having = "HAVING order_status = '{$status}'";
+        }
+
+        $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        $sql = "SELECT n.donation_id, n.order_number, n.donor_name, n.item_name, n.quantity, n.unit,
+                       n.donation_date, n.status AS donation_status, n.current_status,
+                       COUNT(d.delivery_id) AS delivery_count,
+                       SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) AS completed_delivery_count,
+                       MAX(d.status) AS latest_delivery_status,
+                       CASE
+                           WHEN n.status = 'rejected' THEN 'rejected'
+                           WHEN COUNT(d.delivery_id) > 0 AND SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) = COUNT(d.delivery_id) THEN 'completed'
+                           WHEN COUNT(d.delivery_id) > 0 AND SUM(CASE WHEN d.status IN ('claimed', 'picked_up', 'exception') THEN 1 ELSE 0 END) > 0 THEN 'in_transit'
+                           WHEN n.status IN ('pending', 'assessed') THEN 'pending'
+                           ELSE 'processing'
+                       END AS order_status
+                FROM donations n
+                LEFT JOIN deliveries d ON d.donation_id = n.donation_id
+                {$where}
+                GROUP BY n.donation_id
+                {$having}
+                ORDER BY n.donation_date DESC";
         return $this->query($sql);
     }
 }
