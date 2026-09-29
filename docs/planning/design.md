@@ -1,7 +1,29 @@
 # Food Bank Admin Design System
 
 Last Updated: 2026-08-18  
-Scope: Admin Web UI (Dashboard, Donations, Inventory, Beneficiaries, Purchases, Settings)
+Scope: Management UI, member experience, delivery, donations, order tracking, sustainability reports
+
+## 0. Current System Architecture
+
+```mermaid
+flowchart TD
+	Member[會員\n一般會員／企業會員]
+	Staff[管理介面\nfoodbank_staff]
+	Member -->|企業會員捐贈| Donation[物資捐贈主表]
+	Donation --> Items[物資規格明細]
+	Staff --> Review[物資審查]
+	Review --> Dispatch{配送方式}
+	Dispatch --> Loyal[忠信派車]
+	Dispatch --> MemberDispatch[志工派車／配送會員接單]
+	MemberDispatch --> Delivery[配送任務]
+	Loyal --> Delivery
+	Delivery --> Order[訂單追蹤與訂單編號]
+	Member --> Sustainability[企業永續報告]
+	Staff --> Care[關懷戶管理]
+	Care --> Stock[內部物資分配與庫存異動]
+```
+
+庫存只作為關懷戶分配的內部資料能力，不再提供獨立的庫存管理入口；舊資料表保留以支援歷史紀錄。
 
 ## 1. Design Goals
 
@@ -176,7 +198,7 @@ Scope: Admin Web UI (Dashboard, Donations, Inventory, Beneficiaries, Purchases, 
 - public/assets/css/style.css
 - public/index.php
 - src/views/dashboard.php
-- src/views/donations.php
+- src/views/donation_materials_review.php
 - src/views/inventory.php
 - src/views/beneficiaries.php
 - src/views/purchases.php

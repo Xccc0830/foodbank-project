@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (in_array($decision, ['accepted', 'rejected'], true) && $donationId > 0) {
             if ($decision === 'accepted' && !in_array($foodbankDeliveryOption, ['food_bank_pickup', 'volunteer_delivery'], true)) {
-                $reviewMessage = ['type' => 'error', 'text' => '請先選擇配送方式後再接受物資。'];
+                $reviewMessage = ['type' => 'error', 'text' => '請先選擇配送方式後再完成評估或發布。'];
             } elseif ($decision === 'rejected' && $rejectionReason === '') {
                 $reviewMessage = ['type' => 'error', 'text' => '請填寫婉拒原因後再送出。'];
             } else {
@@ -118,11 +118,13 @@ $donationTypeLabels = [
     'other' => '其他',
 ];
 $deliveryOptionLabels = [
-    'volunteer_delivery' => '忠信GO RIDER派車',
+    'donor_delivery' => '忠信派車',
+    'volunteer_delivery' => '志工派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
-    'volunteer_delivery' => '忠信GO RIDER派車',
+    'donor_delivery' => '忠信派車',
+    'volunteer_delivery' => '志工派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
@@ -385,7 +387,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
 <div class="card mt-32">
     <div class="card-header">
         <h2>已發布</h2>
-        <p>已公開到平台、可供忠信GO RIDER查看與配送的物資。</p>
+        <p>已公開到平台、可供配送會員查看與配送的物資。</p>
     </div>
     <div class="card-body">
         <?php if (!empty($publishedDonations)): ?>
@@ -489,7 +491,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <div class="foodbank-delivery-options">
                             <strong>配送方式</strong>
                             <label><input type="radio" name="foodbank_delivery_option" value="food_bank_pickup" required> 忠信派車</label>
-                            <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery" required> 忠信GO RIDER派車</label>
+                            <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery"> 志工派車</label>
                         </div>
                         <div class="modal-actions">
                             <button type="button" id="showRejectionReasonButton" class="btn btn-danger">婉拒</button>
@@ -506,7 +508,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <h3>發布物資資訊</h3>
                             <div class="grid-2">
                                 <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
-                                <label>商家地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>"></label>
+                                <label>商家取貨地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>" required></label>
                                 <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
                                 <label>數量<input type="number" step="1" min="1" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
                                 <label>重量（公斤）<input type="number" step="1" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
@@ -541,7 +543,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <p class="form-hint">以下內容預設為商家填寫的資料，食物銀行可在發布前修改。</p>
                         <div class="grid-2">
                             <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
-                            <label>商家地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>商家取貨地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>" required></label>
                             <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
                             <label>數量<input type="number" step="1" min="1" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
                             <label>重量（公斤）<input type="number" step="1" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
@@ -603,7 +605,6 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
         const showPublishFieldsButton = document.getElementById('showPublishFieldsButton');
         const publishFields = document.getElementById('publishFields');
         const publishNowInput = document.getElementById('publishNowInput');
-        const deliveryCheckboxes = document.querySelectorAll('input[name="foodbank_delivery_option"]');
         const closeModal = function () {
             if (reviewModal) {
                 reviewModal.remove();
@@ -640,20 +641,6 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                 }
             });
         }
-
-        deliveryCheckboxes.forEach(function (checkbox) {
-            checkbox.addEventListener('change', function () {
-                if (!checkbox.checked) {
-                    return;
-                }
-
-                deliveryCheckboxes.forEach(function (otherCheckbox) {
-                    if (otherCheckbox !== checkbox) {
-                        otherCheckbox.checked = false;
-                    }
-                });
-            });
-        });
 
         const splitRadios = document.querySelectorAll('input[name="split_enabled"]');
         const splitCountInput = document.querySelector('input[name="split_count"]');
