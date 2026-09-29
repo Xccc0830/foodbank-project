@@ -1488,6 +1488,12 @@ ALTER TABLE `warehouses`
 ALTER TABLE `sale_items` DROP FOREIGN KEY `sale_items_ibfk_2`;
 UPDATE `notifications` SET `message` = REPLACE(`message`, '志工', '忠信GO RIDER') WHERE `message` LIKE '%志工%';
 UPDATE `activities` SET `title` = REPLACE(`title`, '志工', '忠信GO RIDER') WHERE `title` LIKE '%志工%';
+UPDATE `donations` SET `delivery_option` = 'food_bank_pickup' WHERE `delivery_option` = 'donor_delivery';
+UPDATE `deliveries` SET `delivery_method` = 'food_bank' WHERE `delivery_method` = 'donor';
+ALTER TABLE `donations`
+  MODIFY `delivery_option` enum('food_bank_pickup','volunteer_delivery') NOT NULL DEFAULT 'volunteer_delivery';
+ALTER TABLE `deliveries`
+  MODIFY `delivery_method` enum('food_bank','volunteer') NOT NULL DEFAULT 'volunteer';
 CREATE TABLE `donation_items` (
   `item_id` int(11) NOT NULL AUTO_INCREMENT,
   `donation_id` int(11) NOT NULL,

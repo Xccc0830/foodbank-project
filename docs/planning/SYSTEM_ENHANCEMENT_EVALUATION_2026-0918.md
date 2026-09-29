@@ -125,16 +125,16 @@
 
 ### 新建：
 1. `src/views/donations_evaluation.php` - 完整的評估派車管理界面
-2. `database/migrations/002_donations_evaluation_system.sql` - 數據庫擴展
+2. `database/shinigyi_foodbank (4).sql` - 數據庫擴展已整合至主快照
 
 ---
 
 ## 🚀 部署步驟
 
-### 1. 執行數據庫遷移
+### 1. 匯入整合 SQL
 ```bash
-# 運行遷移文件
-mysql -u [user] -p [database] < database/migrations/002_donations_evaluation_system.sql
+# 匯入主資料庫快照
+mysql -u [user] -p [database] < "database/shinigyi_foodbank (4).sql"
 ```
 
 ### 2. 驗證功能
