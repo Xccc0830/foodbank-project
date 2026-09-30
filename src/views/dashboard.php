@@ -149,6 +149,7 @@ $dashboardRoleLabels = [
             <div class="stat-card"><h3>避免浪費估算</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['food_waste_avoided'], 1); ?></div><p class="stat-label">kgCO2e</p></div>
             <div class="stat-card"><h3>配送里程</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['total_distance'], 1); ?></div><p class="stat-label">公里</p></div>
         </div>
+        <a class="btn btn-secondary btn-sm mt-20" href="?page=carbon_report"><i class="fas fa-arrow-right"></i> 查看年度報告</a>
     </div>
 </div>
 <?php endif; ?>

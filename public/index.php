@@ -286,7 +286,7 @@ $roleLabels = [
 $rolePages = [
     'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
     'member' => $memberType === 'enterprise'
-        ? ['dashboard', 'order_tracking', 'activities', 'rewards', 'notifications', 'donation_materials', 'certificate', 'activity_certificate']
+        ? ['dashboard', 'order_tracking', 'activities', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate']
         : ($memberType === 'general'
             ? ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate']
             : ['dashboard']),
@@ -307,7 +307,7 @@ $menu_items = [
     'activities' => ['label' => $role === 'member' ? '活動報名' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift'],
-    'carbon_report' => ['label' => '永續報表', 'icon' => 'fa-solid fa-leaf'],
+    'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell'],
     'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open'],
