@@ -2,6 +2,7 @@
 require_once BASE_PATH . '/src/models/DonationModel.php';
 require_once BASE_PATH . '/src/models/DeliveryModel.php';
 require_once BASE_PATH . '/src/helpers/UploadHelper.php';
+require_once BASE_PATH . '/src/helpers/DistanceHelper.php';
 require_once BASE_PATH . '/src/models/NotificationModel.php';
 
 $donationModel = new DonationModel();
@@ -22,6 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $deliveryTime = trim((string) ($_POST['delivery_time'] ?? '')) ?: null;
     $donorAddress = trim((string) ($_POST['donor_address'] ?? ''));
     $deliveryAddress = trim((string) ($_POST['delivery_address'] ?? ''));
+    $estimatedDistanceKm = is_numeric($_POST['estimated_distance_km'] ?? null) ? round((float) $_POST['estimated_distance_km'], 2) : null;
+    $estimatedDurationMinutes = is_numeric($_POST['estimated_duration_minutes'] ?? null) ? (int) round((float) $_POST['estimated_duration_minutes']) : null;
     $beneficiaryId = (int) ($_POST['beneficiary_id'] ?? 0);
     $notes = trim((string) ($_POST['notes'] ?? ''));
 
@@ -137,6 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         'delivery_date' => $deliveryDate,
         'delivery_time' => $deliveryTime,
         'delivery_address' => $deliveryAddress !== '' ? $deliveryAddress : null,
+        'estimated_distance_km' => $estimatedDistanceKm,
+        'estimated_duration_minutes' => $estimatedDurationMinutes,
         'beneficiary_id' => $beneficiaryId > 0 ? $beneficiaryId : null,
     ];
 
@@ -323,7 +328,7 @@ if ($beneficiaryResult) {
             </button>
         </div>
         <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" data-distance-estimate-form>
             <input type="hidden" name="action" value="add_material_donation">
             <div class="material-stepper" aria-label="新增物資步驟">
                 <span class="material-step is-active" data-step-indicator="1">1 配送資訊</span>
@@ -350,6 +355,16 @@ if ($beneficiaryResult) {
                     <div class="form-group"><label for="deliveryTime">預計配送時間 <span class="required-mark">*</span></label><input id="deliveryTime" type="time" name="delivery_time" required></div>
                 </div>
                 <div class="form-group"><label for="deliveryAddress">配送地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" placeholder="物資送到哪裡" required></div>
+                <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
+                    <label>預計運送距離與時間</label>
+                    <div class="distance-estimate-box">
+                        <span class="distance-estimate-item"><i class="fas fa-route"></i> <span data-distance-value>—</span></span>
+                        <span class="distance-estimate-item"><i class="fas fa-clock"></i> <span data-duration-value>—</span></span>
+                    </div>
+                    <input type="hidden" name="estimated_distance_km" data-distance-input>
+                    <input type="hidden" name="estimated_duration_minutes" data-duration-input>
+                </div>
+                <p class="distance-estimate-status" data-distance-status hidden></p>
                 <div class="form-group"><label for="beneficiaryId">關懷戶</label><select id="beneficiaryId" name="beneficiary_id"><option value="">選擇關懷戶</option><?php foreach ($beneficiaries as $beneficiary): ?><option value="<?php echo (int) $beneficiary['beneficiary_id']; ?>"><?php echo htmlspecialchars($beneficiary['beneficiary_code'] . '｜' . $beneficiary['last_name'] . $beneficiary['first_name'] . ($beneficiary['address'] ? '｜' . $beneficiary['address'] : '')); ?></option><?php endforeach; ?></select></div>
                 <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 選擇志工派車後，配送會員接單時才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
@@ -501,6 +516,10 @@ if ($beneficiaryResult) {
                                     <strong>配送日期</strong><?php echo htmlspecialchars($task['delivery_date'] ?? '未設定'); ?>
                                     <strong>配送時間</strong><?php echo htmlspecialchars($task['delivery_time'] ?? '未設定'); ?>
                                     <strong>配送地址</strong><?php echo htmlspecialchars($task['delivery_address'] ?? '未設定'); ?>
+                                    <?php if (!empty($task['estimated_distance_km'])): ?>
+                                        <strong>預計運送距離</strong><?php echo htmlspecialchars(formatDistanceText($task['estimated_distance_km'])); ?>
+                                        <strong>預計運送時間</strong><?php echo htmlspecialchars(formatDurationText($task['estimated_duration_minutes'] ?? 0)); ?>
+                                    <?php endif; ?>
                                 </div>
                             <?php endif; ?>
                         </td>
@@ -726,11 +745,18 @@ if ($beneficiaryResult) {
     .required-mark { color: #dc2626; }
     .delivery-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .delivery-mode-options label { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; }
+    .delivery-mode-options input[type="radio"] { width: auto; flex: 0 0 auto; margin: 3px 0 0; padding: 0; }
+    .delivery-mode-options label > span { flex: 1; min-width: 0; }
     .delivery-mode-options label:has(input:checked) { border-color: #0f766e; background: #f0fdfa; }
     .delivery-mode-options strong, .delivery-mode-options small { display: block; }
     .delivery-mode-options small { margin-top: 4px; color: #64748b; }
     .dispatch-details { margin: 18px 0; padding: 18px; border: 1px solid #99f6e4; border-radius: 8px; background: #f0fdfa; }
     .dispatch-details-note { margin: 18px 0; padding: 12px 14px; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 8px; }
+    .distance-estimate-box { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 14px; border: 1px solid #99f6e4; border-radius: 8px; background: #f0fdfa; }
+    .distance-estimate-item { display: flex; align-items: center; gap: 8px; font-weight: 600; color: #0f766e; }
+    .distance-estimate-item i { color: #14b8a6; }
+    .distance-estimate-status { margin: 8px 0 0; font-size: 12px; color: #64748b; }
+    .distance-estimate-status.is-error { color: #dc2626; }
     .material-item-row { margin-bottom: 18px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
     .material-items-summary { margin-top: 24px; }
     .material-items-summary h3 { margin-bottom: 12px; }

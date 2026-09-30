@@ -58,6 +58,11 @@ if (!empty($_SESSION['user']['username'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !verifyCsrfToken($_POST['csrf_token'] ?? null)) {
     http_response_code(403);
+    if ($action === 'delivery_location') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => '登入狀態已逾時，請重新登入後再分享位置。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     exit('請重新整理頁面後再提交表單。');
 }
 
@@ -263,6 +268,20 @@ if ($action === 'register') {
     exit;
 }
 
+if (in_array($action, ['delivery_tracking', 'delivery_location'], true) && empty($_SESSION['user'])) {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => '登入狀態已逾時，請重新登入後查看配送資訊。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'calculate_distance' && empty($_SESSION['user'])) {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => '登入狀態已逾時，請重新登入後再計算距離。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($action === 'login' || empty($_SESSION['user'])) {
     $error = $loginError ?? null;
     $registered = isset($_GET['registered']);
@@ -271,6 +290,124 @@ if ($action === 'login' || empty($_SESSION['user'])) {
 }
 
 $currentUser = $_SESSION['user'];
+if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    require_once BASE_PATH . '/src/models/DeliveryModel.php';
+    $deliveryModel = new DeliveryModel();
+    $currentUserId = (int) ($currentUser['user_id'] ?? 0);
+    $currentRole = $currentUser['role'] ?? 'member';
+
+    if ($action === 'delivery_tracking' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+        $deliveryId = filter_input(INPUT_GET, 'delivery_id', FILTER_VALIDATE_INT);
+        if (!$deliveryId || $deliveryId < 1) {
+            http_response_code(400);
+            echo json_encode(['error' => '配送任務編號無效。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $tracking = $deliveryModel->getLiveTracking($deliveryId, $currentUserId, $currentRole);
+        if ($tracking === false) {
+            http_response_code(500);
+            echo json_encode(['error' => '目前無法取得配送位置。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($tracking === null) {
+            http_response_code(404);
+            echo json_encode(['error' => '找不到配送任務或您無權查看。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        echo json_encode($tracking, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    if ($action === 'delivery_location' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $deliveryId = filter_var($_POST['delivery_id'] ?? null, FILTER_VALIDATE_INT);
+        $operation = $_POST['operation'] ?? '';
+        if (!$deliveryId || $deliveryId < 1) {
+            http_response_code(400);
+            echo json_encode(['error' => '配送任務編號無效。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if ($operation === 'stop') {
+            if ($currentRole !== 'member' || ($currentUser['member_type'] ?? '') !== 'general') {
+                http_response_code(403);
+                echo json_encode(['error' => '只有接單的配送會員可以停止分享位置。'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            if (!$deliveryModel->stopLiveLocation($deliveryId, $currentUserId)) {
+                http_response_code(500);
+                echo json_encode(['error' => '停止分享位置失敗。'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $latitude = $_POST['latitude'] ?? null;
+        $longitude = $_POST['longitude'] ?? null;
+        $accuracy = $_POST['accuracy'] ?? null;
+        if ($operation !== 'update' || $currentRole !== 'member' || ($currentUser['member_type'] ?? '') !== 'general') {
+            http_response_code(403);
+            echo json_encode(['error' => '只有接單的配送會員可以分享位置。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (!$deliveryModel->updateLiveLocation($deliveryId, $currentUserId, $latitude, $longitude, $accuracy)) {
+            http_response_code(400);
+            echo json_encode(['error' => '位置更新失敗；請確認任務已取貨且座標有效。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    http_response_code(405);
+    header('Allow: ' . ($action === 'delivery_tracking' ? 'GET' : 'POST'));
+    echo json_encode(['error' => '不支援的請求方式。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'calculate_distance') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        header('Allow: GET');
+        echo json_encode(['error' => '不支援的請求方式。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    require_once BASE_PATH . '/src/helpers/DistanceHelper.php';
+    $origin = trim((string) ($_GET['origin'] ?? ''));
+    $destination = trim((string) ($_GET['destination'] ?? ''));
+    if ($origin === '' || $destination === '') {
+        http_response_code(400);
+        echo json_encode(['error' => '請先輸入取貨地址與送達地址。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $result = calculateAddressDistance($origin, $destination);
+    if (isset($result['error'])) {
+        http_response_code(422);
+        echo json_encode(['error' => $result['error']], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'distance_km' => $result['distance_km'],
+        'duration_minutes' => $result['duration_minutes'],
+        'distance_text' => formatDistanceText($result['distance_km']),
+        'duration_text' => formatDurationText($result['duration_minutes']),
+        'approximate' => !empty($result['approximate']),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 require_once BASE_PATH . '/src/models/NotificationModel.php';
 $notificationModel = new NotificationModel();
 $unreadNotificationCount = 0;

@@ -174,6 +174,21 @@ CREATE TABLE `deliveries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- 資料表結構 `delivery_locations`
+--
+
+DROP TABLE IF EXISTS `delivery_locations`;
+CREATE TABLE `delivery_locations` (
+  `delivery_id` int(11) NOT NULL,
+  `latitude` decimal(10,7) DEFAULT NULL,
+  `longitude` decimal(10,7) DEFAULT NULL,
+  `accuracy_meters` decimal(8,2) DEFAULT NULL,
+  `is_sharing` tinyint(1) NOT NULL DEFAULT 0,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`delivery_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- 傾印資料表的資料 `deliveries`
 --
 
@@ -252,6 +267,8 @@ CREATE TABLE `donations` (
   `delivery_date` date DEFAULT NULL,
   `delivery_time` time DEFAULT NULL,
   `delivery_address` varchar(255) DEFAULT NULL,
+  `estimated_distance_km` decimal(8,2) DEFAULT NULL,
+  `estimated_duration_minutes` smallint(5) UNSIGNED DEFAULT NULL,
   `beneficiary_id` int(11) DEFAULT NULL,
   `dispatch_contact_name` varchar(100) DEFAULT NULL,
   `dispatch_contact_phone` varchar(30) DEFAULT NULL,

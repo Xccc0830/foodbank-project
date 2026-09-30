@@ -12,6 +12,7 @@ class DonationModel extends BaseModel {
     public function __construct() {
         parent::__construct();
         $this->ensureOrderNumberColumn();
+        $this->ensureEstimatedDistanceColumns();
     }
 
     private function ensureOrderNumberColumn() {
@@ -28,6 +29,18 @@ class DonationModel extends BaseModel {
         $indexResult = $this->db->query("SHOW INDEX FROM donations WHERE Key_name = 'unique_order_number'");
         if ($indexResult && $indexResult->num_rows === 0) {
             $this->db->query("ALTER TABLE donations ADD UNIQUE KEY unique_order_number (order_number)");
+        }
+    }
+
+    private function ensureEstimatedDistanceColumns() {
+        $distanceColumn = $this->db->query("SHOW COLUMNS FROM donations LIKE 'estimated_distance_km'");
+        if ($distanceColumn && $distanceColumn->num_rows === 0) {
+            $this->db->query("ALTER TABLE donations ADD estimated_distance_km DECIMAL(8,2) NULL AFTER delivery_address");
+        }
+
+        $durationColumn = $this->db->query("SHOW COLUMNS FROM donations LIKE 'estimated_duration_minutes'");
+        if ($durationColumn && $durationColumn->num_rows === 0) {
+            $this->db->query("ALTER TABLE donations ADD estimated_duration_minutes SMALLINT UNSIGNED NULL AFTER estimated_distance_km");
         }
     }
 
@@ -258,6 +271,7 @@ class DonationModel extends BaseModel {
         $sql = "SELECT n.donation_id, n.order_number, n.donor_name, n.item_name, n.quantity, n.unit,
                        n.donation_date, n.status AS donation_status, n.current_status,
                        COUNT(d.delivery_id) AS delivery_count,
+                       GROUP_CONCAT(d.delivery_id ORDER BY d.delivery_id) AS delivery_ids,
                        SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) AS completed_delivery_count,
                        MAX(d.status) AS latest_delivery_status,
                        CASE

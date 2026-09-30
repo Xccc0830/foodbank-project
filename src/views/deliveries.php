@@ -71,6 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $isOfficial && $deliveryModel->completeDelivery((int) $_POST['delivery_id'])
             ? ['type' => 'success', 'text' => '已確認送達，公益點數已記錄。']
             : ['type' => 'error', 'text' => '送達確認失敗。'];
+    } elseif ($action === 'complete_delivery_volunteer') {
+        $message = $isVolunteer && $deliveryModel->completeDeliveryByVolunteer((int) $_POST['delivery_id'], $currentUserId)
+            ? ['type' => 'success', 'text' => '行程已完成，公益點數已記錄。']
+            : ['type' => 'error', 'text' => '完成行程失敗，請確認任務狀態為已取貨。'];
     } elseif ($action === 'load_edit_delivery') {
         if (!$isOfficial) {
             $message = ['type' => 'error', 'text' => '配送會員無法編輯配送任務。'];
@@ -131,7 +135,158 @@ $completedDeliveries = array_filter($deliveries, static function ($delivery) use
 $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
     return $delivery['status'] !== 'delivered';
 });
+
+$activeDriverTrip = null;
+if ($isVolunteer) {
+    foreach ($deliveries as $delivery) {
+        if ((int) ($delivery['volunteer_id'] ?? 0) === $currentUserId && in_array($delivery['status'], ['claimed', 'picked_up'], true)) {
+            $activeDriverTrip = $delivery;
+            break;
+        }
+    }
+}
 ?>
+
+<?php if ($isVolunteer): ?>
+<style>
+    .driver-trip-card { position: relative; margin-bottom: 28px; border-radius: var(--radius-lg, 16px); overflow: hidden; box-shadow: var(--shadow-lg, 0 14px 32px rgba(17,24,39,.12)); background: #0f172a; color: #f8fafc; }
+    .driver-trip-map { position: relative; min-height: 220px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; transition: background .25s ease, color .25s ease; background: linear-gradient(160deg, #0b1222 0%, #131b31 55%, #0f172a 100%); }
+    .driver-trip-map[data-theme="light"] { background: linear-gradient(160deg, #eef2ff 0%, #f8fafc 55%, #ffffff 100%); color: #1f2937; }
+    .driver-trip-map-topbar { display: flex; align-items: center; justify-content: space-between; }
+    .driver-trip-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(99,91,255,.22); color: #c7c2ff; }
+    .driver-trip-map[data-theme="light"] .driver-trip-status-pill { background: rgba(99,91,255,.12); color: #4E47E5; }
+    .driver-map-theme-toggle { border: 1px solid rgba(248,250,252,.3); background: rgba(255,255,255,.08); color: inherit; border-radius: 999px; width: 36px; height: 36px; cursor: pointer; font-size: 14px; }
+    .driver-trip-map[data-theme="light"] .driver-map-theme-toggle { border-color: rgba(15,23,42,.15); background: rgba(15,23,42,.06); }
+    .driver-trip-route { display: flex; align-items: center; gap: 10px; margin: 28px 0; }
+    .driver-trip-pin { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 15px; flex: 0 0 auto; }
+    .driver-trip-pin-start { background: #14b8a6; color: #06281f; }
+    .driver-trip-pin-end { background: #f97316; color: #3a1c02; }
+    .driver-trip-route-line { flex: 1; position: relative; height: 3px; border-radius: 3px; background: repeating-linear-gradient(90deg, #635BFF 0, #635BFF 10px, transparent 10px, transparent 18px); }
+    .driver-trip-map[data-theme="light"] .driver-trip-route-line { background: repeating-linear-gradient(90deg, #4E47E5 0, #4E47E5 10px, transparent 10px, transparent 18px); }
+    .driver-trip-route-line::after { content: "\f3c5"; font-family: "Font Awesome 5 Free"; font-weight: 900; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: 14px; color: #f8fafc; }
+    .driver-trip-map[data-theme="light"] .driver-trip-route-line::after { color: #4E47E5; }
+    .driver-navigate-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: none; background: #635BFF; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; }
+    .driver-navigate-btn:hover { background: #4E47E5; }
+    .driver-trip-sheet { background: var(--bg-primary, #fff); color: var(--text-primary, #111827); padding: 18px 20px 20px; }
+    .driver-trip-sheet-handle { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; border: none; background: transparent; cursor: pointer; padding: 0 0 12px; }
+    .driver-trip-sheet-handle span { width: 44px; height: 4px; border-radius: 4px; background: var(--gray-300, #d1d5db); }
+    .driver-trip-sheet-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+    .driver-trip-sheet-summary strong { display: block; font-size: 15px; }
+    .driver-trip-sheet-summary small { color: var(--text-secondary, #6b7280); }
+    .driver-trip-sheet-details { margin-top: 16px; display: grid; gap: 14px; }
+    .driver-trip-sheet-details[hidden] { display: none; }
+    .driver-trip-stop { display: flex; gap: 12px; align-items: flex-start; }
+    .driver-trip-stop i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-secondary, #f7f9fc); color: var(--primary-color, #635BFF); flex: 0 0 auto; }
+    .driver-trip-stop strong { display: block; font-size: 13px; color: var(--text-secondary, #6b7280); }
+    .driver-trip-stop span { display: block; font-size: 14px; font-weight: 600; }
+    .driver-trip-note { margin-top: 4px; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-size: 12px; }
+    .driver-trip-checklist { margin-top: 16px; display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--bg-secondary, #f7f9fc); }
+    .driver-trip-checklist label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .driver-action-button { margin-top: 16px; width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(90deg, #635BFF, #7A73FF); box-shadow: 0 10px 24px rgba(99,91,255,.35); }
+    .driver-action-button.driver-action-complete { background: linear-gradient(90deg, #10B981, #34d399); box-shadow: 0 10px 24px rgba(16,185,129,.35); }
+    .driver-action-button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+    .driver-action-button i { transition: transform .2s ease; }
+    .driver-action-button:not(:disabled):hover i { transform: translateX(4px); }
+</style>
+<?php endif; ?>
+
+<?php if ($activeDriverTrip):
+    $tripIsPickupPhase = $activeDriverTrip['status'] === 'claimed';
+    $tripDestinationLabel = $tripIsPickupPhase ? '前往商家取件' : '前往顧客送達';
+    $tripStoreName = $activeDriverTrip['donor_name'] ?? '合作商家';
+    $tripOrigin = $tripIsPickupPhase ? '目前位置' : $activeDriverTrip['pickup_address'];
+    $tripDestinationAddress = $tripIsPickupPhase ? $activeDriverTrip['pickup_address'] : $activeDriverTrip['delivery_address'];
+    $navigationUrl = 'https://www.google.com/maps/dir/?api=1&destination=' . urlencode($tripDestinationAddress);
+    $hasOtherStop = false;
+    foreach ($deliveries as $otherDelivery) {
+        if ((int) $otherDelivery['delivery_id'] === (int) $activeDriverTrip['delivery_id']) {
+            continue;
+        }
+        if ((int) ($otherDelivery['volunteer_id'] ?? 0) === $currentUserId && in_array($otherDelivery['status'], ['claimed', 'picked_up'], true)) {
+            $hasOtherStop = true;
+            break;
+        }
+    }
+?>
+<div class="driver-trip-card" data-driver-trip data-status="<?php echo htmlspecialchars($activeDriverTrip['status']); ?>">
+    <div class="driver-trip-map" data-theme="dark" data-map-theme>
+        <div class="driver-trip-map-topbar">
+            <span class="driver-trip-status-pill"><i class="fas fa-route"></i> <?php echo htmlspecialchars($tripDestinationLabel); ?></span>
+            <button type="button" class="driver-map-theme-toggle" data-map-theme-toggle aria-label="切換地圖淺色／深色模式"><i class="fas fa-moon" data-theme-icon></i></button>
+        </div>
+        <div class="driver-trip-route">
+            <span class="driver-trip-pin driver-trip-pin-start" title="<?php echo htmlspecialchars($tripOrigin); ?>"><i class="fas fa-location-arrow"></i></span>
+            <span class="driver-trip-route-line" aria-hidden="true"></span>
+            <span class="driver-trip-pin driver-trip-pin-end" title="<?php echo htmlspecialchars($tripDestinationAddress); ?>"><i class="fas <?php echo $tripIsPickupPhase ? 'fa-store' : 'fa-house-user'; ?>"></i></span>
+        </div>
+        <a class="driver-navigate-btn" href="<?php echo htmlspecialchars($navigationUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener"><i class="fas fa-diamond-turn-right"></i> 開始導航</a>
+    </div>
+    <div class="driver-trip-sheet" data-driver-sheet>
+        <button type="button" class="driver-trip-sheet-handle" data-sheet-toggle aria-expanded="false" aria-controls="driverTripDetails-<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
+            <span></span>
+            <div class="driver-trip-sheet-summary">
+                <span>
+                    <strong><?php echo htmlspecialchars($tripStoreName); ?></strong>
+                    <small><?php echo htmlspecialchars($tripDestinationAddress); ?></small>
+                </span>
+                <i class="fas fa-chevron-up" data-sheet-chevron></i>
+            </div>
+        </button>
+        <div class="driver-trip-sheet-details" id="driverTripDetails-<?php echo (int) $activeDriverTrip['delivery_id']; ?>" data-sheet-details hidden>
+            <div class="driver-trip-stop">
+                <i class="fas fa-store"></i>
+                <div><strong>取件商家</strong><span><?php echo htmlspecialchars($tripStoreName); ?></span><span><?php echo htmlspecialchars($activeDriverTrip['pickup_address']); ?></span></div>
+            </div>
+            <div class="driver-trip-stop">
+                <i class="fas fa-house-user"></i>
+                <div><strong>送達地址</strong><span><?php echo htmlspecialchars($activeDriverTrip['delivery_address']); ?></span></div>
+            </div>
+            <?php if ($hasOtherStop): ?>
+                <div class="driver-trip-note"><i class="fas fa-circle-info"></i> 這趟路線中，您沿途還有一站停靠點，請依序完成配送。</div>
+            <?php endif; ?>
+
+            <?php if ($tripIsPickupPhase): ?>
+                <form method="post" class="driver-trip-action-form" data-pickup-form>
+                    <?php echo csrfField(); ?>
+                    <input type="hidden" name="action" value="confirm_pickup">
+                    <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
+                    <div class="driver-trip-checklist">
+                        <label><input type="checkbox" name="seal_intact" data-pickup-check required> 防拆貼紙完整</label>
+                        <label><input type="checkbox" name="item_count_confirmed" data-pickup-check required> 已清點物資</label>
+                    </div>
+                    <button type="submit" class="driver-action-button" data-pickup-submit disabled><i class="fas fa-box-open"></i> 完成取件</button>
+                </form>
+                <form method="post" class="delivery-action-form">
+                    <?php echo csrfField(); ?>
+                    <input type="hidden" name="action" value="report_exception">
+                    <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
+                    <input name="exception_notes" placeholder="取件異常原因（例如找不到商家、物資短少）" required>
+                    <button class="btn btn-danger btn-sm" type="submit">回報異常</button>
+                </form>
+            <?php else: ?>
+                <div class="delivery-location-sharing" data-live-location data-delivery-id="<?php echo (int) $activeDriverTrip['delivery_id']; ?>" data-sharing="<?php echo !empty($activeDriverTrip['is_location_sharing']) ? 'true' : 'false'; ?>">
+                    <p class="delivery-location-sharing-status" aria-live="polite"><?php echo !empty($activeDriverTrip['is_location_sharing']) ? '定位分享已啟用；若重新開啟頁面，請繼續分享以更新位置。' : '開始分享即時位置後，捐贈者即可追蹤配送進度。'; ?></p>
+                    <button type="button" class="btn btn-primary btn-sm" data-start-location><?php echo !empty($activeDriverTrip['is_location_sharing']) ? '繼續分享定位' : '開始分享定位'; ?></button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-stop-location <?php echo empty($activeDriverTrip['is_location_sharing']) ? 'hidden' : ''; ?>>停止分享</button>
+                </div>
+                <form method="post" class="driver-trip-action-form">
+                    <?php echo csrfField(); ?>
+                    <input type="hidden" name="action" value="complete_delivery_volunteer">
+                    <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
+                    <button type="submit" class="driver-action-button driver-action-complete"><i class="fas fa-flag-checkered"></i> 完成行程</button>
+                </form>
+                <form method="post" class="delivery-action-form">
+                    <?php echo csrfField(); ?>
+                    <input type="hidden" name="action" value="report_exception">
+                    <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
+                    <input name="exception_notes" placeholder="配送異常原因（例如找不到地址、無人收貨）" required>
+                    <button class="btn btn-danger btn-sm" type="submit">回報異常</button>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="view-header">
     <div>
@@ -324,7 +479,9 @@ $pendingDeliveries = array_filter($deliveries, static function ($delivery) {
                     <td>
                         <div class="delivery-action-stack">
                             <?php if ($isVolunteer && ($delivery['delivery_method'] ?? 'volunteer') === 'volunteer' && $delivery['status'] === 'open'): ?><form method="post" class="delivery-action-form"><?php echo csrfField(); ?><input type="hidden" name="action" value="claim_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-primary btn-sm" type="submit">接單</button></form><?php endif; ?>
-                            <?php if ($isVolunteer && $delivery['status'] === 'claimed' && (int) $delivery['volunteer_id'] === $currentUserId): ?><form method="post" class="delivery-action-form delivery-action-form-check"><input type="hidden" name="action" value="confirm_pickup"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><label><input type="checkbox" name="seal_intact" required> 防拆貼紙完整</label><label><input type="checkbox" name="item_count_confirmed" required> 已清點物資</label><button class="btn btn-primary btn-sm">確認取貨</button></form><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="report_exception"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><input name="exception_notes" placeholder="異常原因" required><button class="btn btn-danger btn-sm">回報異常</button></form><?php endif; ?>
+                            <?php if ($isVolunteer && in_array($delivery['status'], ['claimed', 'picked_up'], true) && (int) $delivery['volunteer_id'] === $currentUserId): ?>
+                                <span class="text-muted"><i class="fas fa-arrow-up"></i> 請至上方「配送中任務」卡片操作</span>
+                            <?php endif; ?>
                             <?php $canCompleteDelivery = $isOfficial && (($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' || in_array($delivery['status'], ['claimed', 'picked_up', 'in_transit'], true)); ?>
                             <?php if ($canCompleteDelivery): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' ? '確認忠信派車已完成' : '確認收貨'; ?></button></form><?php endif; ?>
                             <?php if ($isOfficial): ?>

@@ -11,8 +11,12 @@
 
 ### 資料庫
 
-主 SQL 快照已整合會員角色、配送方式、物資明細，以及舊受益者／庫存資料表的清理內容。
+主 SQL 快照已整合會員角色、配送方式、物資明細、配送即時定位資料表，以及舊受益者／庫存資料表的清理內容。
 匯入前請先備份資料庫；新安裝或重建資料庫時，直接匯入 `database/shinigyi_foodbank (4).sql` 即可。
+既有安裝可執行 `database/migrations/20260930_delivery_live_tracking.sql` 建立配送定位資料表；系統在配送頁首次載入時也會自動確認此資料表存在。
+即時定位需要配送會員取貨後明確啟用瀏覽器定位權限，並以 HTTPS（或 localhost）開啟網站；位置每 10 秒更新，停止分享或配送頁離開後會停止傳送，逾時資料也會清除。顧客可選擇開啟 OpenStreetMap 查看位置，只有點選地圖連結時才會將座標傳給該服務。
+既有安裝可執行 `database/migrations/20261007_donation_distance_estimate.sql` 為 `donations` 資料表新增 `estimated_distance_km`／`estimated_duration_minutes` 欄位；系統在物資捐贈頁首次載入時也會自動確認欄位存在。
+物資捐贈表單在「商家取貨地址」與「配送地址」都填寫完成後，會呼叫伺服器端的 `?action=calculate_distance` API 自動計算兩地之間的路程距離與預估運送時間並帶入表單。此功能透過 OpenStreetMap 的 Nominatim（地理編碼）與 OSRM（路徑規劃）公開服務運作，**需要伺服器可對外連線**（PHP 需啟用 `curl` 擴充套件）；由於台灣部分門牌號碼未完整收錄於 OpenStreetMap，系統會自動從完整地址逐步簡化為路段層級查詢，若僅能定位到路段會標示為概略估算。
 
 ### 第 1 步：獲取項目文件
 

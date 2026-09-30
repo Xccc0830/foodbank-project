@@ -1718,6 +1718,28 @@ form {
    color: var(--text-secondary);
 }
 
+.delivery-location-sharing {
+   display: grid;
+   gap: 8px;
+   min-width: 190px;
+   padding: 10px;
+   border: 1px solid var(--gray-200);
+   border-radius: var(--radius-md);
+   background: var(--bg-secondary);
+}
+
+.delivery-location-sharing p,
+.delivery-location-sharing small {
+   margin: 0;
+   color: var(--text-secondary);
+   font-size: 12px;
+   white-space: normal;
+}
+
+.delivery-location-sharing [hidden] {
+   display: none !important;
+}
+
 
 .status {
     display: inline-flex;
