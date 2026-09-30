@@ -68,7 +68,8 @@ CREATE TABLE `activity_assignments` (
   `points` int(11) NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `assignment_type` enum('individual','company') NOT NULL DEFAULT 'individual',
-  `organization_name` varchar(150) DEFAULT NULL
+  `organization_name` varchar(150) DEFAULT NULL,
+  `participant_count` int(11) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -146,6 +147,7 @@ DROP TABLE IF EXISTS `deliveries`;
 CREATE TABLE `deliveries` (
   `delivery_id` int(11) NOT NULL,
   `donation_id` int(11) DEFAULT NULL,
+  `allocation_id` int(11) DEFAULT NULL,
   `delivery_method` enum('food_bank','volunteer') NOT NULL DEFAULT 'volunteer',
   `created_by` int(11) DEFAULT NULL,
   `volunteer_id` int(11) DEFAULT NULL,
@@ -307,13 +309,31 @@ CREATE TABLE `donation_allocations` (
   `allocation_id` int(11) NOT NULL,
   `donation_id` int(11) NOT NULL,
   `allocation_number` int(11) NOT NULL DEFAULT 1,
+  `sub_order_number` varchar(40) DEFAULT NULL,
+  `length_cm` decimal(6,2) DEFAULT NULL,
+  `width_cm` decimal(6,2) DEFAULT NULL,
+  `height_cm` decimal(6,2) DEFAULT NULL,
+  `weight_kg` decimal(8,2) DEFAULT NULL,
   `quantity` decimal(10,2) NOT NULL,
   `unit` varchar(20) DEFAULT NULL,
   `status` enum('pending','assigned','in_transit','completed') DEFAULT 'pending',
   `assigned_to` int(11) DEFAULT NULL,
   `assigned_at` datetime DEFAULT NULL,
   `completed_at` datetime DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp()
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  UNIQUE KEY `uq_sub_order_number` (`sub_order_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 資料表結構 `donation_allocation_items`
+--
+
+DROP TABLE IF EXISTS `donation_allocation_items`;
+CREATE TABLE `donation_allocation_items` (
+  `allocation_item_id` int(11) NOT NULL,
+  `allocation_id` int(11) NOT NULL,
+  `donation_item_id` int(11) NOT NULL,
+  `quantity` decimal(10,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -1350,6 +1370,10 @@ CREATE TABLE `donation_items` (
   `specification` varchar(150) DEFAULT NULL,
   `quantity` decimal(10,2) NOT NULL,
   `unit` varchar(20) NOT NULL DEFAULT '件',
+  `length_cm` decimal(6,2) DEFAULT NULL,
+  `width_cm` decimal(6,2) DEFAULT NULL,
+  `height_cm` decimal(6,2) DEFAULT NULL,
+  `item_weight_kg` decimal(8,2) DEFAULT NULL,
   `expiry_date` date DEFAULT NULL,
   `notes` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
@@ -1374,6 +1398,151 @@ ALTER TABLE `donations`
 -- 修正舊資料殘留的「志工」字樣，統一顯示為「忠信GO RIDER」
 UPDATE `notifications` SET `message` = REPLACE(`message`, '志工', '忠信GO RIDER') WHERE `message` LIKE '%志工%';
 UPDATE `activities` SET `title` = REPLACE(`title`, '志工', '忠信GO RIDER') WHERE `title` LIKE '%志工%';
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `permissions`（權限目錄）
+--
+
+DROP TABLE IF EXISTS `permissions`;
+CREATE TABLE `permissions` (
+  `permission_key` varchar(50) NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `category` varchar(50) NOT NULL,
+  PRIMARY KEY (`permission_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `permissions` (`permission_key`, `label`, `category`) VALUES
+  ('page.dashboard', '儀表板', 'page'),
+  ('page.order_tracking', '訂單追蹤', 'page'),
+  ('page.deliveries', '配送任務', 'page'),
+  ('page.material_transport', '物資運送', 'page'),
+  ('page.activities', '活動報名／發布', 'page'),
+  ('page.item_categories', '物資分類', 'page'),
+  ('page.rewards', '興毅幣兌換', 'page'),
+  ('page.carbon_report', '永續報告', 'page'),
+  ('page.reports', '數據分析／榮譽榜', 'page'),
+  ('page.notifications', '通知中心', 'page'),
+  ('page.donation_materials', '物資捐贈', 'page'),
+  ('page.donation_materials_review', '物資捐贈審查', 'page'),
+  ('page.settings', '設置', 'page'),
+  ('page.users', '帳號審核', 'page'),
+  ('page.volunteer_management', '一般會員管理', 'page'),
+  ('page.certificate', '證書', 'page'),
+  ('page.activity_certificate', '活動證書', 'page'),
+  ('rider.accept_task', '承接 Rider 配送任務', 'delivery'),
+  ('donation.create', '刊登物資捐贈', 'donation'),
+  ('donation.review', '審查／拆單物資捐贈', 'donation'),
+  ('admin.manage_users', '管理帳號審核', 'admin');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `role_permission_defaults`（角色預設權限矩陣）
+--
+
+DROP TABLE IF EXISTS `role_permission_defaults`;
+CREATE TABLE `role_permission_defaults` (
+  `role` enum('foodbank_staff','member') NOT NULL,
+  `member_type` enum('general','enterprise','') NOT NULL DEFAULT '',
+  `permission_key` varchar(50) NOT NULL,
+  KEY `idx_rpd_permission_key` (`permission_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `role_permission_defaults` (`role`, `member_type`, `permission_key`) VALUES
+  ('foodbank_staff', '', 'page.dashboard'),
+  ('foodbank_staff', '', 'page.order_tracking'),
+  ('foodbank_staff', '', 'page.donation_materials_review'),
+  ('foodbank_staff', '', 'page.deliveries'),
+  ('foodbank_staff', '', 'page.activities'),
+  ('foodbank_staff', '', 'page.item_categories'),
+  ('foodbank_staff', '', 'page.rewards'),
+  ('foodbank_staff', '', 'page.settings'),
+  ('foodbank_staff', '', 'page.users'),
+  ('foodbank_staff', '', 'page.volunteer_management'),
+  ('foodbank_staff', '', 'page.carbon_report'),
+  ('foodbank_staff', '', 'page.reports'),
+  ('foodbank_staff', '', 'page.notifications'),
+  ('foodbank_staff', '', 'page.certificate'),
+  ('foodbank_staff', '', 'page.activity_certificate'),
+  ('foodbank_staff', '', 'donation.review'),
+  ('foodbank_staff', '', 'admin.manage_users'),
+  ('member', 'enterprise', 'page.dashboard'),
+  ('member', 'enterprise', 'page.order_tracking'),
+  ('member', 'enterprise', 'page.activities'),
+  ('member', 'enterprise', 'page.rewards'),
+  ('member', 'enterprise', 'page.notifications'),
+  ('member', 'enterprise', 'page.donation_materials'),
+  ('member', 'enterprise', 'page.carbon_report'),
+  ('member', 'enterprise', 'page.certificate'),
+  ('member', 'enterprise', 'page.activity_certificate'),
+  ('member', 'enterprise', 'donation.create'),
+  ('member', 'general', 'page.dashboard'),
+  ('member', 'general', 'page.deliveries'),
+  ('member', 'general', 'page.material_transport'),
+  ('member', 'general', 'page.activities'),
+  ('member', 'general', 'page.rewards'),
+  ('member', 'general', 'page.reports'),
+  ('member', 'general', 'page.notifications'),
+  ('member', 'general', 'page.certificate'),
+  ('member', 'general', 'page.activity_certificate'),
+  ('member', 'general', 'rider.accept_task');
+
+ALTER TABLE `role_permission_defaults`
+  ADD PRIMARY KEY (`role`, `member_type`, `permission_key`);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `user_permission_overrides`（使用者個人權限覆寫，如一般會員加選 Rider）
+--
+
+DROP TABLE IF EXISTS `user_permission_overrides`;
+CREATE TABLE `user_permission_overrides` (
+  `user_id` int(11) NOT NULL,
+  `permission_key` varchar(50) NOT NULL,
+  `granted` tinyint(1) NOT NULL DEFAULT 1,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`user_id`, `permission_key`),
+  KEY `idx_upo_permission_key` (`permission_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 既有帳號回填：所有目前已存在的一般會員視為已加選 Rider 任務（維持現行行為，零回歸）
+INSERT INTO `user_permission_overrides` (`user_id`, `permission_key`, `granted`)
+SELECT `user_id`, 'rider.accept_task', 1 FROM `users` WHERE `role` = 'member' AND `member_type` = 'general';
+
+--
+-- 資料表的限制式 `role_permission_defaults`
+--
+ALTER TABLE `role_permission_defaults`
+  ADD CONSTRAINT `role_permission_defaults_ibfk_1` FOREIGN KEY (`permission_key`) REFERENCES `permissions` (`permission_key`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `user_permission_overrides`
+--
+ALTER TABLE `user_permission_overrides`
+  ADD CONSTRAINT `user_permission_overrides_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `user_permission_overrides_ibfk_2` FOREIGN KEY (`permission_key`) REFERENCES `permissions` (`permission_key`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donation_allocation_items`
+--
+ALTER TABLE `donation_allocation_items`
+  ADD PRIMARY KEY (`allocation_item_id`),
+  ADD KEY `idx_dai_allocation_id` (`allocation_id`),
+  ADD KEY `idx_dai_donation_item_id` (`donation_item_id`),
+  MODIFY `allocation_item_id` int(11) NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `donation_allocation_items`
+  ADD CONSTRAINT `donation_allocation_items_ibfk_1` FOREIGN KEY (`allocation_id`) REFERENCES `donation_allocations` (`allocation_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `donation_allocation_items_ibfk_2` FOREIGN KEY (`donation_item_id`) REFERENCES `donation_items` (`item_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `deliveries`
+--
+ALTER TABLE `deliveries`
+  ADD KEY `idx_deliveries_allocation_id` (`allocation_id`);
 
 COMMIT;
 

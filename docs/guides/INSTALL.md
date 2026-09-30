@@ -16,6 +16,12 @@
 既有安裝可執行 `database/migrations/20260930_delivery_live_tracking.sql` 建立配送定位資料表；系統在配送頁首次載入時也會自動確認此資料表存在。
 即時定位需要配送會員取貨後明確啟用瀏覽器定位權限，並以 HTTPS（或 localhost）開啟網站；位置每 10 秒更新，停止分享或配送頁離開後會停止傳送，逾時資料也會清除。顧客可選擇開啟 OpenStreetMap 查看位置，只有點選地圖連結時才會將座標傳給該服務。
 既有安裝可執行 `database/migrations/20261007_donation_distance_estimate.sql` 為 `donations` 資料表新增 `estimated_distance_km`／`estimated_duration_minutes` 欄位；系統在物資捐贈頁首次載入時也會自動確認欄位存在。
+既有安裝可執行 `database/migrations/20261008_permission_and_order_split.sql`：
+- 新增權限系統資料表（`permissions`／`role_permission_defaults`／`user_permission_overrides`），讓側邊選單與路由改以「能力 (Permission)」而非寫死的角色判斷來渲染，並支援個別使用者加選/退選功能（例如一般會員自行加選 Rider 配送任務）。
+- 為 `donation_items` 新增長寬高 (`length_cm`/`width_cm`/`height_cm`) 與重量 (`item_weight_kg`) 欄位。
+- 新增拆單子單資料表 `donation_allocation_items`，並為 `donation_allocations` 補上 `sub_order_number`（如 `FB-...-A`）等欄位，讓一張主單 (Parent Order) 可拆成多張具備關聯編號的子單 (Sub-orders)，各自記錄物資內容、數量與長寬高；`deliveries.allocation_id` 用來連結每筆配送任務所屬的子單。
+- 為 `activity_assignments` 新增 `participant_count` 欄位，供企業會員報名活動時自填參與人數。
+此遷移為冪等 (idempotent) 設計，可重複執行；此遷移內容已同步整合進主 SQL 快照 `database/shinigyi_foodbank (4).sql`，新安裝可直接匯入快照，無需另外執行此遷移檔。
 物資捐贈表單在「商家取貨地址」與「配送地址」都填寫完成後，會呼叫伺服器端的 `?action=calculate_distance` API 自動計算兩地之間的路程距離與預估運送時間並帶入表單。此功能透過 OpenStreetMap 的 Nominatim（地理編碼）與 OSRM（路徑規劃）公開服務運作，**需要伺服器可對外連線**（PHP 需啟用 `curl` 擴充套件）；由於台灣部分門牌號碼未完整收錄於 OpenStreetMap，系統會自動從完整地址逐步簡化為路段層級查詢，若僅能定位到路段會標示為概略估算。
 
 ### 第 1 步：獲取項目文件

@@ -1,0 +1,13 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^diff \"/Applications/XAMPP/xamppfiles/htdocs/shinyi/foodbank-project/public/index\\.php\" \"/Users/chenyu/Library/Application Support/Code/agentSessionData/4a663dee-1b61-44db-8f20-20f065b32151/attachments/dce47209-fe97-41d1-8ede-398f513a870e/file_index\\.php\" \\| head -100$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^/Applications/XAMPP/xamppfiles/bin/mysql --version 2>&1; /Applications/XAMPP/xamppfiles/bin/mysql -u root -e \"SELECT VERSION\\(\\);\" 2>&1; /Applications/XAMPP/xamppfiles/bin/mysql -u root -e \"SHOW DATABASES;\" 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/Applications/XAMPP/xamppfiles/bin/mysql": true
+    }
+}

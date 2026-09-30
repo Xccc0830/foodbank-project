@@ -46,11 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $organizationName = $assignmentType === 'company'
             ? (string) ($currentUser['enterprise_name'] ?? '')
             : null;
+        $participantCount = $isEnterpriseMember ? max(1, (int) ($_POST['participant_count'] ?? 1)) : 1;
 
         if ($assignmentType === 'company' && trim($organizationName) === '') {
             $message = ['type' => 'error', 'text' => '請先補齊企業會員的企業／組織名稱。'];
         } else {
-            $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName)
+            $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName, $participantCount)
                 ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業會員活動報名已送出。' : '活動報名完成，預計可獲得 5 枚興毅幣。']
                 : ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或活動名額已滿。'];
         }
@@ -230,6 +231,9 @@ $activityStatusLabels = [
             <input type="hidden" name="action" value="register_activity">
             <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
             <input type="hidden" name="assignment_type" value="<?php echo $isEnterpriseMember ? 'company' : 'individual'; ?>">
+            <?php if ($isEnterpriseMember): ?>
+                <input type="number" name="participant_count" min="1" value="1" title="參與人數" style="width: 70px;" required>
+            <?php endif; ?>
             <button class="btn btn-primary btn-sm" type="submit">報名活動</button>
         </form>
     <?php else: ?>
@@ -350,8 +354,9 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
                     const name = escapeHtml(participant.full_name || participant.username || '');
                     const type = participant.assignment_type === 'company' ? '企業會員報名' : '一般會員報名';
                     const organization = participant.organization_name ? ' · ' + escapeHtml(participant.organization_name) : '';
+                    const headcount = participant.assignment_type === 'company' && participant.participant_count ? ' · 參與人數：' + escapeHtml(String(participant.participant_count)) : '';
                     const phone = participant.phone ? '<small>電話：' + escapeHtml(participant.phone) + '</small>' : '';
-                    return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + '</span>' + phone + '</div>';
+                    return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + headcount + '</span>' + phone + '</div>';
             }
             function renderGroup(titleText, group) {
                 return group.length
@@ -376,11 +381,12 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
 
 <?php if ($canRegisterActivities): ?>
 <div class="card mt-32"><div class="card-header"><h2>我的活動報名</h2><p>活動結束後可查看參與證明</p></div><div class="card-body">
-<?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>會員類型</th><th>企業／組織</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
+<?php if ($myAssignments): ?><div class="activities-assignments-table-body"><table class="data-table activities-assignments-table"><thead><tr><th>活動名稱</th><th>會員類型</th><th>企業／組織</th><th>參與人數</th><th>活動狀態</th><th>操作</th></tr></thead><tbody>
 <?php foreach ($myAssignments as $assignment): ?><tr>
     <td><?php echo htmlspecialchars($assignment['title']); ?></td>
     <td><?php echo $assignment['assignment_type'] === 'company' ? '企業會員' : '一般會員'; ?></td>
     <td><?php echo htmlspecialchars($assignment['organization_name'] ?? '-'); ?></td>
+    <td><?php echo $assignment['assignment_type'] === 'company' ? (int) ($assignment['participant_count'] ?? 1) : '-'; ?></td>
     <td><span class="status status-<?php echo htmlspecialchars($assignment['activity_status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$assignment['activity_status']] ?? $assignment['activity_status']); ?></span></td>
     <td>
         <?php if (($assignment['assignment_status'] ?? 'registered') === 'cancelled'): ?>

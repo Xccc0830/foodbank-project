@@ -242,10 +242,50 @@ class DonationModel extends BaseModel {
         $pickupAddress = $this->db->real_escape_string($pickupAddress);
         $sealCode = $this->db->real_escape_string((string) ($existingDonation['seal_code'] ?? ''));
 
-        for ($taskNumber = 0; $taskNumber < $splitCount; $taskNumber++) {
+        // 拆單系統：split_count > 1 時，除了原有的配送任務，額外建立正式的主單/子單關聯
+        // （donation_allocations 子單 + sub_order_number，並將對應物資項目依比例分配到各子單）。
+        $orderNumber = (string) ($existingDonation['order_number'] ?? '');
+        $donationItems = $this->hasDonationItemsTable()
+            ? $this->query("SELECT item_id, quantity, unit FROM donation_items WHERE donation_id = {$donation_id}")
+            : [];
+        $totalQuantity = (float) ($publishData['quantity'] ?? $existingDonation['quantity'] ?? 0);
+        $unit = $this->db->real_escape_string((string) ($existingDonation['unit'] ?? '件'));
+
+        for ($taskNumber = 1; $taskNumber <= $splitCount; $taskNumber++) {
+            $allocationId = null;
+            if ($orderNumber !== '') {
+                $subOrderNumber = $this->db->real_escape_string($orderNumber . '-' . $this->allocationSuffix($taskNumber));
+                $allocationQuantity = $splitCount > 0 ? round($totalQuantity / $splitCount, 2) : $totalQuantity;
+                if (!$this->db->query(
+                    "INSERT INTO donation_allocations (donation_id, allocation_number, sub_order_number, weight_kg, quantity, unit, status)
+                     VALUES ({$donation_id}, {$taskNumber}, '{$subOrderNumber}', {$weight}, {$allocationQuantity}, '{$unit}', 'pending')"
+                )) {
+                    $this->db->rollback();
+                    return false;
+                }
+                $allocationId = (int) $this->db->insert_id;
+
+                foreach ($donationItems as $donationItem) {
+                    $itemQuantity = (float) ($donationItem['quantity'] ?? 0);
+                    $portion = $splitCount > 0 ? round($itemQuantity / $splitCount, 2) : $itemQuantity;
+                    if ($portion <= 0) {
+                        continue;
+                    }
+                    $donationItemId = (int) $donationItem['item_id'];
+                    if (!$this->db->query(
+                        "INSERT INTO donation_allocation_items (allocation_id, donation_item_id, quantity) VALUES ({$allocationId}, {$donationItemId}, {$portion})"
+                    )) {
+                        $this->db->rollback();
+                        return false;
+                    }
+                }
+            }
+
+            $allocationColumn = $allocationId !== null ? ", allocation_id" : '';
+            $allocationValue = $allocationId !== null ? ", {$allocationId}" : '';
             $taskSql = "INSERT INTO deliveries
-                (donation_id, delivery_method, vehicle_type, total_distance_km, weight_kg, seal_code, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
-                VALUES ({$donation_id}, '{$deliveryMethod}', '{$vehicleType}', 0, {$weight}, '{$sealCode}', 'normal', 0, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, seal_code, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
+                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', 0, {$weight}, '{$sealCode}', 'normal', 0, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
                 $this->db->rollback();
                 return false;
@@ -254,6 +294,50 @@ class DonationModel extends BaseModel {
 
         $this->db->commit();
         return true;
+    }
+
+    /**
+     * 產生子單後綴：1=>A, 2=>B, ..., 26=>Z, 27=>AA ...（Excel 欄位命名風格）。
+     */
+    private function allocationSuffix($number) {
+        $number = (int) $number;
+        $suffix = '';
+        while ($number > 0) {
+            $remainder = ($number - 1) % 26;
+            $suffix = chr(65 + $remainder) . $suffix;
+            $number = intdiv($number - 1, 26);
+        }
+        return $suffix === '' ? 'A' : $suffix;
+    }
+
+    /**
+     * 取得單一主單（捐贈）的所有子單，含內容物與長寬高，供拆單管理與追蹤頁使用。
+     */
+    public function getDonationAllocations($donationId) {
+        $donationId = (int) $donationId;
+        $allocations = $this->query(
+            "SELECT a.*,
+                    (SELECT d.delivery_id FROM deliveries d WHERE d.allocation_id = a.allocation_id LIMIT 1) AS delivery_id,
+                    (SELECT d.status FROM deliveries d WHERE d.allocation_id = a.allocation_id LIMIT 1) AS delivery_status,
+                    (SELECT d.volunteer_id FROM deliveries d WHERE d.allocation_id = a.allocation_id LIMIT 1) AS volunteer_id
+             FROM donation_allocations a
+             WHERE a.donation_id = {$donationId}
+             ORDER BY a.allocation_number ASC"
+        );
+
+        foreach ($allocations as &$allocation) {
+            $allocationId = (int) $allocation['allocation_id'];
+            $allocation['items'] = $this->query(
+                "SELECT ai.quantity, di.item_id, di.item_name, di.brand, di.specification, di.unit,
+                        di.length_cm, di.width_cm, di.height_cm, di.item_weight_kg
+                 FROM donation_allocation_items ai
+                 JOIN donation_items di ON di.item_id = ai.donation_item_id
+                 WHERE ai.allocation_id = {$allocationId}"
+            );
+        }
+        unset($allocation);
+
+        return $allocations;
     }
 
     public function getOrderTracking($donorId = null, $status = null) {
@@ -287,6 +371,14 @@ class DonationModel extends BaseModel {
                 GROUP BY n.donation_id
                 {$having}
                 ORDER BY n.donation_date DESC";
-        return $this->query($sql);
+        $rows = $this->query($sql);
+
+        // 主單整體進度已由上方彙總得出；這裡補上各子單（拆單）的個別配送狀態供追蹤頁顯示。
+        foreach ($rows as &$row) {
+            $row['sub_orders'] = $this->getDonationAllocations((int) $row['donation_id']);
+        }
+        unset($row);
+
+        return $rows;
     }
 }

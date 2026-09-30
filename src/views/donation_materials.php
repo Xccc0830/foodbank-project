@@ -33,6 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $itemSpecifications = is_array($_POST['specification'] ?? null) ? $_POST['specification'] : [];
     $itemQuantities = is_array($_POST['item_quantity'] ?? null) ? $_POST['item_quantity'] : [];
     $itemUnits = is_array($_POST['item_unit'] ?? null) ? $_POST['item_unit'] : [];
+    $itemLengths = is_array($_POST['item_length_cm'] ?? null) ? $_POST['item_length_cm'] : [];
+    $itemWidths = is_array($_POST['item_width_cm'] ?? null) ? $_POST['item_width_cm'] : [];
+    $itemHeights = is_array($_POST['item_height_cm'] ?? null) ? $_POST['item_height_cm'] : [];
+    $itemWeights = is_array($_POST['item_weight_kg'] ?? null) ? $_POST['item_weight_kg'] : [];
     $itemExpiryDates = is_array($_POST['item_expiry_date'] ?? null) ? $_POST['item_expiry_date'] : [];
     $itemNotes = is_array($_POST['item_notes'] ?? null) ? $_POST['item_notes'] : [];
     $items = [];
@@ -48,6 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
             'specification' => trim((string) ($itemSpecifications[$index] ?? '')) ?: null,
             'quantity' => $quantity,
             'unit' => trim((string) ($itemUnits[$index] ?? '件')) ?: '件',
+            'length_cm' => is_numeric($itemLengths[$index] ?? null) ? round((float) $itemLengths[$index], 2) : null,
+            'width_cm' => is_numeric($itemWidths[$index] ?? null) ? round((float) $itemWidths[$index], 2) : null,
+            'height_cm' => is_numeric($itemHeights[$index] ?? null) ? round((float) $itemHeights[$index], 2) : null,
+            'item_weight_kg' => is_numeric($itemWeights[$index] ?? null) ? round((float) $itemWeights[$index], 2) : null,
             'expiry_date' => trim((string) ($itemExpiryDates[$index] ?? '')) ?: null,
             'notes' => trim((string) ($itemNotes[$index] ?? '')) ?: null,
         ];
@@ -158,18 +166,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         $connection->begin_transaction();
         $insertedId = $donationModel->addDonation($donationData);
         if ($insertedId) {
-            $itemStatement = $connection->prepare('INSERT INTO donation_items (donation_id, item_name, brand, specification, quantity, unit, expiry_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+            $itemStatement = $connection->prepare('INSERT INTO donation_items (donation_id, item_name, brand, specification, quantity, unit, length_cm, width_cm, height_cm, item_weight_kg, expiry_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $itemsSaved = $itemStatement !== false;
             if ($itemsSaved) {
                 foreach ($items as $item) {
                     $itemStatement->bind_param(
-                        'isssdsss',
+                        'isssdsddddss',
                         $insertedId,
                         $item['item_name'],
                         $item['brand'],
                         $item['specification'],
                         $item['quantity'],
                         $item['unit'],
+                        $item['length_cm'],
+                        $item['width_cm'],
+                        $item['height_cm'],
+                        $item['item_weight_kg'],
                         $item['expiry_date'],
                         $item['notes']
                     );
@@ -347,7 +359,7 @@ if ($beneficiaryResult) {
                     <label>配送方式 <span class="required-mark">*</span></label>
                     <div class="delivery-mode-options">
                         <label><input type="radio" name="delivery_mode" value="food_bank" required> <span><strong>忠信派車</strong><small>由忠信食物銀行安排配送</small></span></label>
-                        <label><input type="radio" name="delivery_mode" value="volunteer"> <span><strong>志工派車</strong><small>由配送會員接取配送任務</small></span></label>
+                        <label><input type="radio" name="delivery_mode" value="volunteer"> <span><strong>Rider 媒合</strong><small>由 Rider 會員接取配送任務</small></span></label>
                     </div>
                 </div>
                 <div class="grid-2">
@@ -366,7 +378,7 @@ if ($beneficiaryResult) {
                 </div>
                 <p class="distance-estimate-status" data-distance-status hidden></p>
                 <div class="form-group"><label for="beneficiaryId">關懷戶</label><select id="beneficiaryId" name="beneficiary_id"><option value="">選擇關懷戶</option><?php foreach ($beneficiaries as $beneficiary): ?><option value="<?php echo (int) $beneficiary['beneficiary_id']; ?>"><?php echo htmlspecialchars($beneficiary['beneficiary_code'] . '｜' . $beneficiary['last_name'] . $beneficiary['first_name'] . ($beneficiary['address'] ? '｜' . $beneficiary['address'] : '')); ?></option><?php endforeach; ?></select></div>
-                <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 選擇志工派車後，配送會員接單時才會自動顯示姓名、電話與車輛資訊。</div>
+                <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 選擇 Rider 媒合後，配送會員接單時才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
                 <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step>下一步：填寫物資</button></div>
             </section>
@@ -377,7 +389,9 @@ if ($beneficiaryResult) {
                     <div class="material-item-row">
                         <div class="grid-2"><div class="form-group"><label>物資名稱 <span class="required-mark">*</span></label><input type="text" name="item_name[]" placeholder="例如：白米" required></div><div class="form-group"><label>品牌</label><input type="text" name="brand[]" placeholder="例如：台灣好米"></div></div>
                         <div class="grid-3"><div class="form-group"><label>規格</label><input type="text" name="specification[]" placeholder="例如：5kg"></div><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="0.01" step="0.01" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>箱</option><option>瓶</option><option>盒</option><option>份</option><option>件</option></select></div></div>
-                        <div class="grid-2"><div class="form-group"><label>保存期限</label><input type="date" name="item_expiry_date[]"></div><div class="form-group"><label>備註</label><input type="text" name="item_notes[]" placeholder="其他資訊"></div></div>
+                        <div class="grid-3"><div class="form-group"><label>長 (cm)</label><input type="number" name="item_length_cm[]" min="0" step="0.1" placeholder="例如：30"></div><div class="form-group"><label>寬 (cm)</label><input type="number" name="item_width_cm[]" min="0" step="0.1" placeholder="例如：20"></div><div class="form-group"><label>高 (cm)</label><input type="number" name="item_height_cm[]" min="0" step="0.1" placeholder="例如：15"></div></div>
+                        <div class="grid-2"><div class="form-group"><label>重量 (kg)</label><input type="number" name="item_weight_kg[]" min="0" step="0.01" placeholder="例如：5"></div><div class="form-group"><label>保存期限</label><input type="date" name="item_expiry_date[]"></div></div>
+                        <div class="form-group"><label>備註</label><input type="text" name="item_notes[]" placeholder="其他資訊"></div>
                     </div>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="addMaterialItemButton"><i class="fas fa-plus"></i> 新增物資</button>
@@ -627,8 +641,13 @@ if ($beneficiaryResult) {
                 <?php if (!empty($viewingItems)): ?>
                     <div class="material-items-summary">
                         <h3>物資規格</h3>
-                        <div class="data-table-wrapper"><table class="data-table"><thead><tr><th>物資名稱</th><th>品牌</th><th>規格</th><th>數量</th><th>保存期限</th><th>備註</th></tr></thead><tbody>
-                            <?php foreach ($viewingItems as $item): ?><tr><td><?php echo htmlspecialchars($item['item_name']); ?></td><td><?php echo htmlspecialchars($item['brand'] ?? ''); ?></td><td><?php echo htmlspecialchars($item['specification'] ?? ''); ?></td><td><?php echo htmlspecialchars($item['quantity'] . ' ' . $item['unit']); ?></td><td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td><td><?php echo htmlspecialchars($item['notes'] ?? ''); ?></td></tr><?php endforeach; ?>
+                        <div class="data-table-wrapper"><table class="data-table"><thead><tr><th>物資名稱</th><th>品牌</th><th>規格</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th><th>備註</th></tr></thead><tbody>
+                            <?php foreach ($viewingItems as $item):
+                                $dimensionParts = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($value) {
+                                    return $value !== null && $value !== '';
+                                });
+                                $dimensionText = count($dimensionParts) === 3 ? implode(' × ', $dimensionParts) : '未填寫';
+                            ?><tr><td><?php echo htmlspecialchars($item['item_name']); ?></td><td><?php echo htmlspecialchars($item['brand'] ?? ''); ?></td><td><?php echo htmlspecialchars($item['specification'] ?? ''); ?></td><td><?php echo htmlspecialchars($item['quantity'] . ' ' . $item['unit']); ?></td><td><?php echo htmlspecialchars($dimensionText); ?></td><td><?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? $item['item_weight_kg'] . ' kg' : '未填寫'); ?></td><td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td><td><?php echo htmlspecialchars($item['notes'] ?? ''); ?></td></tr><?php endforeach; ?>
                         </tbody></table></div>
                     </div>
                 <?php endif; ?>

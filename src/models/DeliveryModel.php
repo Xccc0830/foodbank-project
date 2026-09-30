@@ -82,7 +82,7 @@ class DeliveryModel extends BaseModel {
                 LEFT JOIN users u ON u.user_id = d.volunteer_id
                 LEFT JOIN delivery_locations dl ON dl.delivery_id = d.delivery_id
                 ORDER BY d.created_at DESC";
-        return $this->query($sql);
+        return $this->enrichTasksWithItemSummary($this->query($sql));
     }
 
     public function getLiveTracking($deliveryId, $userId, $userRole) {
@@ -253,7 +253,7 @@ class DeliveryModel extends BaseModel {
                   AND d.delivery_method = 'volunteer'
                   AND d.status IN ('open', 'claimed', 'picked_up')
                 ORDER BY n.published_at DESC, d.delivery_id ASC";
-        return $this->query($sql);
+        return $this->enrichTasksWithItemSummary($this->query($sql));
     }
 
     public function donorConfirmPickup($deliveryId, $donorId) {
@@ -309,7 +309,7 @@ class DeliveryModel extends BaseModel {
                                     AND d.delivery_method = 'volunteer'
                                     AND d.status IN ('open', 'claimed')
                                 ORDER BY n.published_at DESC, d.delivery_id ASC";
-                return $this->query($sql);
+                return $this->enrichTasksWithItemSummary($this->query($sql));
         }
 
         public function getMaterialTransportTask($deliveryId) {
@@ -325,7 +325,12 @@ class DeliveryModel extends BaseModel {
                                                                             AND n.status = 'published'
                                                                             AND d.delivery_method = 'volunteer'
                                                                         LIMIT 1");
-                return $result ? $result->fetch_assoc() : null;
+                $row = $result ? $result->fetch_assoc() : null;
+                if (!$row) {
+                        return null;
+                }
+                $enriched = $this->enrichTasksWithItemSummary([$row]);
+                return $enriched[0] ?? $row;
         }
 
             public function getMaterialTransportHistoryTasks($volunteerId) {
@@ -340,8 +345,74 @@ class DeliveryModel extends BaseModel {
                             AND d.volunteer_id = {$volunteerId}
                             AND d.status = 'delivered'
                         ORDER BY d.delivered_at DESC, d.delivery_id DESC";
-                return $this->query($sql);
+                return $this->enrichTasksWithItemSummary($this->query($sql));
             }
+
+    /**
+     * 補上物資件數與長寬高摘要，供 Rider 任務卡片/詳情顯示。
+     * 若配送任務已綁定特定子單 (allocation_id)，僅彙總該子單的物資；
+     * 否則彙總整張主單 (donation_id) 的物資。
+     */
+    private function enrichTasksWithItemSummary(array $rows) {
+        if (empty($rows)) {
+            return $rows;
+        }
+
+        $allocationIds = [];
+        $donationIds = [];
+        foreach ($rows as $row) {
+            if (!empty($row['allocation_id'])) {
+                $allocationIds[] = (int) $row['allocation_id'];
+            } elseif (!empty($row['donation_id'])) {
+                $donationIds[] = (int) $row['donation_id'];
+            }
+        }
+
+        $allocationSummaries = [];
+        if (!empty($allocationIds)) {
+            $ids = implode(',', array_unique($allocationIds));
+            foreach ($this->query(
+                "SELECT ai.allocation_id, COUNT(*) AS item_count,
+                        MAX(di.length_cm) AS max_length_cm, MAX(di.width_cm) AS max_width_cm, MAX(di.height_cm) AS max_height_cm,
+                        SUM(di.item_weight_kg) AS total_item_weight_kg
+                 FROM donation_allocation_items ai
+                 JOIN donation_items di ON di.item_id = ai.donation_item_id
+                 WHERE ai.allocation_id IN ({$ids})
+                 GROUP BY ai.allocation_id"
+            ) as $summaryRow) {
+                $allocationSummaries[(int) $summaryRow['allocation_id']] = $summaryRow;
+            }
+        }
+
+        $donationSummaries = [];
+        if (!empty($donationIds)) {
+            $ids = implode(',', array_unique($donationIds));
+            foreach ($this->query(
+                "SELECT donation_id, COUNT(*) AS item_count,
+                        MAX(length_cm) AS max_length_cm, MAX(width_cm) AS max_width_cm, MAX(height_cm) AS max_height_cm,
+                        SUM(item_weight_kg) AS total_item_weight_kg
+                 FROM donation_items
+                 WHERE donation_id IN ({$ids})
+                 GROUP BY donation_id"
+            ) as $summaryRow) {
+                $donationSummaries[(int) $summaryRow['donation_id']] = $summaryRow;
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $summary = !empty($row['allocation_id'])
+                ? ($allocationSummaries[(int) $row['allocation_id']] ?? null)
+                : ($donationSummaries[(int) ($row['donation_id'] ?? 0)] ?? null);
+            $row['item_count'] = $summary ? (int) $summary['item_count'] : 0;
+            $row['max_length_cm'] = $summary['max_length_cm'] ?? null;
+            $row['max_width_cm'] = $summary['max_width_cm'] ?? null;
+            $row['max_height_cm'] = $summary['max_height_cm'] ?? null;
+            $row['total_item_weight_kg'] = $summary['total_item_weight_kg'] ?? null;
+        }
+        unset($row);
+
+        return $rows;
+    }
 
     public function canManageDelivery($deliveryId, $userId, $userRole) {
         if ($userRole !== 'foodbank_staff') {

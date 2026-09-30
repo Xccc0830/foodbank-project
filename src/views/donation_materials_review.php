@@ -283,6 +283,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <td><?php echo htmlspecialchars($formatDateTime($donation['donation_date'] ?? null)); ?></td>
                             <td>
                                 <form method="post">
+                                    <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="view_review_donation">
                                     <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
                                     <button type="submit" class="btn btn-primary btn-sm">評估</button>
@@ -337,6 +338,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <td><?php echo htmlspecialchars($formatDateTime($decisionTime)); ?></td>
                             <td>
                                 <form method="post">
+                                    <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="view_review_donation">
                                     <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
                                     <button type="submit" class="btn btn-primary btn-sm">查看</button>
@@ -373,7 +375,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <td><?php echo htmlspecialchars($donation['item_name'] ?? '未填寫'); ?></td>
                         <td><?php echo htmlspecialchars($deliveryOptionLabels[$donation['delivery_option'] ?? ''] ?? '未指定'); ?></td>
                         <td><?php echo htmlspecialchars($formatDateTime($donation['approved_at'] ?? null)); ?></td>
-                        <td><form method="post"><input type="hidden" name="action" value="view_publish_donation"><input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>"><button type="submit" class="btn btn-primary btn-sm">發布</button></form></td>
+                        <td><form method="post"><?php echo csrfField(); ?><input type="hidden" name="action" value="view_publish_donation"><input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>"><button type="submit" class="btn btn-primary btn-sm">發布</button></form></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -414,12 +416,14 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <td><?php echo htmlspecialchars($formatDateTime($donation['published_at'] ?? null)); ?></td>
                         <td>
                             <form method="post">
+                                <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="view_publish_donation">
                                 <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
                                 <button type="submit" class="btn btn-primary btn-sm">查看</button>
                             </form>
                             <?php if ($deliveryProgress['accepted_tasks'] > 0 && $deliveryProgress['completed_tasks'] < $deliveryProgress['total_tasks']): ?>
                                 <form method="post" class="inline-form">
+                                    <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="complete_published_donation">
                                     <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
                                     <button type="submit" class="btn btn-success btn-sm">任務完成</button>
@@ -452,7 +456,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <td><?php echo htmlspecialchars($donation['item_name'] ?? '未填寫'); ?></td>
                         <td><?php echo htmlspecialchars($donation['quantity'] ?? ''); ?> <?php echo htmlspecialchars($donation['unit'] ?? ''); ?></td>
                         <td><?php echo htmlspecialchars($formatDateTime($isRejectedHistory ? ($donation['rejected_at'] ?? null) : ($donation['updated_at'] ?? null))); ?></td>
-                        <td><form method="post"><input type="hidden" name="action" value="view_review_donation"><input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>"><button type="submit" class="btn btn-secondary btn-sm">查看</button></form></td>
+                        <td><form method="post"><?php echo csrfField(); ?><input type="hidden" name="action" value="view_review_donation"><input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>"><button type="submit" class="btn btn-secondary btn-sm">查看</button></form></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -480,6 +484,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                 <?php $renderDetails($viewingDonation); ?>
                 <?php if (($viewingDonation['status'] ?? '') === 'pending'): ?>
                     <form method="post" class="review-decision-form">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="action" value="review_material_donation">
                         <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
                         <input type="hidden" name="publish_now" id="publishNowInput" value="0">
@@ -537,6 +542,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                     </form>
                 <?php elseif (($viewingDonation['status'] ?? '') === 'assessed' && $isPublishView && ($viewingDonation['evaluation_status'] ?? '') !== 'rejected'): ?>
                     <form method="post" class="review-decision-form">
+                        <?php echo csrfField(); ?>
                         <input type="hidden" name="action" value="publish_material_donation">
                         <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
                         <h3>發布物資資訊</h3>
@@ -581,6 +587,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <?php $viewProgress = $deliveryModel->getDonationDeliveryProgress((int) $viewingDonation['donation_id']); ?>
                         <?php if ($viewProgress['accepted_tasks'] > 0 && $viewProgress['completed_tasks'] < $viewProgress['total_tasks']): ?>
                             <form method="post" class="review-decision-form">
+                                <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="complete_published_donation">
                                 <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
                                 <button type="submit" class="btn btn-success">任務完成</button>

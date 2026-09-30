@@ -25,7 +25,7 @@ class ActivityModel extends BaseModel {
     public function getParticipants($activityId) {
         $activityId = (int) $activityId;
         return $this->query(
-            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.status AS assignment_status,
+            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.participant_count, aa.status AS assignment_status,
                     u.full_name, u.username, u.email, u.phone
              FROM activity_assignments aa
              JOIN users u ON u.user_id = aa.user_id
@@ -113,7 +113,7 @@ class ActivityModel extends BaseModel {
         return true;
     }
 
-    public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null) {
+    public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null, $headcount = null) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
         $userResult = $this->db->query("SELECT role, member_type, enterprise_name, full_name FROM users WHERE user_id = {$userId} AND status = 'active' LIMIT 1");
@@ -134,6 +134,12 @@ class ActivityModel extends BaseModel {
         $assignmentType = $isEnterpriseMember ? 'company' : 'individual';
         if ($isEnterpriseMember) {
             $organizationName = trim((string) ($userInfo['enterprise_name'] ?: $organizationName ?: $userInfo['full_name']));
+        }
+
+        // 僅企業會員可自填活動參與人數，個人會員一律以 1 人計。
+        $headcount = $isEnterpriseMember ? (int) $headcount : 1;
+        if ($headcount < 1) {
+            $headcount = 1;
         }
 
         if ($assignmentType === 'company') {
@@ -172,7 +178,7 @@ class ActivityModel extends BaseModel {
 
             return (bool) $this->db->query(
                "UPDATE activity_assignments
-                SET status = 'registered', cancelled_at = NULL, points = {$points}, assignment_type = '{$assignmentType}', organization_name = {$organizationNameEscaped}
+                SET status = 'registered', cancelled_at = NULL, points = {$points}, assignment_type = '{$assignmentType}', organization_name = {$organizationNameEscaped}, participant_count = {$headcount}
                 WHERE assignment_id = {$existingAssignment['assignment_id']}"
             );
         }
@@ -198,8 +204,8 @@ class ActivityModel extends BaseModel {
 
         try {
             return $this->db->query(
-               "INSERT INTO activity_assignments (activity_id, user_id, points, assignment_type, organization_name)
-                SELECT {$activityId}, {$userId}, {$points}, '{$assignmentType}', {$organizationNameEscaped}"
+               "INSERT INTO activity_assignments (activity_id, user_id, points, assignment_type, organization_name, participant_count)
+                SELECT {$activityId}, {$userId}, {$points}, '{$assignmentType}', {$organizationNameEscaped}, {$headcount}"
             );
         } catch (mysqli_sql_exception $e) {
             if (str_contains($e->getMessage(), 'Duplicate entry')) {
@@ -245,7 +251,7 @@ class ActivityModel extends BaseModel {
     public function getUserAssignments($userId) {
         $userId = (int) $userId;
         return $this->query(
-            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.status AS assignment_status, aa.points, aa.cancelled_at, aa.cancellation_reason,
+            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.participant_count, aa.status AS assignment_status, aa.points, aa.cancelled_at, aa.cancellation_reason,
                    a.activity_id, a.title, a.status AS activity_status, a.start_at, a.created_by
              FROM activity_assignments aa
              JOIN activities a ON a.activity_id = aa.activity_id

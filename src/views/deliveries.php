@@ -241,6 +241,26 @@ if ($isVolunteer) {
                 <i class="fas fa-house-user"></i>
                 <div><strong>送達地址</strong><span><?php echo htmlspecialchars($activeDriverTrip['delivery_address']); ?></span></div>
             </div>
+            <?php
+                $tripItemCount = (int) ($activeDriverTrip['item_count'] ?? 0);
+                $tripDimensionParts = array_filter([
+                    $activeDriverTrip['max_length_cm'] ?? null,
+                    $activeDriverTrip['max_width_cm'] ?? null,
+                    $activeDriverTrip['max_height_cm'] ?? null,
+                ], static function ($value) {
+                    return $value !== null && $value !== '';
+                });
+            ?>
+            <?php if ($tripItemCount > 0): ?>
+                <div class="driver-trip-stop">
+                    <i class="fas fa-box"></i>
+                    <div>
+                        <strong>物資規格</strong>
+                        <span><?php echo $tripItemCount; ?> 項物資</span>
+                        <span>長寬高：<?php echo count($tripDimensionParts) === 3 ? htmlspecialchars(implode(' × ', $tripDimensionParts)) . ' cm' : '未填寫'; ?></span>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php if ($hasOtherStop): ?>
                 <div class="driver-trip-note"><i class="fas fa-circle-info"></i> 這趟路線中，您沿途還有一站停靠點，請依序完成配送。</div>
             <?php endif; ?>
@@ -421,7 +441,7 @@ if ($isVolunteer) {
     <div class="card-header"><h2>未完成任務</h2><p>目前共 <?php echo count($pendingDeliveries); ?> 筆任務</p></div>
     <div class="card-body deliveries-table-body">
         <?php if ($pendingDeliveries): ?>
-            <table class="data-table deliveries-table"><thead><tr><th>訂單編號</th><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>任務類型</th><th>點數</th><th>狀態</th><th>異常回報</th><th>編輯配送任務</th></tr></thead><tbody>
+            <table class="data-table deliveries-table"><thead><tr><th>訂單編號</th><th>路線</th><th>運送方式</th><th>交通</th><th>距離</th><th>重量</th><th>物資規格</th><th>任務類型</th><th>點數</th><th>狀態</th><th>異常回報</th><th>編輯配送任務</th></tr></thead><tbody>
             <?php foreach ($pendingDeliveries as $delivery): ?>
                 <tr id="delivery-<?php echo (int) $delivery['delivery_id']; ?>">
                     <td><code><?php echo htmlspecialchars($delivery['order_number'] ?? '未關聯'); ?></code></td>
@@ -436,6 +456,23 @@ if ($isVolunteer) {
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
+                    <td>
+                        <?php
+                            $rowItemCount = (int) ($delivery['item_count'] ?? 0);
+                            $rowDimensionParts = array_filter([
+                                $delivery['max_length_cm'] ?? null,
+                                $delivery['max_width_cm'] ?? null,
+                                $delivery['max_height_cm'] ?? null,
+                            ], static function ($value) {
+                                return $value !== null && $value !== '';
+                            });
+                        ?>
+                        <?php if ($rowItemCount > 0): ?>
+                            <?php echo $rowItemCount; ?> 項<?php if (count($rowDimensionParts) === 3): ?><br><small><?php echo htmlspecialchars(implode(' × ', $rowDimensionParts)); ?> cm</small><?php endif; ?>
+                        <?php else: ?>
+                            -
+                        <?php endif; ?>
+                    </td>
                     <td><?php echo ['normal' => '一般', 'priority' => '優先', 'urgent' => '急件'][$delivery['urgency']] ?? '一般'; ?></td>
                     <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
                     <td>

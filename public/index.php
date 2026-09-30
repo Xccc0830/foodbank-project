@@ -290,6 +290,9 @@ if ($action === 'login' || empty($_SESSION['user'])) {
 }
 
 $currentUser = $_SESSION['user'];
+require_once BASE_PATH . '/src/services/AuthService.php';
+$authService = AuthService::forCurrentUser($currentUser);
+
 if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');
@@ -332,7 +335,7 @@ if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
         }
 
         if ($operation === 'stop') {
-            if ($currentRole !== 'member' || ($currentUser['member_type'] ?? '') !== 'general') {
+            if (!$authService->can('rider.accept_task')) {
                 http_response_code(403);
                 echo json_encode(['error' => '只有接單的配送會員可以停止分享位置。'], JSON_UNESCAPED_UNICODE);
                 exit;
@@ -349,7 +352,7 @@ if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
         $latitude = $_POST['latitude'] ?? null;
         $longitude = $_POST['longitude'] ?? null;
         $accuracy = $_POST['accuracy'] ?? null;
-        if ($operation !== 'update' || $currentRole !== 'member' || ($currentUser['member_type'] ?? '') !== 'general') {
+        if ($operation !== 'update' || !$authService->can('rider.accept_task')) {
             http_response_code(403);
             echo json_encode(['error' => '只有接單的配送會員可以分享位置。'], JSON_UNESCAPED_UNICODE);
             exit;
@@ -420,14 +423,6 @@ $roleLabels = [
     'foodbank_staff' => '忠信食物銀行',
     'member' => $memberType === 'enterprise' ? '企業會員' : ($memberType === 'general' ? '一般會員' : '會員'),
 ];
-$rolePages = [
-    'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
-    'member' => $memberType === 'enterprise'
-        ? ['dashboard', 'order_tracking', 'activities', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate']
-        : ($memberType === 'general'
-            ? ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate']
-            : ['dashboard']),
-];
 
 // 簡單的路由系統
 $page = isset($_GET['page']) ? trim($_GET['page']) : 'dashboard';
@@ -453,7 +448,13 @@ $menu_items = [
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
     'volunteer_management' => ['label' => '一般會員管理', 'icon' => 'fa-solid fa-people-group'],
 ];
-$allowedPages = $rolePages[$role] ?? ['dashboard'];
+
+// 頁面存取控制：以 Permission (page.<slug>) 為準，不再使用寫死的角色判斷。
+// certificate / activity_certificate 未列在側邊選單，但仍需納入頁面白名單。
+$routablePages = array_merge(array_keys($menu_items), ['certificate', 'activity_certificate']);
+$allowedPages = array_values(array_filter($routablePages, function ($slug) use ($authService) {
+    return $authService->can('page.' . $slug);
+}));
 if (!in_array($page, $allowedPages, true)) {
     $page = 'dashboard';
 }

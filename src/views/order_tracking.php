@@ -22,6 +22,14 @@ $statusClasses = [
     'completed' => 'completed',
     'rejected' => 'rejected',
 ];
+$subOrderStatusLabels = [
+    'open' => '待接單',
+    'claimed' => '已接單',
+    'picked_up' => '配送中',
+    'delivered' => '已送達',
+    'exception' => '異常待處理',
+    'cancelled' => '已取消',
+];
 ?>
 
 <div class="view-header">
@@ -37,6 +45,9 @@ $statusClasses = [
     .customer-order-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid #eef2f7; }
     .customer-order-heading h2 { margin: 0 0 4px; font-size: 18px; }
     .customer-order-heading p { margin: 0; color: #64748b; font-size: 13px; }
+    .customer-suborder-summary { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 24px; border-bottom: 1px solid #eef2f7; background: #f8fafc; }
+    .customer-suborder-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid #e2e8f0; font-size: 12px; }
+    .customer-suborder-chip strong { color: #0f766e; font-family: monospace; }
     .customer-delivery-card { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); }
     .customer-delivery-main { min-width: 0; padding: 24px; }
     .customer-delivery-summary { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
@@ -121,6 +132,16 @@ $statusClasses = [
                             </div>
                             <span class="status status-<?php echo htmlspecialchars($statusClasses[$orderStatus] ?? 'approved'); ?>"><?php echo htmlspecialchars($statusLabels[$orderStatus] ?? $orderStatus); ?></span>
                         </header>
+                        <?php if (!empty($order['sub_orders'])): ?>
+                            <div class="customer-suborder-summary">
+                                <?php foreach ($order['sub_orders'] as $subOrder): ?>
+                                    <span class="customer-suborder-chip">
+                                        <strong><?php echo htmlspecialchars($subOrder['sub_order_number'] ?? ''); ?></strong>
+                                        <span class="status status-<?php echo htmlspecialchars($subOrder['delivery_status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($subOrderStatusLabels[$subOrder['delivery_status'] ?? ''] ?? '待指派'); ?></span>
+                                    </span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                         <?php if ($deliveryIds): ?>
                             <?php foreach ($deliveryIds as $deliveryId): ?>
                                 <article class="customer-delivery-card order-live-tracking" data-delivery-id="<?php echo $deliveryId; ?>" data-order-status="<?php echo htmlspecialchars($orderStatus); ?>" aria-label="配送任務 <?php echo $deliveryId; ?>">
@@ -188,6 +209,7 @@ $statusClasses = [
                         <th>建立日期</th>
                         <th>配送任務</th>
                         <th>完成進度</th>
+                        <th>拆單狀態</th>
                         <th>目前狀態</th>
                         <th>明細</th>
                     </tr>
@@ -202,6 +224,15 @@ $statusClasses = [
                             <td><?php echo htmlspecialchars(date('Y-m-d H:i', strtotime($order['donation_date']))); ?></td>
                             <td><?php echo (int) $order['delivery_count']; ?> 個任務</td>
                             <td><?php echo (int) $order['completed_delivery_count']; ?> / <?php echo (int) $order['delivery_count']; ?> 完成</td>
+                            <td>
+                                <?php if (!empty($order['sub_orders'])): ?>
+                                    <?php foreach ($order['sub_orders'] as $subOrder): ?>
+                                        <div><code><?php echo htmlspecialchars($subOrder['sub_order_number'] ?? ''); ?></code> <span class="status status-<?php echo htmlspecialchars($subOrder['delivery_status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($subOrderStatusLabels[$subOrder['delivery_status'] ?? ''] ?? '待指派'); ?></span></div>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
                             <td><span class="status status-<?php echo htmlspecialchars($statusClasses[$orderStatus] ?? 'approved'); ?>"><?php echo htmlspecialchars($statusLabels[$orderStatus] ?? $orderStatus); ?></span></td>
                             <td><a href="?page=<?php echo $isOfficial ? 'donation_materials_review' : 'donation_materials'; ?>" class="btn btn-secondary btn-sm">查看物資</a></td>
                         </tr>
