@@ -16,7 +16,7 @@
 ### 2️⃣ **已批准處理區域**
 - ✓ 展示已批准但未發布的物資
 - ✓ 支持派車方式選擇：
-  - **志工協助** - 由志工領取運送
+  - **忠信GO RIDER協助** - 由忠信GO RIDER領取運送
   - **自行派車** - 食物銀行派車
 - ✓ 自動生成防拆貼紙編號
 - ✓ 拆單功能（支持拆成1-5份）
@@ -25,7 +25,7 @@
 - ✓ 實時監控配送進度
 - ✓ 支持多層級狀態更新：
   - 待取貨 (waiting_pickup)
-  - 志工已領取 (volunteer_received)
+  - 忠信GO RIDER已領取 (volunteer_received)
   - 配送中 (in_transit)
   - 已送達食物銀行 (at_foodbank)
   - 檢查完成 (inspection_complete)
@@ -65,7 +65,7 @@
 ### 新增欄位到 `donations` 表：
 ```sql
 - evaluation_status    (評估狀態)
-- delivery_method     (派車方式：志工/自運)
+- delivery_method     (派車方式：忠信GO RIDER/自運)
 - approval_notes      (批准備註)
 - approved_at         (批准時間)
 - approved_by         (批准人員)
@@ -83,7 +83,7 @@
 ### 新建表：
 - **donation_allocations** - 物資分配日誌表
   - 追蹤每份拆單物資的狀態
-  - 記錄分配給志工/派車單位的情況
+  - 記錄分配給忠信GO RIDER/派車單位的情況
   - 支持完整的配送生命週期追蹤
 
 ---
@@ -98,14 +98,14 @@
   ├─ 批准（選擇派車方式）
   │   ↓
   │  【已批准區域】
-  │   ├─ 選擇派車方式（志工/自運）
+  │   ├─ 選擇派車方式（忠信GO RIDER/自運）
   │   ├─ 配置拆單（1-5份）
   │   ├─ 設定檢查要求
   │   └─ 發布物資
   │       ↓
   │      【已發布追蹤】
   │       ├─ 待取貨
-  │       ├─ 志工已領取
+  │       ├─ 忠信GO RIDER已領取
   │       ├─ 配送中
   │       ├─ 已送達食物銀行
   │       └─ 檢查完成
@@ -159,7 +159,7 @@ mysql -u [user] -p [database] < "database/shinigyi_foodbank (4).sql"
 |---------|---------|------|
 | 待評估區域（批准/拒絕） | ✅ | donations_evaluation.php |
 | 已評估區域（派車選擇） | ✅ | donations_evaluation.php |
-| 志工協助流程 | ✅ | delivery_method 欄位 |
+| 忠信GO RIDER協助流程 | ✅ | delivery_method 欄位 |
 | 自行派車流程 | ✅ | delivery_method 欄位 |
 | 拆單功能 | ✅ | split_count + donation_allocations |
 | 防拆貼紙機制 | ✅ | seal_code 欄位 |
@@ -171,7 +171,7 @@ mysql -u [user] -p [database] < "database/shinigyi_foodbank (4).sql"
 ## 📝 關鍵特性
 
 1. **完整的狀態流轉** - 從待評估到檢查完成的完整生命週期
-2. **靈活的派車方式** - 支持志工協助和食物銀行自運
+2. **靈活的派車方式** - 支持忠信GO RIDER協助和食物銀行自運
 3. **拆單功能** - 支持將一份捐贈拆分為多份，便於多人領取
 4. **防拆跟蹤** - 每份物資都有唯一的防拆碼
 5. **配送進度可視化** - 實時追蹤物資流向
@@ -181,10 +181,10 @@ mysql -u [user] -p [database] < "database/shinigyi_foodbank (4).sql"
 
 ## ✨ 下一步建議
 
-1. **整合志工端** - 在志工配送頁面展示已發布物資
+1. **整合忠信GO RIDER端** - 在忠信GO RIDER配送頁面展示已發布物資
 2. **捐贈方報表** - 為捐贈者提供捐贈狀態追蹤
 3. **自動化通知** - 配送狀態變更時自動通知相關人員
-4. **獎勵機制** - 完善志工和捐贈方的獎勵系統
+4. **獎勵機制** - 完善忠信GO RIDER和捐贈方的獎勵系統
 5. **數據分析** - 添加評估轉化率、配送效率等數據分析
 
 ---

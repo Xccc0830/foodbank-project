@@ -14,7 +14,7 @@ flowchart TD
 	Staff --> Review[物資審查]
 	Review --> Dispatch{配送方式}
 	Dispatch --> Loyal[忠信派車]
-	Dispatch --> MemberDispatch[志工派車／配送會員接單]
+	Dispatch --> MemberDispatch[忠信GO RIDER派車／配送會員接單]
 	MemberDispatch --> Delivery[配送任務]
 	Loyal --> Delivery
 	Delivery --> Order[訂單追蹤與訂單編號]

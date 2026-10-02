@@ -458,30 +458,30 @@ CREATE TABLE `notifications` (
 --
 
 INSERT INTO `notifications` (`notification_id`, `user_id`, `title`, `message`, `type`, `read_at`, `created_at`) VALUES
-(1, 1, '配送任務已接單', '配送任務 #4 已由志工接單。', 'info', NULL, '2026-09-22 06:16:10'),
-(2, 2, '配送任務已接單', '配送任務 #4 已由志工接單。', 'info', '2026-09-22 14:21:29', '2026-09-22 06:16:10'),
-(3, 3, '配送任務已接單', '配送任務 #4 已由志工接單。', 'info', NULL, '2026-09-22 06:16:10'),
-(4, 7, '配送任務已接單', '配送任務 #4 已由志工接單。', 'info', NULL, '2026-09-22 06:16:10'),
+(1, 1, '配送任務已接單', '配送任務 #4 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:16:10'),
+(2, 2, '配送任務已接單', '配送任務 #4 已由忠信GO RIDER接單。', 'info', '2026-09-22 14:21:29', '2026-09-22 06:16:10'),
+(3, 3, '配送任務已接單', '配送任務 #4 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:16:10'),
+(4, 7, '配送任務已接單', '配送任務 #4 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:16:10'),
 (5, 4, '配送已完成', '配送任務 #4 已確認收貨，獲得 0 點公益點數。', 'success', '2026-09-22 14:22:32', '2026-09-22 06:21:18'),
-(6, 1, '配送任務已接單', '配送任務 #5 已由志工接單。', 'info', NULL, '2026-09-22 06:24:51'),
-(7, 2, '配送任務已接單', '配送任務 #5 已由志工接單。', 'info', '2026-09-22 15:22:51', '2026-09-22 06:24:51'),
-(8, 3, '配送任務已接單', '配送任務 #5 已由志工接單。', 'info', NULL, '2026-09-22 06:24:51'),
-(9, 7, '配送任務已接單', '配送任務 #5 已由志工接單。', 'info', NULL, '2026-09-22 06:24:51'),
-(10, 1, '配送任務已接單', '配送任務 #6 已由志工接單。', 'info', NULL, '2026-09-22 06:53:54'),
-(11, 2, '配送任務已接單', '配送任務 #6 已由志工接單。', 'info', '2026-09-22 15:22:52', '2026-09-22 06:53:54'),
-(12, 3, '配送任務已接單', '配送任務 #6 已由志工接單。', 'info', NULL, '2026-09-22 06:53:54'),
-(13, 7, '配送任務已接單', '配送任務 #6 已由志工接單。', 'info', NULL, '2026-09-22 06:53:54'),
-(14, 1, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', NULL, '2026-09-22 06:54:26'),
-(15, 2, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', '2026-09-22 15:22:53', '2026-09-22 06:54:26'),
-(16, 3, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', NULL, '2026-09-22 06:54:26'),
-(17, 7, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', NULL, '2026-09-22 06:54:26'),
-(18, 1, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', NULL, '2026-09-22 07:18:50'),
-(19, 2, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', '2026-09-22 15:22:54', '2026-09-22 07:18:50'),
-(20, 3, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', NULL, '2026-09-22 07:18:50'),
-(21, 7, '配送任務已接單', '配送任務 #7 已由志工接單。', 'info', NULL, '2026-09-22 07:18:50'),
-(22, 1, '配送任務已接單', '配送任務 #8 已由志工接單。', 'info', NULL, '2026-09-22 07:18:54'),
-(23, 2, '配送任務已接單', '配送任務 #8 已由志工接單。', 'info', '2026-09-22 15:22:55', '2026-09-22 07:18:54'),
-(24, 3, '配送任務已接單', '配送任務 #8 已由志工接單。', 'info', NULL, '2026-09-22 07:18:54'),
+(6, 1, '配送任務已接單', '配送任務 #5 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:24:51'),
+(7, 2, '配送任務已接單', '配送任務 #5 已由忠信GO RIDER接單。', 'info', '2026-09-22 15:22:51', '2026-09-22 06:24:51'),
+(8, 3, '配送任務已接單', '配送任務 #5 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:24:51'),
+(9, 7, '配送任務已接單', '配送任務 #5 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:24:51'),
+(10, 1, '配送任務已接單', '配送任務 #6 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:53:54'),
+(11, 2, '配送任務已接單', '配送任務 #6 已由忠信GO RIDER接單。', 'info', '2026-09-22 15:22:52', '2026-09-22 06:53:54'),
+(12, 3, '配送任務已接單', '配送任務 #6 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:53:54'),
+(13, 7, '配送任務已接單', '配送任務 #6 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:53:54'),
+(14, 1, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:54:26'),
+(15, 2, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', '2026-09-22 15:22:53', '2026-09-22 06:54:26'),
+(16, 3, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:54:26'),
+(17, 7, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 06:54:26'),
+(18, 1, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 07:18:50'),
+(19, 2, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', '2026-09-22 15:22:54', '2026-09-22 07:18:50'),
+(20, 3, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 07:18:50'),
+(21, 7, '配送任務已接單', '配送任務 #7 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 07:18:50'),
+(22, 1, '配送任務已接單', '配送任務 #8 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 07:18:54'),
+(23, 2, '配送任務已接單', '配送任務 #8 已由忠信GO RIDER接單。', 'info', '2026-09-22 15:22:55', '2026-09-22 07:18:54'),
+(24, 3, '配送任務已接單', '配送任務 #8 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 07:18:54'),
 (25, 7, '配送任務已接單', '配送任務 #8 已由忠信GO RIDER接單。', 'info', NULL, '2026-09-22 07:18:54');
 
 -- --------------------------------------------------------
@@ -794,12 +794,12 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `p
 (1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '忠信食物銀行', NULL, 'admin', NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
 (2, 'manager', '$2y$10$iL8M6sR5fDEijHGLU/dWqeHTuSusk4IjCJ5VAsz.OytAgc/2Dc7QG', 'manager@foodbank.local', '忠信食物銀行', NULL, 'admin', NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
 (3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(4, 'volunteer', '$2y$10$ZWwCxo.mGqgE5GvPiR5nH.WhufmwuBbGPtJ0TEmEcqveablDm8uCK', 'volunteer@foodbank.local', '平台志工', NULL, 'volunteer', NULL, 'active', '2026-08-18 16:46:44', '2026-09-18 07:05:20', NULL, 0, 0, NULL, NULL),
+(4, 'volunteer', '$2y$10$ZWwCxo.mGqgE5GvPiR5nH.WhufmwuBbGPtJ0TEmEcqveablDm8uCK', 'volunteer@foodbank.local', '平台忠信GO RIDER', NULL, 'volunteer', NULL, 'active', '2026-08-18 16:46:44', '2026-09-18 07:05:20', NULL, 0, 0, NULL, NULL),
 (6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'volunteer', NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL),
 (7, 'official', '3fae19dadf1a05245ffa9cd28f3e4530dc42d16511f743883da4e0f5c70fdc12', 'official@foodbank.local', '官方審核人員', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
 (8, 'donor', '0df8b21212b360c2862c2cce12a4f3d883f13acdc4b59f43cf5b2fcfd2c30954', 'donor@foodbank.local', '捐贈店家', NULL, 'donor', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
 (11, 'store_demo', '$2y$10$RUndnqZIN/Nw5FJx/X059eW0ZsjRovylNN8kt7k2HioHPuiQEGKMu', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'donor', '零售部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
-(12, 'courier_demo', '$2y$10$v16TT2Uetokuln3OeVD7PuY0ZCqMM/nwKnFUFtJg1SzFmJhjknZjC', 'courier_demo@foodbank.local', '配送志工A', '0923456789', 'volunteer', '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
+(12, 'courier_demo', '$2y$10$v16TT2Uetokuln3OeVD7PuY0ZCqMM/nwKnFUFtJg1SzFmJhjknZjC', 'courier_demo@foodbank.local', '配送忠信GO RIDERA', '0923456789', 'volunteer', '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
 (13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'donor', NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, NULL, NULL);
 */
 
@@ -1395,9 +1395,9 @@ FROM `donations`;
 ALTER TABLE `donations`
   ADD CONSTRAINT `donations_ibfk_2` FOREIGN KEY (`beneficiary_id`) REFERENCES `beneficiaries` (`beneficiary_id`) ON DELETE SET NULL;
 
--- 修正舊資料殘留的「志工」字樣，統一顯示為「忠信GO RIDER」
-UPDATE `notifications` SET `message` = REPLACE(`message`, '志工', '忠信GO RIDER') WHERE `message` LIKE '%志工%';
-UPDATE `activities` SET `title` = REPLACE(`title`, '志工', '忠信GO RIDER') WHERE `title` LIKE '%志工%';
+-- 修正舊資料殘留的「忠信GO RIDER」字樣，統一顯示為「忠信GO RIDER」
+UPDATE `notifications` SET `message` = REPLACE(`message`, '忠信GO RIDER', '忠信GO RIDER') WHERE `message` LIKE '%忠信GO RIDER%';
+UPDATE `activities` SET `title` = REPLACE(`title`, '忠信GO RIDER', '忠信GO RIDER') WHERE `title` LIKE '%忠信GO RIDER%';
 
 -- --------------------------------------------------------
 
