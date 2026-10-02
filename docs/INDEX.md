@@ -31,6 +31,7 @@
 
 | 文檔 | 內容 |
 |------|------|
+| [SYSTEM_ARCHITECTURE_AND_GAP_MATRIX_2026-10-02.md](reports/SYSTEM_ARCHITECTURE_AND_GAP_MATRIX_2026-10-02.md) | 系統現況架構與產學需求差距確認表 (2026/10/02) |
 | [ENHANCEMENT_CHECKLIST.md](reports/ENHANCEMENT_CHECKLIST.md) | ✅ **待加強清單** - 優先級劃分 |
 | [SYSTEM_MODIFICATIONS_2026-0918.md](reports/SYSTEM_MODIFICATIONS_2026-0918.md) | 2026/09/18 系統修改記錄 |
 | [INVENTORY_REMOVAL_REPORT_2026-0918.md](reports/INVENTORY_REMOVAL_REPORT_2026-0918.md) | 庫存系統刪除報告 (2026/09/18) |
@@ -58,6 +59,9 @@
 
 ### 瞭解架構
 → `planning/PROJECT_OVERVIEW.md`
+
+### 產學需求確認
+→ `reports/SYSTEM_ARCHITECTURE_AND_GAP_MATRIX_2026-10-02.md`
 
 ### 查看修改歷史
 → `reports/SYSTEM_MODIFICATIONS_2026-0918.md`
