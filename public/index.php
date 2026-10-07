@@ -275,6 +275,13 @@ if (in_array($action, ['delivery_tracking', 'delivery_location'], true) && empty
     exit;
 }
 
+if ($action === 'notifications_poll' && empty($_SESSION['user'])) {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => '登入狀態已逾時，請重新登入後查看通知。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($action === 'calculate_distance' && empty($_SESSION['user'])) {
     http_response_code(401);
     header('Content-Type: application/json; charset=utf-8');
@@ -292,6 +299,39 @@ if ($action === 'login' || empty($_SESSION['user'])) {
 $currentUser = $_SESSION['user'];
 require_once BASE_PATH . '/src/services/AuthService.php';
 $authService = AuthService::forCurrentUser($currentUser);
+
+if ($action === 'notifications_poll') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        header('Allow: GET');
+        echo json_encode(['error' => '不支援的請求方式。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $afterId = filter_input(INPUT_GET, 'after_id', FILTER_VALIDATE_INT);
+    if ($afterId === false || $afterId === null || $afterId < 0) {
+        http_response_code(400);
+        echo json_encode(['error' => '通知編號無效。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    require_once BASE_PATH . '/src/models/NotificationModel.php';
+    $pollNotificationModel = new NotificationModel();
+    $newNotifications = $pollNotificationModel->getSince((int) $currentUser['user_id'], $afterId);
+    if ($newNotifications === false) {
+        http_response_code(500);
+        echo json_encode(['error' => '目前無法取得新通知。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode([
+        'unread_count' => $pollNotificationModel->getUnreadCount((int) $currentUser['user_id']),
+        'notifications' => $newNotifications,
+    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
 
 if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
     header('Content-Type: application/json; charset=utf-8');
@@ -417,6 +457,7 @@ $unreadNotificationCount = 0;
 if (isset($currentUser['user_id'])) {
     $unreadNotificationCount = (int) $notificationModel->getUnreadCount((int) $currentUser['user_id']);
 }
+$latestNotificationId = $notificationModel->getLatestIdForUser((int) $currentUser['user_id']);
 $role = $currentUser['role'];
 $memberType = $currentUser['member_type'] ?? null;
 $roleLabels = [
@@ -473,7 +514,7 @@ ob_start();
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
-<body>
+<body data-notification-poll-url="?action=notifications_poll" data-notification-last-id="<?php echo (int) $latestNotificationId; ?>">
     <div class="app-wrapper">
         <!-- 側邊欄 -->
         <aside class="sidebar">
@@ -496,8 +537,8 @@ ob_start();
                     <a href="?page=<?php echo $key; ?>" class="nav-item <?php echo $is_active; ?>" title="<?php echo $label; ?>">
                         <span class="nav-icon"><i class="<?php echo $icon; ?>"></i></span>
                         <span class="nav-label"><?php echo $label; ?></span>
-                        <?php if ($key === 'notifications' && $unreadNotificationCount > 0): ?>
-                            <span class="notification-badge sidebar-notification-badge"><?php echo (int) $unreadNotificationCount; ?></span>
+                        <?php if ($key === 'notifications'): ?>
+                            <span class="notification-badge sidebar-notification-badge" data-notification-badge <?php echo $unreadNotificationCount > 0 ? '' : 'hidden'; ?>><?php echo (int) $unreadNotificationCount; ?></span>
                         <?php endif; ?>
                     </a>
                 <?php endforeach; ?>
@@ -537,9 +578,7 @@ ob_start();
                     </div>
                     <a href="?page=notifications" class="icon-btn" title="通知" aria-label="查看通知中心">
                         <i class="fas fa-bell"></i>
-                        <?php if ($unreadNotificationCount > 0): ?>
-                            <span class="notification-badge"><?php echo (int) $unreadNotificationCount; ?></span>
-                        <?php endif; ?>
+                        <span class="notification-badge" data-notification-badge <?php echo $unreadNotificationCount > 0 ? '' : 'hidden'; ?>><?php echo (int) $unreadNotificationCount; ?></span>
                     </a>
                     <a href="?page=settings" class="icon-btn" title="設置" aria-label="前往設置">
                         <i class="fas fa-cog"></i>

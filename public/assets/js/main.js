@@ -9,10 +9,64 @@
         initializeEventListeners();
         initializeSidebarToggle();
         initializeLiveDeliveryTracking();
+        initializeNotifications();
         initializeMaterialDonationDistanceEstimate();
         initializeDriverTripCard();
         injectRuntimeStyles();
     });
+
+    function initializeNotifications() {
+        const pollUrl = document.body.dataset.notificationPollUrl;
+        if (!pollUrl) {
+            return;
+        }
+
+        let lastNotificationId = Number(document.body.dataset.notificationLastId || 0);
+        let requestInFlight = false;
+
+        function updateBadges(unreadCount) {
+            document.querySelectorAll('[data-notification-badge]').forEach(function (badge) {
+                badge.textContent = String(unreadCount);
+                badge.hidden = unreadCount < 1;
+            });
+        }
+
+        async function pollNotifications() {
+            if (requestInFlight || document.visibilityState === 'hidden') {
+                return;
+            }
+            requestInFlight = true;
+
+            try {
+                const url = new URL(pollUrl, window.location.href);
+                url.searchParams.set('after_id', String(lastNotificationId));
+                const response = await fetch(url.toString(), {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || '無法更新通知。');
+                }
+
+                updateBadges(Number(result.unread_count) || 0);
+                (result.notifications || []).forEach(function (notification) {
+                    lastNotificationId = Math.max(lastNotificationId, Number(notification.notification_id) || 0);
+                    if (typeof window.showNotification === 'function') {
+                        window.showNotification(notification.title + '：' + notification.message, notification.type);
+                    }
+                });
+            } catch (error) {
+                console.error('通知更新失敗：', error);
+            } finally {
+                requestInFlight = false;
+            }
+        }
+
+        pollNotifications();
+        window.setInterval(pollNotifications, 5000);
+        document.addEventListener('visibilitychange', pollNotifications);
+    }
 
     function initializeLiveDeliveryTracking() {
         const csrfToken = document.querySelector('meta[name="csrf-token"]');

@@ -16,7 +16,6 @@ $message = null;
 $editingActivity = null;
 $participantLists = [];
 
-$connection = $db->getConnection();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['action'] ?? '') === 'create_activity') {
         if (!$canCreateActivity) {
@@ -35,9 +34,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'created_by' => (int) $currentUser['user_id'],
             'status' => 'planned',
         ];
-        $message = $data['title'] !== '' && ($activityType !== 'other' || $activityTypeDetail !== '') && $activityModel->createActivity($data)
-            ? ['type' => 'success', 'text' => '公益活動已發布。']
-            : ['type' => 'error', 'text' => $activityType === 'other' && $activityTypeDetail === '' ? '請填寫其他活動類型。' : '請填寫活動名稱，或活動發布失敗。'];
+        $activityId = $data['title'] !== '' && ($activityType !== 'other' || $activityTypeDetail !== '')
+            ? $activityModel->createActivity($data)
+            : false;
+        if ($activityId) {
+            $notifiedCount = $notificationModel->notifyMembers(
+                '有新的公益活動',
+                sprintf('「%s」已開放報名，愛心商家可優先認領，剩餘名額同步開放 Go Rider。', $data['title']),
+                'info'
+            );
+            if ($notifiedCount === 0) {
+                error_log("公益活動發布後沒有通知到會員：activity_id={$activityId}");
+            }
+            $message = ['type' => 'success', 'text' => '公益活動已發布，會員已收到通知。'];
+        } else {
+            $message = ['type' => 'error', 'text' => $activityType === 'other' && $activityTypeDetail === '' ? '請填寫其他活動類型。' : '請填寫活動名稱，或活動發布失敗。'];
+        }
         }
     }
 
@@ -46,14 +58,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $organizationName = $assignmentType === 'company'
             ? (string) ($currentUser['enterprise_name'] ?? '')
             : null;
-        $participantCount = $isEnterpriseMember ? max(1, (int) ($_POST['participant_count'] ?? 1)) : 1;
+        $participantCount = $isEnterpriseMember ? (int) ($_POST['participant_count'] ?? 0) : 1;
 
-        if ($assignmentType === 'company' && trim($organizationName) === '') {
+        if ($assignmentType === 'company' && $participantCount < 1) {
+            $message = ['type' => 'error', 'text' => '請填寫至少 1 位企業參與人數。'];
+        } elseif ($assignmentType === 'company' && trim($organizationName) === '') {
             $message = ['type' => 'error', 'text' => '請先補齊企業會員的企業／組織名稱。'];
         } else {
-            $message = $activityModel->register((int) $_POST['activity_id'], (int) $currentUser['user_id'], $assignmentType, $organizationName, $participantCount)
-                ? ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業會員活動報名已送出。' : '活動報名完成，預計可獲得 5 枚興毅幣。']
-                : ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或活動名額已滿。'];
+            $activityId = (int) ($_POST['activity_id'] ?? 0);
+            $registered = $activityModel->register($activityId, (int) $currentUser['user_id'], $assignmentType, $organizationName, $participantCount);
+            $activity = $registered ? $activityModel->getActivityById($activityId) : null;
+            if ($registered && $activity) {
+                $memberName = trim((string) ($currentUser['full_name'] ?? $currentUser['username'] ?? '會員'));
+                $registrationDetails = $assignmentType === 'company'
+                    ? sprintf('%s（%s）認領「%s」，報名 %d 人。', $memberName, $organizationName, $activity['title'], $participantCount)
+                    : sprintf('%s 報名「%s」。', $memberName, $activity['title']);
+                $notificationModel->notify(
+                    (int) $currentUser['user_id'],
+                    '活動報名已確認',
+                    $assignmentType === 'company'
+                        ? sprintf('您已為「%s」報名 %d 人；剩餘名額已同步開放 Go Rider。', $activity['title'], $participantCount)
+                        : sprintf('您已成功報名「%s」。', $activity['title']),
+                    'success'
+                );
+                $notifiedCount = $notificationModel->notifyRole('foodbank_staff', '收到新的活動報名', $registrationDetails, 'info');
+                if ($notifiedCount === 0) {
+                    error_log("活動報名後沒有通知到食物銀行人員：activity_id={$activityId}");
+                }
+                $remainingCapacity = $assignmentType === 'company' ? $activityModel->getRemainingCapacity($activityId) : null;
+                if ($assignmentType === 'company' && is_int($remainingCapacity) && $remainingCapacity > 0) {
+                    $riderNotifications = $notificationModel->notifyMembers(
+                        '公益活動名額已開放',
+                        sprintf('愛心商家已認領「%s」，目前尚有 %d 個名額，Go Rider 現可報名。', $activity['title'], $remainingCapacity),
+                        'info',
+                        'general'
+                    );
+                    if ($riderNotifications === 0) {
+                        error_log("企業認領後沒有通知 Go Rider 剩餘活動名額：activity_id={$activityId}");
+                    }
+                }
+                $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業活動認領已送出，剩餘名額同步開放 Go Rider。' : '活動報名完成，預計可獲得 5 枚興毅幣。'];
+            } else {
+                $message = ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或剩餘名額不足。'];
+            }
         }
     }
 
@@ -69,19 +116,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : ['type' => 'error', 'text' => '取消失敗，或該活動並非您的報名記錄。'];
 
             if ($cancelled && $cancelledActivity) {
-                $officialUsers = $connection->query("SELECT user_id FROM users WHERE role = 'foodbank_staff' AND status = 'active'");
                 $volunteerName = trim((string) ($currentUser['full_name'] ?? $currentUser['username'] ?? '會員'));
-                $notificationTitle = '會員取消活動報名';
                 $notificationMessage = sprintf(
                     '%s 取消報名活動「%s」，原因：%s',
                     $volunteerName,
                     $cancelledActivity['title'],
                     $cancellationReason
                 );
-                if ($officialUsers) {
-                    while ($officialUser = $officialUsers->fetch_assoc()) {
-                        $notificationModel->notify((int) $officialUser['user_id'], $notificationTitle, $notificationMessage, 'warning');
-                    }
+                $notificationModel->notify((int) $currentUser['user_id'], '活動報名已取消', '您已取消活動「' . $cancelledActivity['title'] . '」的報名。', 'info');
+                if ($notificationModel->notifyRole('foodbank_staff', '會員取消活動報名', $notificationMessage, 'warning') === 0) {
+                    error_log('活動取消後沒有通知到食物銀行人員：activity_id=' . (int) $_POST['activity_id']);
                 }
             }
         }
@@ -121,12 +165,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ($updated
             ? ['type' => 'success', 'text' => '活動已更新。']
             : ['type' => 'error', 'text' => '更新失敗，只有活動發起人或食物銀行/管理者才可編輯。']);
+        if ($updated) {
+            $updatedActivity = $activityModel->getActivityById($activityId);
+            foreach ($activityModel->getParticipants($activityId) as $participant) {
+                $notificationModel->notify(
+                    (int) $participant['user_id'],
+                    '公益活動內容已更新',
+                    sprintf('您已報名的活動「%s」資訊有更新，請查看活動頁面。', $updatedActivity['title'] ?? '公益活動'),
+                    'info'
+                );
+            }
+        }
     }
 }
 
 $activities = $activityModel->getAllActivities();
 foreach ($activities as $index => $activity) {
-    $activities[$index]['can_register'] = $canRegisterActivities && $activityModel->canUserRegisterActivity((int) $activity['activity_id'], (int) $currentUser['user_id']);
+    $capacity = (int) ($activity['capacity'] ?? 0);
+    $remainingCapacity = $capacity > 0 ? max(0, $capacity - (int) $activity['participant_count']) : null;
+    $activities[$index]['remaining_capacity'] = $remainingCapacity;
+    $activities[$index]['can_register'] = $canRegisterActivities
+        && ($isEnterpriseMember || $capacity <= 0 || !empty($activity['has_company_claim']))
+        && ($remainingCapacity === null || $remainingCapacity > 0)
+        && in_array($activity['status'], ['planned', 'ongoing'], true)
+        && $activityModel->canUserRegisterActivity((int) $activity['activity_id'], (int) $currentUser['user_id']);
     $activities[$index]['can_manage'] = $activityModel->canManageActivity((int) $activity['activity_id'], (int) $currentUser['user_id'], $currentRole);
     $activities[$index]['can_view_participants'] = $activities[$index]['can_manage'] || $currentRole === 'foodbank_staff';
     if ($activities[$index]['can_view_participants']) {
@@ -157,7 +219,20 @@ $activityStatusLabels = [
 ];
 ?>
 
-<div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '以企業會員身分報名活動，參與在地公益行動' : '報名公益活動，參與在地行動並累積公益貢獻') : '發布公益活動，邀請會員參與在地行動'; ?></p></div></div>
+<style>
+    .enterprise-participant-step {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .enterprise-claim-start[hidden],
+    .enterprise-participant-step[hidden] {
+        display: none !important;
+    }
+</style>
+<div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '愛心商家可優先認領並填寫企業參與人數；尚未認領的名額立即開放 Go Rider，雙方皆可同時報名' : '愛心商家認領後的剩餘名額會立即開放，Go Rider 可同步報名並參與在地行動') : '發布公益活動，邀請會員參與在地行動'; ?></p></div></div>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
@@ -209,7 +284,7 @@ $activityStatusLabels = [
 
 <div class="card mt-32"><div class="card-header"><h2>活動列表</h2></div><div class="card-body activities-table-body">
 <?php if ($activities): ?><table class="data-table activities-table"><thead><tr><th>活動名稱</th><th>類型</th><th>時間</th><th>參與人數</th><th>狀態</th><th>操作</th></tr></thead><tbody>
-<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><?php if (!empty($activity['description']) && trim($activity['description']) !== trim($activity['title'])): ?><br><small class="<?php echo mb_strlen(trim($activity['description']), 'UTF-8') > 80 ? 'activity-description' : 'activity-description-short'; ?>"><?php echo htmlspecialchars($activity['description']); ?></small><?php if (mb_strlen(trim($activity['description']), 'UTF-8') > 80): ?><button type="button" class="activity-description-button" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>" data-activity-description="<?php echo htmlspecialchars($activity['description'], ENT_QUOTES, 'UTF-8'); ?>">查看完整說明</button><?php endif; ?><?php endif; ?></td><td><?php echo htmlspecialchars($getActivityTypeLabel($activity)); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] : ''; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$activity['status']] ?? $activity['status']); ?></span></td><td>
+<?php foreach ($activities as $activity): ?><tr><td><strong><?php echo htmlspecialchars($activity['title']); ?></strong><?php if (!empty($activity['description']) && trim($activity['description']) !== trim($activity['title'])): ?><br><small class="<?php echo mb_strlen(trim($activity['description']), 'UTF-8') > 80 ? 'activity-description' : 'activity-description-short'; ?>"><?php echo htmlspecialchars($activity['description']); ?></small><?php if (mb_strlen(trim($activity['description']), 'UTF-8') > 80): ?><button type="button" class="activity-description-button" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>" data-activity-description="<?php echo htmlspecialchars($activity['description'], ENT_QUOTES, 'UTF-8'); ?>">查看完整說明</button><?php endif; ?><?php endif; ?></td><td><?php echo htmlspecialchars($getActivityTypeLabel($activity)); ?></td><td><?php echo htmlspecialchars($activity['start_at']); ?></td><td><?php echo (int) $activity['participant_count']; ?><?php echo $activity['capacity'] ? ' / ' . (int) $activity['capacity'] . ' 人' : ' 人'; ?><?php if ($activity['remaining_capacity'] !== null && $canRegisterActivities): ?><br><small>剩餘 <?php echo (int) $activity['remaining_capacity']; ?> 人</small><?php endif; ?></td><td><span class="status status-<?php echo htmlspecialchars($activity['status']); ?>"><?php echo htmlspecialchars($activityStatusLabels[$activity['status']] ?? $activity['status']); ?></span></td><td>
     <?php if ($activity['can_manage']): ?>
         <div class="inline-action-group">
             <form method="post" class="delivery-action-form"><?php echo csrfField(); ?>
@@ -232,12 +307,29 @@ $activityStatusLabels = [
             <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
             <input type="hidden" name="assignment_type" value="<?php echo $isEnterpriseMember ? 'company' : 'individual'; ?>">
             <?php if ($isEnterpriseMember): ?>
-                <input type="number" name="participant_count" min="1" value="1" title="參與人數" style="width: 70px;" required>
+                <button class="btn btn-primary btn-sm enterprise-claim-start" type="button">優先認領／企業報名</button>
+                <div class="enterprise-participant-step" hidden>
+                    <label for="activity-participant-count-<?php echo (int) $activity['activity_id']; ?>">選擇企業參與人數</label>
+                    <input id="activity-participant-count-<?php echo (int) $activity['activity_id']; ?>" type="number" name="participant_count" min="1" <?php echo $activity['remaining_capacity'] !== null ? 'max="' . (int) $activity['remaining_capacity'] . '"' : ''; ?> value="1" title="企業參與人數" required disabled>
+                    <button class="btn btn-primary btn-sm" type="submit">確認報名</button>
+                    <button class="btn btn-secondary btn-sm enterprise-claim-cancel" type="button">返回</button>
+                </div>
+            <?php else: ?>
+                <button class="btn btn-primary btn-sm" type="submit">報名活動</button>
             <?php endif; ?>
-            <button class="btn btn-primary btn-sm" type="submit">報名活動</button>
         </form>
     <?php else: ?>
-        <span class="status status-warning">已報名或已逾期</span>
+        <span class="status status-warning"><?php
+            if ($activity['remaining_capacity'] === 0) {
+                echo '名額已滿';
+            } elseif (!$isEnterpriseMember && (int) ($activity['capacity'] ?? 0) > 0 && empty($activity['has_company_claim'])) {
+                echo '等待愛心商家優先認領';
+            } elseif (!in_array($activity['status'], ['planned', 'ongoing'], true)) {
+                echo '活動已結束或取消';
+            } else {
+                echo '已報名';
+            }
+        ?></span>
     <?php endif; ?>
 </td></tr><?php endforeach; ?></tbody></table>
 <?php else: ?><div class="empty-state"><i class="fas fa-calendar"></i><p>目前沒有公開活動</p></div><?php endif; ?></div></div>
@@ -300,6 +392,27 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
 
     select.addEventListener('change', updateActivityTypeField);
     updateActivityTypeField();
+});
+
+document.querySelectorAll('.enterprise-claim-start').forEach(function (button) {
+    const form = button.closest('form');
+    const step = form.querySelector('.enterprise-participant-step');
+    const input = step.querySelector('input[name="participant_count"]');
+    const cancelButton = step.querySelector('.enterprise-claim-cancel');
+
+    button.addEventListener('click', function () {
+        button.hidden = true;
+        step.hidden = false;
+        input.disabled = false;
+        input.focus();
+    });
+
+    cancelButton.addEventListener('click', function () {
+        input.disabled = true;
+        step.hidden = true;
+        button.hidden = false;
+        button.focus();
+    });
 });
 </script>
 

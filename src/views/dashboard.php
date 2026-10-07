@@ -41,7 +41,7 @@ if ($isEnterpriseMember) {
 $donationListPage = $isEnterpriseMember ? 'donation_materials' : 'donation_materials_review';
 $dashboardRoleLabels = [
     'foodbank_staff' => '管理介面',
-    'member' => $isEnterpriseMember ? '企業會員工作台' : '一般會員工作台',
+    'member' => $isEnterpriseMember ? '企業公益行動中心' : 'Go Rider服務中心',
 ];
 ?>
 

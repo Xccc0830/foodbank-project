@@ -752,7 +752,7 @@ class DeliveryModel extends BaseModel {
 
     private function notifyUser($userId, $title, $message, $type) {
         require_once __DIR__ . '/NotificationModel.php';
-        return (new NotificationModel())->notify((int) $userId, $title, $message, $type);
+        return (new NotificationModel($this->db))->notify((int) $userId, $title, $message, $type);
     }
 
     private function notifyGeneralMembers($title, $message, $type) {

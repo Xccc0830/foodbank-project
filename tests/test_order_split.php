@@ -65,6 +65,8 @@ $orderNumber = $donation['order_number'];
 $conn->query("UPDATE donations SET status = 'assessed' WHERE donation_id = {$donationId}");
 
 $itemsBefore = $conn->query("SELECT item_id, quantity FROM donation_items WHERE donation_id = {$donationId}")->fetch_all(MYSQLI_ASSOC);
+$notificationCursorResult = $conn->query("SELECT COALESCE(MAX(notification_id), 0) AS latest_id FROM notifications");
+$notificationCursor = $notificationCursorResult ? (int) $notificationCursorResult->fetch_assoc()['latest_id'] : 0;
 
 $published = $donationModel->publishDonation($donationId, ['split_count' => 3, 'delivery_method' => 'volunteer', 'urgency' => 'normal']);
 
@@ -72,6 +74,22 @@ if ($published) {
     echo "PASS publish-with-split (donation #{$donationId})\n";
 } else {
     echo "FAIL publish-with-split (donation #{$donationId})\n";
+    $failures++;
+}
+
+$activeRidersResult = $conn->query("SELECT COUNT(*) AS total FROM users WHERE role = 'member' AND member_type = 'general' AND status = 'active'");
+$activeRiderCount = $activeRidersResult ? (int) $activeRidersResult->fetch_assoc()['total'] : 0;
+$notifiedRidersResult = $conn->query(
+    "SELECT COUNT(DISTINCT user_id) AS total FROM notifications
+     WHERE notification_id > {$notificationCursor} AND title = '新的 Go Rider 配送任務'"
+);
+$notifiedRiderCount = $notifiedRidersResult ? (int) $notifiedRidersResult->fetch_assoc()['total'] : 0;
+if ($published && $activeRiderCount > 0 && $notifiedRiderCount === $activeRiderCount) {
+    echo "PASS published-volunteer-deliveries-notify-all-active-riders\n";
+} elseif ($activeRiderCount === 0) {
+    echo "SKIP published-volunteer-deliveries-notify-all-active-riders (no active general members)\n";
+} else {
+    echo "FAIL published-volunteer-deliveries-notify-all-active-riders (expected {$activeRiderCount}, got {$notifiedRiderCount})\n";
     $failures++;
 }
 
