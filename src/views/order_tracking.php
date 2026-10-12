@@ -66,16 +66,10 @@ $subOrderStatusLabels = [
     .customer-progress-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
     .customer-progress-step { color: #94a3b8; font-size: 12px; }
     .customer-progress-step.is-active, .customer-progress-step.is-complete { color: #0f766e; font-weight: 700; }
-    .customer-delivery-map { position: relative; display: grid; min-height: 270px; overflow: hidden; place-items: center; background: radial-gradient(ellipse at 50% 42%, #f0fdfa 0, #e7f5f0 38%, #e8eef4 100%); }
-    .customer-delivery-map::before, .customer-delivery-map::after { position: absolute; width: 130%; height: 42px; border: 12px solid rgba(255,255,255,.85); border-right: 0; border-left: 0; content: ""; transform: rotate(-24deg); }
-    .customer-delivery-map::after { width: 90%; transform: rotate(36deg); }
-    .customer-map-grid { position: absolute; inset: 0; opacity: .38; background-image: linear-gradient(35deg, transparent 47%, #cbd5e1 48%, #cbd5e1 49%, transparent 50%), linear-gradient(145deg, transparent 43%, #cbd5e1 44%, #cbd5e1 45%, transparent 46%); background-size: 95px 82px, 120px 100px; }
-    .customer-map-rider { position: absolute; z-index: 6; top: calc(50% - 23px); left: calc(50% - 23px); display: grid; width: 46px; height: 46px; place-items: center; border: 3px solid #fff; border-radius: 50%; background: #0f766e; color: #fff; font-size: 18px; box-shadow: 0 4px 16px rgba(15,23,42,.24); }
-    .customer-map-placeholder { position: relative; z-index: 4; max-width: 230px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,.94); color: #475569; text-align: center; font-size: 13px; box-shadow: 0 3px 12px rgba(15,23,42,.12); }
-    .customer-map-frame { position: absolute; z-index: 5; inset: 0; width: 100%; height: 100%; border: 0; }
-    .customer-map-frame[hidden], .customer-map-rider[hidden] { display: none; }
-    .customer-map-attribution { position: absolute; z-index: 6; right: 0; bottom: 0; padding: 3px 6px; background: rgba(255,255,255,.9); color: #475569; font-size: 10px; }
-    .customer-map-attribution a { color: inherit; }
+    .customer-delivery-map { position: relative; display: grid; min-height: 320px; overflow: hidden; place-items: center; border-radius: 14px; background: radial-gradient(ellipse at 50% 42%, #f0fdfa 0, #e7f5f0 38%, #e8eef4 100%); }
+    .customer-map-placeholder { position: relative; z-index: 1; max-width: 230px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,.94); color: #475569; text-align: center; font-size: 13px; box-shadow: 0 3px 12px rgba(15,23,42,.12); }
+    .customer-map-canvas { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; }
+    .customer-map-canvas[hidden], .customer-map-placeholder[hidden] { display: none; }
     .customer-delivery-side { display: flex; flex-direction: column; justify-content: space-between; gap: 18px; padding: 24px; border-left: 1px solid #eef2f7; background: #fbfcfe; }
     .customer-courier { display: flex; align-items: center; gap: 14px; }
     .customer-courier-avatar { display: grid; flex: 0 0 54px; width: 54px; height: 54px; place-items: center; border-radius: 50%; background: #ccfbf1; color: #0f766e; font-size: 19px; font-weight: 800; }
@@ -161,17 +155,14 @@ $subOrderStatusLabels = [
                                             <div class="customer-progress-track"><span class="customer-progress-fill"></span></div>
                                             <div class="customer-progress-steps">
                                                 <span class="customer-progress-step">準備中</span>
-                                                <span class="customer-progress-step">外送員接單</span>
+                                                <span class="customer-progress-step">Go Rider 接單</span>
                                                 <span class="customer-progress-step">前往送達</span>
                                                 <span class="customer-progress-step">已送達</span>
                                             </div>
                                         </div>
                                         <div class="customer-delivery-map" aria-label="配送位置地圖">
-                                            <div class="customer-map-grid"></div>
-                                            <span class="customer-map-rider" hidden><i class="fa-solid fa-motorcycle"></i></span>
-                                            <p class="customer-map-placeholder">配送員取貨後，地圖會顯示即時位置</p>
-                                            <iframe class="customer-map-frame" title="OpenStreetMap 配送員即時位置" loading="lazy" referrerpolicy="no-referrer" hidden></iframe>
-                                            <span class="customer-map-attribution" hidden>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> 貢獻者</span>
+                                            <p class="customer-map-placeholder">Go Rider 取貨後，地圖會顯示即時位置</p>
+                                            <div class="customer-map-canvas" data-map-canvas hidden></div>
                                         </div>
                                     </div>
                                     <aside class="customer-delivery-side">
@@ -183,12 +174,8 @@ $subOrderStatusLabels = [
                                         </div>
                                         <p class="customer-stop-alert" data-other-stops hidden></p>
                                         <div>
-                                            <p class="customer-location-status" aria-live="polite">地圖將在您點選後載入，並由 OpenStreetMap 提供地圖圖資。</p>
+                                            <p class="customer-location-status" aria-live="polite">Go Rider 取貨後，即時位置與行進軌跡會直接顯示在左側地圖。</p>
                                             <p class="customer-tracking-update" data-location-updated></p>
-                                        </div>
-                                        <div class="customer-tracking-actions">
-                                            <button type="button" class="btn btn-secondary btn-sm" data-show-map disabled>載入地圖並查看位置</button>
-                                            <a class="btn btn-secondary btn-sm order-live-tracking-map" target="_blank" rel="noopener noreferrer" hidden>另開地圖</a>
                                         </div>
                                     </aside>
                                 </article>
@@ -242,6 +229,6 @@ $subOrderStatusLabels = [
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-box-open"></i><p>目前沒有符合條件的訂單</p></div>
         <?php endif; ?>
-        <p class="order-live-tracking-privacy">配送位置僅供該訂單捐贈者、配送會員及官方人員查看；點選地圖連結才會將座標傳送至 OpenStreetMap。</p>
+        <p class="order-live-tracking-privacy">配送位置僅供該訂單捐贈者、配送會員及官方人員查看；地圖由 Mapbox 提供，載入地圖時會依 Mapbox 的服務條款傳送瀏覽資訊。</p>
     </div>
 </div>

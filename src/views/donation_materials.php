@@ -3,6 +3,7 @@ require_once BASE_PATH . '/src/models/DonationModel.php';
 require_once BASE_PATH . '/src/models/DeliveryModel.php';
 require_once BASE_PATH . '/src/helpers/UploadHelper.php';
 require_once BASE_PATH . '/src/helpers/DistanceHelper.php';
+require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 require_once BASE_PATH . '/src/models/NotificationModel.php';
 
 $donationModel = new DonationModel();
@@ -160,8 +161,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
             break;
         }
     }
-    if ($donorName === '' || $donorAddress === '' || $deliveryMode === '' || $deliveryAddress === '' || !$deliveryDate || !$deliveryTime || $hasInvalidItem) {
-        $formMessage = ['type' => 'error', 'text' => '請完成企業資料、取貨地址、送達地址、配送方式、日期時間，以及至少一筆物資。'];
+    $addressError = validateAddress($donorAddress, '取貨地址') ?? validateAddress($deliveryAddress, '送達地址');
+    if ($addressError !== null) {
+        $formMessage = ['type' => 'error', 'text' => $addressError];
+    } elseif ($donorName === '' || $deliveryMode === '' || !$deliveryDate || !$deliveryTime || $hasInvalidItem) {
+        $formMessage = ['type' => 'error', 'text' => '請完成企業資料、配送方式、日期時間，以及至少一筆物資。'];
     } else {
         $connection->begin_transaction();
         $insertedId = $donationModel->addDonation($donationData);
@@ -234,8 +238,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'donor_confirm_pickup') {
     $confirmed = $deliveryModel->donorConfirmPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId);
     $formMessage = $confirmed
-        ? ['type' => 'success', 'text' => '已確認外送員領取物資，運送狀態已更新。']
-        : ['type' => 'error', 'text' => '確認失敗，請確認外送員已接受任務。'];
+        ? ['type' => 'success', 'text' => '已確認 Go Rider 領取物資，運送狀態已更新。']
+        : ['type' => 'error', 'text' => '確認失敗，請確認 Go Rider 已接受任務。'];
 }
 
 $merchantDonations = $donationModel->getAllDonations(null, $currentUserId);
@@ -352,7 +356,7 @@ if ($beneficiaryResult) {
                 <div class="form-section-heading"><span>商家資料</span><h3>企業取貨資訊</h3><p>這是配送人員前往取物資的地點，不是物資送達地址。</p></div>
                 <div class="grid-2">
                     <div class="form-group"><label for="donorName">捐贈企業／組織</label><input id="donorName" type="text" value="<?php echo htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
-                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" placeholder="配送人員要到哪裡取貨" required></div>
+                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
                 </div>
                 <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點與關懷戶。</p></div>
                 <div class="form-group">
@@ -366,7 +370,7 @@ if ($beneficiaryResult) {
                     <div class="form-group"><label for="deliveryDate">預計配送日期 <span class="required-mark">*</span></label><input id="deliveryDate" type="date" name="delivery_date" required></div>
                     <div class="form-group"><label for="deliveryTime">預計配送時間 <span class="required-mark">*</span></label><input id="deliveryTime" type="time" name="delivery_time" required></div>
                 </div>
-                <div class="form-group"><label for="deliveryAddress">配送地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" placeholder="物資送到哪裡" required></div>
+                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
                 <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
                     <label>預計運送距離與時間</label>
                     <div class="distance-estimate-box">
@@ -513,7 +517,7 @@ if ($beneficiaryResult) {
                     $transportStatus = $task['status'] ?? 'open';
                     $transportStatusLabel = $transportStatus === 'open'
                         ? '尚在等待運送人員'
-                        : ($transportStatus === 'claimed' ? '運送員正在路上' : '物資已領取，運送中');
+                        : ($transportStatus === 'claimed' ? 'Go Rider 正在路上' : '物資已領取，運送中');
                     ?>
                     <tr>
                         <td><?php echo htmlspecialchars($task['donor_name'] ?? ''); ?></td>
@@ -542,7 +546,7 @@ if ($beneficiaryResult) {
                                 <form method="post" class="inline-form">
                                     <input type="hidden" name="action" value="donor_confirm_pickup">
                                     <input type="hidden" name="delivery_id" value="<?php echo (int) $task['delivery_id']; ?>">
-                                    <button type="submit" class="btn btn-primary btn-sm">外送員已將物資領取</button>
+                                    <button type="submit" class="btn btn-primary btn-sm">Go Rider 已將物資領取</button>
                                 </form>
                             <?php else: ?>
                                 <span class="text-muted">等待狀態更新</span>

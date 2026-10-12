@@ -507,6 +507,8 @@ ob_start();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="google-maps-api-key" content="<?php echo htmlspecialchars(GOOGLE_MAPS_API_KEY, ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="mapbox-access-token" content="<?php echo htmlspecialchars(MAPBOX_ACCESS_TOKEN, ENT_QUOTES, 'UTF-8'); ?>">
     <title><?php echo APP_NAME; ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -628,6 +630,8 @@ ob_start();
         </div>
     </footer>
 
+    <script src="assets/js/google-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/google-map.js'); ?>"></script>
+    <script src="assets/js/mapbox-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/mapbox-map.js'); ?>"></script>
     <script src="assets/js/main.js?v=<?php echo filemtime(__DIR__ . '/assets/js/main.js'); ?>"></script>
 </body>
 </html>

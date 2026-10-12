@@ -31,6 +31,18 @@ if (!defined('APP_DEBUG')) {
     define('APP_DEBUG', $debug);
 }
 
+// Browser key for Maps JavaScript API + Places; restrict it by HTTP referrer in Google Cloud Console.
+if (file_exists(__DIR__ . '/local.php')) {
+    require_once __DIR__ . '/local.php';
+}
+// Mapbox public token (pk.*)，供愛心商家端即時地圖使用。
+if (!defined('MAPBOX_ACCESS_TOKEN')) {
+    define('MAPBOX_ACCESS_TOKEN', getenv('MAPBOX_ACCESS_TOKEN') ?: '');
+}
+if (!defined('GOOGLE_MAPS_API_KEY')) {
+    define('GOOGLE_MAPS_API_KEY', getenv('GOOGLE_MAPS_API_KEY') ?: '');
+}
+
 if (!defined('DB_HOST')) {
     define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
 }

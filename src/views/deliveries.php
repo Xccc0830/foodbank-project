@@ -4,6 +4,7 @@
  */
 
 require_once BASE_PATH . '/src/models/DeliveryModel.php';
+require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 
 $deliveryModel = new DeliveryModel();
 $message = null;
@@ -19,6 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create_delivery') {
         if (!$isOfficial) {
             $message = ['type' => 'error', 'text' => '配送會員只能選擇接單，無法發布配送任務。'];
+        } elseif ($addressError = validateAddress($_POST['pickup_address'] ?? '', '取貨地址') ?? validateAddress($_POST['delivery_address'] ?? '', '送達地址')) {
+            $message = ['type' => 'error', 'text' => $addressError];
         } else {
         $data = [
             'donation_id' => $_POST['donation_id'] ?? null,
@@ -88,6 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'update_delivery') {
         if (!$isOfficial) {
             $message = ['type' => 'error', 'text' => '配送會員無法更新配送任務。'];
+            $updated = false;
+        } elseif ($addressError = validateAddress($_POST['pickup_address'] ?? '', '取貨地址') ?? validateAddress($_POST['delivery_address'] ?? '', '送達地址')) {
+            $message = ['type' => 'error', 'text' => $addressError];
             $updated = false;
         } else {
         $updated = $deliveryModel->updateDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole, [
@@ -169,9 +175,8 @@ if ($isVolunteer) {
     .driver-navigate-btn:hover { background: #4E47E5; }
     .driver-trip-sheet { background: var(--bg-primary, #fff); color: var(--text-primary, #111827); padding: 18px 20px 20px; }
     .driver-trip-sheet-handle { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; border: none; background: transparent; cursor: pointer; padding: 0 0 12px; }
-    .driver-trip-sheet-handle span { width: 44px; height: 4px; border-radius: 4px; background: var(--gray-300, #d1d5db); }
-    .driver-trip-sheet-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
-    .driver-trip-sheet-summary strong { display: block; font-size: 15px; }
+    .driver-trip-sheet-summary { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+    .driver-trip-sheet-summary strong { display: block; font-size: 15px; white-space: nowrap; }
     .driver-trip-sheet-summary small { color: var(--text-secondary, #6b7280); }
     .driver-trip-sheet-details { margin-top: 16px; display: grid; gap: 14px; }
     .driver-trip-sheet-details[hidden] { display: none; }
@@ -196,7 +201,14 @@ if ($isVolunteer) {
     $tripStoreName = $activeDriverTrip['donor_name'] ?? '合作商家';
     $tripOrigin = $tripIsPickupPhase ? '目前位置' : $activeDriverTrip['pickup_address'];
     $tripDestinationAddress = $tripIsPickupPhase ? $activeDriverTrip['pickup_address'] : $activeDriverTrip['delivery_address'];
-    $navigationUrl = 'https://www.google.com/maps/dir/?api=1&destination=' . urlencode($tripDestinationAddress);
+    $tripTravelMode = ($activeDriverTrip['vehicle_type'] ?? 'motorcycle') === 'car' ? 'driving' : 'two_wheeler';
+    // 階段一：目前定位 → 取貨地址；階段二：目前定位 → 送達地址（無定位時以取貨地址為起點）
+    $navigationUrl = 'https://www.google.com/maps/dir/?' . http_build_query(array_filter([
+        'api' => 1,
+        'origin' => $tripIsPickupPhase ? null : $activeDriverTrip['pickup_address'],
+        'destination' => $tripDestinationAddress,
+        'travelmode' => $tripTravelMode,
+    ]));
     $hasOtherStop = false;
     foreach ($deliveries as $otherDelivery) {
         if ((int) $otherDelivery['delivery_id'] === (int) $activeDriverTrip['delivery_id']) {
@@ -219,15 +231,13 @@ if ($isVolunteer) {
             <span class="driver-trip-route-line" aria-hidden="true"></span>
             <span class="driver-trip-pin driver-trip-pin-end" title="<?php echo htmlspecialchars($tripDestinationAddress); ?>"><i class="fas <?php echo $tripIsPickupPhase ? 'fa-store' : 'fa-house-user'; ?>"></i></span>
         </div>
-        <a class="driver-navigate-btn" href="<?php echo htmlspecialchars($navigationUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener"><i class="fas fa-diamond-turn-right"></i> 開始導航</a>
+        <a class="driver-navigate-btn" data-navigate-btn data-destination="<?php echo htmlspecialchars($tripDestinationAddress, ENT_QUOTES, 'UTF-8'); ?>" data-fallback-origin="<?php echo $tripIsPickupPhase ? '' : htmlspecialchars($activeDriverTrip['pickup_address'], ENT_QUOTES, 'UTF-8'); ?>" data-travel-mode="<?php echo $tripTravelMode; ?>" href="<?php echo htmlspecialchars($navigationUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener"><i class="fas fa-diamond-turn-right"></i> 開始導航</a>
     </div>
     <div class="driver-trip-sheet" data-driver-sheet>
         <button type="button" class="driver-trip-sheet-handle" data-sheet-toggle aria-expanded="false" aria-controls="driverTripDetails-<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
-            <span></span>
             <div class="driver-trip-sheet-summary">
                 <span>
                     <strong><?php echo htmlspecialchars($tripStoreName); ?></strong>
-                    <small><?php echo htmlspecialchars($tripDestinationAddress); ?></small>
                 </span>
                 <i class="fas fa-chevron-up" data-sheet-chevron></i>
             </div>
@@ -265,6 +275,10 @@ if ($isVolunteer) {
                 <div class="driver-trip-note"><i class="fas fa-circle-info"></i> 這趟路線中，您沿途還有一站停靠點，請依序完成配送。</div>
             <?php endif; ?>
 
+            <div class="delivery-location-sharing" data-live-location data-auto-start data-delivery-id="<?php echo (int) $activeDriverTrip['delivery_id']; ?>" data-sharing="<?php echo !empty($activeDriverTrip['is_location_sharing']) ? 'true' : 'false'; ?>">
+                <p class="delivery-location-sharing-status" aria-live="polite">正在自動啟用即時定位分享；請在瀏覽器允許位置存取。</p>
+                <button type="button" class="btn btn-primary btn-sm" data-start-location hidden>重新取得定位</button>
+            </div>
             <?php if ($tripIsPickupPhase): ?>
                 <form method="post" class="driver-trip-action-form" data-pickup-form>
                     <?php echo csrfField(); ?>
@@ -284,11 +298,6 @@ if ($isVolunteer) {
                     <button class="btn btn-danger btn-sm" type="submit">回報異常</button>
                 </form>
             <?php else: ?>
-                <div class="delivery-location-sharing" data-live-location data-delivery-id="<?php echo (int) $activeDriverTrip['delivery_id']; ?>" data-sharing="<?php echo !empty($activeDriverTrip['is_location_sharing']) ? 'true' : 'false'; ?>">
-                    <p class="delivery-location-sharing-status" aria-live="polite"><?php echo !empty($activeDriverTrip['is_location_sharing']) ? '定位分享已啟用；若重新開啟頁面，請繼續分享以更新位置。' : '開始分享即時位置後，捐贈者即可追蹤配送進度。'; ?></p>
-                    <button type="button" class="btn btn-primary btn-sm" data-start-location><?php echo !empty($activeDriverTrip['is_location_sharing']) ? '繼續分享定位' : '開始分享定位'; ?></button>
-                    <button type="button" class="btn btn-secondary btn-sm" data-stop-location <?php echo empty($activeDriverTrip['is_location_sharing']) ? 'hidden' : ''; ?>>停止分享</button>
-                </div>
                 <form method="post" class="driver-trip-action-form">
                     <?php echo csrfField(); ?>
                     <input type="hidden" name="action" value="complete_delivery_volunteer">

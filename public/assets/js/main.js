@@ -9,6 +9,7 @@
         initializeEventListeners();
         initializeSidebarToggle();
         initializeLiveDeliveryTracking();
+        initializeNavigateButton();
         initializeNotifications();
         initializeMaterialDonationDistanceEstimate();
         initializeDriverTripCard();
@@ -99,7 +100,7 @@
 
         locationControls.forEach(function (control) {
             const startButton = control.querySelector('[data-start-location]');
-            const stopButton = control.querySelector('[data-stop-location]');
+            const stopButton = control.querySelector('[data-stop-location]') || document.createElement('button');
             const status = control.querySelector('.delivery-location-sharing-status');
             const deliveryId = control.dataset.deliveryId;
             let watchId = null;
@@ -109,7 +110,7 @@
             let locationUpdateTimer = null;
             let updateInFlight = false;
 
-            if (!startButton || !stopButton || !status || !deliveryId) {
+            if (!startButton || !status || !deliveryId) {
                 return;
             }
 
@@ -127,7 +128,7 @@
             }
 
             async function publishLocation(currentGeneration) {
-                if (!latestPosition || currentGeneration !== generation || updateInFlight || Date.now() - lastSentAt < 10000) {
+                if (!latestPosition || currentGeneration !== generation || updateInFlight || Date.now() - lastSentAt < 4000) {
                     return;
                 }
                 lastSentAt = Date.now();
@@ -144,32 +145,24 @@
                         return;
                     }
                     control.dataset.sharing = 'true';
-                    status.textContent = '正在分享即時位置；請保持此配送任務頁開啟。';
-                    stopButton.hidden = false;
-                    startButton.disabled = true;
-                    startButton.textContent = '定位分享中';
+                    status.textContent = '定位已自動分享給商家與食物銀行；請保持此頁面開啟。';
+                    startButton.hidden = true;
                 } catch (error) {
                     if (currentGeneration === generation) {
                         stopWatching();
+                        startButton.hidden = false;
                         startButton.disabled = false;
-                        startButton.textContent = '重新取得定位';
                         status.textContent = error.message;
-                        if (control.dataset.sharing !== 'true') {
-                            stopButton.hidden = true;
-                        }
                     }
                 } finally {
                     updateInFlight = false;
-                    if (currentGeneration === generation && control.dataset.sharing !== 'true') {
-                        startButton.disabled = false;
-                        startButton.textContent = '重新取得定位';
-                    }
                 }
             }
 
-            startButton.addEventListener('click', function () {
+            function startSharing() {
                 if (!navigator.geolocation) {
                     status.textContent = '此瀏覽器不支援定位功能。';
+                    startButton.hidden = false;
                     return;
                 }
                 if (watchId !== null) {
@@ -178,75 +171,50 @@
 
                 const currentGeneration = ++generation;
                 lastSentAt = 0;
-                startButton.disabled = true;
-                stopButton.hidden = false;
+                startButton.hidden = true;
                 status.textContent = '正在取得定位；請允許瀏覽器存取位置。';
                 watchId = navigator.geolocation.watchPosition(function (position) {
                     if (currentGeneration !== generation) {
                         return;
                     }
                     latestPosition = position;
+                    window.goRiderPosition = { lat: position.coords.latitude, lng: position.coords.longitude };
                     publishLocation(currentGeneration);
                 }, function (error) {
                     if (currentGeneration !== generation) {
                         return;
                     }
                     stopWatching();
+                    startButton.hidden = false;
                     startButton.disabled = false;
-                    startButton.textContent = '重新取得定位';
                     status.textContent = error.code === error.PERMISSION_DENIED
                         ? '未取得定位權限；請在瀏覽器允許位置存取後重試。'
                         : '無法取得目前位置，請確認定位服務已開啟，並使用 HTTPS 網址後重試。';
-                    if (control.dataset.sharing !== 'true') {
-                        stopButton.hidden = true;
-                    }
                 }, {
                     enableHighAccuracy: true,
-                    maximumAge: 5000,
+                    maximumAge: 3000,
                     timeout: 20000
                 });
                 locationUpdateTimer = window.setInterval(function () {
                     publishLocation(currentGeneration);
-                }, 10000);
-            });
+                }, 5000);
+            }
 
-            stopButton.addEventListener('click', async function () {
-                stopWatching();
-                startButton.disabled = false;
-                stopButton.disabled = true;
-                try {
-                    await requestLocationUpdate(control, { operation: 'stop' });
-                    control.dataset.sharing = 'false';
-                    status.textContent = '已停止分享，精確座標已清除。';
-                    startButton.textContent = '開始分享定位';
-                    stopButton.hidden = true;
-                } catch (error) {
-                    startButton.textContent = '重新取得定位';
-                    status.textContent = error.message;
-                } finally {
-                    stopButton.disabled = false;
-                }
-            });
+            startButton.addEventListener('click', startSharing);
 
-            window.addEventListener('pagehide', function () {
-                if (watchId === null && control.dataset.sharing !== 'true') {
-                    return;
-                }
-                stopWatching();
-                if (navigator.sendBeacon && csrfToken) {
-                    const body = new URLSearchParams({
-                        csrf_token: csrfToken.content,
-                        delivery_id: deliveryId,
-                        operation: 'stop'
-                    });
-                    navigator.sendBeacon(endpoint('delivery_location'), body);
-                }
-            });
+            // 接單後自動開始分享；頁面回到前景時若定位中斷則自動恢復
+            if (control.hasAttribute('data-auto-start')) {
+                startSharing();
+                document.addEventListener('visibilitychange', function () {
+                    if (document.visibilityState === 'visible' && watchId === null && document.body.contains(control)) {
+                        startSharing();
+                    }
+                });
+            }
         });
 
         async function refreshTracking(card) {
             const status = card.querySelector('.order-live-tracking-status');
-            const mapLink = card.querySelector('.order-live-tracking-map');
             const statusTitle = card.querySelector('.customer-delivery-status-title');
             const eta = card.querySelector('[data-delivery-eta]');
             const courierName = card.querySelector('[data-courier-name]');
@@ -254,11 +222,8 @@
             const courierAvatar = card.querySelector('[data-courier-avatar]');
             const stopAlert = card.querySelector('[data-other-stops]');
             const locationUpdated = card.querySelector('[data-location-updated]');
-            const mapButton = card.querySelector('[data-show-map]');
-            const mapFrame = card.querySelector('.customer-map-frame');
-            const mapRider = card.querySelector('.customer-map-rider');
             const mapPlaceholder = card.querySelector('.customer-map-placeholder');
-            const mapAttribution = card.querySelector('.customer-map-attribution');
+            const mapCanvas = card.querySelector('[data-map-canvas]');
             const progressFill = card.querySelector('.customer-progress-fill');
             const progressSteps = card.querySelectorAll('.customer-progress-step');
             const url = new URL(endpoint('delivery_tracking'));
@@ -273,8 +238,8 @@
                 const statusDetails = {
                     open: { title: '等待配送員接單', message: '訂單已準備，等待配送員接單。', step: 0, progress: 8 },
                     claimed: { title: '配送員已接單', message: '配送員已接單，正在前往取貨。', step: 1, progress: 32 },
-                    picked_up: { title: '外送員正在前往送達地點', message: '物資已取貨，外送員正在前往送達地點。', step: 2, progress: 72 },
-                    in_transit: { title: '外送員正在前往送達地點', message: '外送員正在配送途中。', step: 2, progress: 72 },
+                    picked_up: { title: 'Go Rider 正在前往送達地點', message: '物資已取貨，Go Rider 正在前往送達地點。', step: 2, progress: 72 },
+                    in_transit: { title: 'Go Rider 正在前往送達地點', message: 'Go Rider 正在配送途中。', step: 2, progress: 72 },
                     delivered: { title: '物資已送達', message: '配送已完成，感謝您的愛心。', step: 3, progress: 100 },
                     exception: { title: '配送狀況處理中', message: '配送遇到狀況，食物銀行人員正在協助處理。', step: 1, progress: 36 },
                     cancelled: { title: '配送任務已取消', message: '此配送任務已取消。', step: 0, progress: 0 }
@@ -319,114 +284,65 @@
                         courierAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
                     }
                 }
-                if (mapRider) {
-                    const riderIcon = mapRider.querySelector('i');
-                    if (riderIcon) {
-                        riderIcon.className = result.vehicle_type === 'car' ? 'fa-solid fa-car' : 'fa-solid fa-motorcycle';
-                    }
-                }
                 if (stopAlert) {
                     const otherStops = Number(result.other_active_delivery_count) || 0;
                     stopAlert.hidden = otherStops === 0 || result.status === 'delivered';
                     stopAlert.textContent = otherStops > 0
-                        ? '外送員目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
+                        ? 'Go Rider 目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
                         : '';
                 }
 
-                if (Number(result.is_sharing) === 1 && result.latitude !== null && result.longitude !== null) {
-                    const latitude = Number(result.latitude);
-                    const longitude = Number(result.longitude);
+                const isAfterPickup = result.status === 'picked_up' || result.status === 'in_transit';
+                const hasLocation = Number(result.is_sharing) === 1 && result.latitude !== null && result.longitude !== null;
+                if (isAfterPickup && hasLocation && mapCanvas && window.FoodbankMap) {
                     const updatedAt = Number(result.location_updated_at) * 1000;
                     const ageSeconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
                     if (locationUpdated) {
                         locationUpdated.textContent = ageSeconds > 60
-                            ? '位置超過 1 分鐘未更新，可能不是配送員目前位置。'
+                            ? '位置超過 1 分鐘未更新，可能不是 Go Rider 目前位置。'
                             : '位置' + (ageSeconds < 5 ? '剛剛更新' : ageSeconds + ' 秒前更新');
                     }
-                    if (mapButton) {
-                        mapButton.disabled = false;
-                        mapButton.dataset.latitude = latitude.toString();
-                        mapButton.dataset.longitude = longitude.toString();
+                    if (!card.liveMap) {
+                        card.liveMap = window.FoodbankMap.create(mapCanvas, { riderTitle: 'Go Rider' });
                     }
-                    if (mapLink) {
-                        mapLink.href = 'https://www.openstreetmap.org/?mlat=' + encodeURIComponent(latitude) + '&mlon=' + encodeURIComponent(longitude) + '#map=17/' + latitude + '/' + longitude;
-                        mapLink.title = '開啟地圖時會將此座標傳送至 OpenStreetMap';
-                        mapLink.hidden = false;
+                    if (mapPlaceholder) {
+                        mapPlaceholder.hidden = true;
                     }
-                    if (mapPlaceholder && !mapFrame?.dataset.loaded) {
-                        mapPlaceholder.textContent = ageSeconds > 60
-                            ? '顯示最近一次位置；目前定位可能已過期'
-                            : '配送員位置已更新 · 點選「載入地圖」顯示地圖圖資';
-                    }
-
-                    if (mapButton?.dataset.mapOpen === 'true' && mapFrame) {
-                        const lastMapRefresh = Number(mapFrame.dataset.refreshedAt) || 0;
-                        const lastLatitude = Number(mapFrame.dataset.latitude);
-                        const lastLongitude = Number(mapFrame.dataset.longitude);
-                        const moved = !Number.isFinite(lastLatitude) || !Number.isFinite(lastLongitude)
-                            || Math.abs(latitude - lastLatitude) > 0.0002
-                            || Math.abs(longitude - lastLongitude) > 0.0002;
-                        if (!mapFrame.dataset.loaded || (moved && Date.now() - lastMapRefresh > 30000)) {
-                            const delta = 0.006;
-                            const bounds = [
-                                (longitude - delta).toFixed(5),
-                                (latitude - delta).toFixed(5),
-                                (longitude + delta).toFixed(5),
-                                (latitude + delta).toFixed(5)
-                            ].join(',');
-                            mapFrame.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bounds + '&layer=mapnik&marker=' + latitude + ',' + longitude;
-                            mapFrame.dataset.loaded = 'true';
-                            mapFrame.dataset.refreshedAt = Date.now().toString();
-                            mapFrame.dataset.latitude = latitude.toString();
-                            mapFrame.dataset.longitude = longitude.toString();
-                            mapFrame.hidden = false;
-                            if (mapPlaceholder) {
-                                mapPlaceholder.hidden = true;
-                            }
-                            if (mapAttribution) {
-                                mapAttribution.hidden = false;
-                            }
-                            if (mapRider) {
-                                mapRider.hidden = false;
-                            }
+                    mapCanvas.hidden = false;
+                    try {
+                        await card.liveMap.ready();
+                        card.liveMap.setPickup(result.pickup_address);
+                        card.liveMap.setDestination(result.delivery_address);
+                        await card.liveMap.setTrail(result.trail);
+                        await card.liveMap.setRider(result.latitude, result.longitude);
+                    } catch (mapError) {
+                        mapCanvas.hidden = true;
+                        if (mapPlaceholder) {
+                            mapPlaceholder.hidden = false;
+                            mapPlaceholder.textContent = mapError.message;
                         }
                     }
                 } else {
-                    if (mapButton) {
-                        mapButton.disabled = true;
-                    }
-                    if (mapLink) {
-                        mapLink.hidden = true;
-                    }
-                    if (mapRider) {
-                        mapRider.hidden = true;
-                    }
-                    if (mapFrame) {
-                        mapFrame.hidden = true;
-                        mapFrame.src = 'about:blank';
-                        delete mapFrame.dataset.loaded;
-                    }
-                    if (mapButton) {
-                        mapButton.dataset.mapOpen = 'false';
-                        mapButton.textContent = '載入地圖並查看位置';
-                    }
-                    if (mapAttribution) {
-                        mapAttribution.hidden = true;
+                    if (card.liveMap) {
+                        card.liveMap.clearRider();
                     }
                     if (mapPlaceholder) {
                         mapPlaceholder.hidden = false;
+                        mapPlaceholder.textContent = result.status === 'delivered'
+                            ? '配送已完成。'
+                            : (isAfterPickup ? 'Go Rider 尚未開啟即時位置分享。' : 'Go Rider 取貨後，地圖會顯示即時位置');
+                    }
+                    if (mapCanvas) {
+                        mapCanvas.hidden = true;
                     }
                     if (locationUpdated) {
-                        locationUpdated.textContent = result.status === 'picked_up'
-                            ? '配送員尚未開啟即時位置分享。'
-                            : '配送員取貨並啟用定位後，這裡會顯示即時位置。';
+                        locationUpdated.textContent = isAfterPickup
+                            ? 'Go Rider 尚未開啟即時位置分享。'
+                            : 'Go Rider 取貨後，這裡會顯示即時位置。';
                     }
                 }
             } catch (error) {
                 status.textContent = error.message;
-                if (mapLink) {
-                    mapLink.hidden = true;
-                }
             }
         }
 
@@ -434,46 +350,20 @@
             trackingCards.forEach(refreshTracking);
             window.setInterval(function () {
                 trackingCards.forEach(refreshTracking);
-            }, 10000);
+            }, 5000);
         }
+    }
 
-        document.querySelectorAll('[data-show-map]').forEach(function (button) {
+    function initializeNavigateButton() {
+        document.querySelectorAll('[data-navigate-btn]').forEach(function (button) {
             button.addEventListener('click', function () {
-                const card = button.closest('.order-live-tracking');
-                const mapFrame = card && card.querySelector('.customer-map-frame');
-                const mapPlaceholder = card && card.querySelector('.customer-map-placeholder');
-                const mapAttribution = card && card.querySelector('.customer-map-attribution');
-                const mapRider = card && card.querySelector('.customer-map-rider');
-                const latitude = Number(button.dataset.latitude);
-                const longitude = Number(button.dataset.longitude);
-                if (!mapFrame || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-                    return;
-                }
-
-                const delta = 0.006;
-                const bounds = [
-                    (longitude - delta).toFixed(5),
-                    (latitude - delta).toFixed(5),
-                    (longitude + delta).toFixed(5),
-                    (latitude + delta).toFixed(5)
-                ].join(',');
-                mapFrame.src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bounds + '&layer=mapnik&marker=' + latitude + ',' + longitude;
-                mapFrame.dataset.loaded = 'true';
-                mapFrame.dataset.refreshedAt = Date.now().toString();
-                mapFrame.dataset.latitude = latitude.toString();
-                mapFrame.dataset.longitude = longitude.toString();
-                mapFrame.hidden = false;
-                button.dataset.mapOpen = 'true';
-                button.textContent = '地圖已載入';
-                if (mapPlaceholder) {
-                    mapPlaceholder.hidden = true;
-                }
-                if (mapAttribution) {
-                    mapAttribution.hidden = false;
-                }
-                if (mapRider) {
-                    mapRider.classList.add('is-on-map');
-                }
+                const position = window.goRiderPosition;
+                const origin = position ? position.lat + ',' + position.lng : (button.dataset.fallbackOrigin || '');
+                button.href = window.FoodbankMap.buildDirectionsUrl(
+                    origin,
+                    button.dataset.destination,
+                    button.dataset.travelMode
+                );
             });
         });
     }
