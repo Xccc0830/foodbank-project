@@ -596,6 +596,8 @@ ob_start();
                     $view_file = BASE_PATH . '/src/views/' . $page . '.php';
                     if ($page === 'volunteer_management') {
                         $view_file = BASE_PATH . '/src/views/users.php';
+                    } elseif ($page === 'material_transport') {
+                        $view_file = BASE_PATH . '/src/views/deliveries.php';
                     }
 
                     if (file_exists($view_file)) {

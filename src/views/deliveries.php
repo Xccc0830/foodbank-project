@@ -319,8 +319,8 @@ if ($isVolunteer) {
 
 <div class="view-header">
     <div>
-        <h1 class="view-title"><?php echo $isVolunteer ? '可接配送' : '配送任務'; ?></h1>
-        <p class="view-subtitle"><?php echo $isVolunteer ? '查看、接取與追蹤自己的配送任務' : '發布、管理與追蹤惜食配送任務'; ?></p>
+        <h1 class="view-title"><?php echo $page === 'material_transport' ? '物資運送' : ($isVolunteer ? '可接配送' : '配送任務'); ?></h1>
+        <p class="view-subtitle"><?php echo $page === 'material_transport' ? '查看、接取與追蹤物資運送任務' : ($isVolunteer ? '查看、接取與追蹤自己的配送任務' : '發布、管理與追蹤惜食配送任務'); ?></p>
     </div>
 </div>
 
