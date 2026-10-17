@@ -1065,8 +1065,8 @@ form {
 .rank-2 td { background: rgba(192,192,192,0.04); }
 .rank-3 td { background: rgba(205,127,50,0.04); }
 
-/* 限制表格中名次欄寬度，避免過度擠占 */
-.data-table td:first-child, .data-table th:first-child {
+/* 限制排行榜表格中名次欄寬度，避免過度擠占 */
+.ranking-table td:first-child, .ranking-table th:first-child {
    width: 56px;
    text-align: center;
 }

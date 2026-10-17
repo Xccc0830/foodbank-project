@@ -105,7 +105,7 @@ if (($_GET['export'] ?? '') === 'volunteers_csv') {
     </div>
     <div class="card-body">
         <?php if ($volunteerRanking): ?>
-            <table class="data-table">
+            <table class="data-table ranking-table">
                 <thead><tr><th>排名</th><th>志工姓名</th><th>完成配送次數</th><th>累積公益點數</th></tr></thead>
                 <tbody>
                 <?php foreach ($volunteerRanking as $index => $row): ?>
