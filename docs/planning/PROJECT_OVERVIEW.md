@@ -46,8 +46,7 @@ foodbank-project/
 │   └── database.php               # ⭐ 數據庫連接配置
 │
 ├── 📁 database/                    # 數據庫文件夾
-│   ├── schema.sql                 # ⭐ 新安裝唯一主 SQL
-│   └── migrations/                # 既有資料庫升級用
+│   └── schema.sql                 # ⭐ 唯一 SQL；僅供新安裝
 │
 ├── 📁 public/                      # 公開文件夾（Web 根目錄）
 │   ├── index.php                  # ⭐ 主入口文件

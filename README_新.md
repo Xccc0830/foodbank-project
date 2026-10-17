@@ -51,8 +51,7 @@ foodbank-project/
 │   ├── models/          # 數據模型
 │   └── views/           # 視圖模板
 ├── database/            # 數據庫
-│   ├── schema.sql             # 新安裝唯一主 SQL
-│   └── migrations/            # 既有資料庫升級用
+│   └── schema.sql             # 唯一 SQL；僅供新安裝
 └── config/              # 配置文件
 ```
 

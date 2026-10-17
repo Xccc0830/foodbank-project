@@ -11,20 +11,10 @@
 
 ### 資料庫
 
-`database/schema.sql` 是新安裝唯一需要匯入的主 SQL，已整合目前完整資料表、欄位、索引與權限種子資料。
-匯入前請先備份資料庫；新安裝或重建資料庫時，先建立 `shinigyi_foodbank`，再直接匯入 `database/schema.sql`，不需另外匯入遷移檔。
-`database/migrations/` 僅供既有資料庫逐步升級使用；不可在新安裝匯入主 SQL 後再重複套用。
+`database/schema.sql` 是本專案唯一提供的 SQL，包含目前完整資料表、欄位、索引與權限種子資料，僅供新安裝使用。
+匯入前請先備份資料庫；新安裝時，先建立空的 `shinigyi_foodbank`，再直接匯入 `database/schema.sql`。
+此 SQL 會刪除並重建其中列出的資料表，不可匯入已有資料的資料庫。本專案目前不提供既有資料庫升級 SQL；若需保留既有資料，請勿匯入。
 依 2026/10/13 專題會議決議，系統不提供即時 GPS 定位；配送進度以狀態（接單、取貨、送達）呈現。
-
-既有資料庫先備份，再執行 `database/migrations/20261018_meeting_decisions_consolidated.sql` 一次，即可套用上述會議決議的資料庫變更。此合併遷移檔涵蓋 GPS 移除、防拆封條改取貨照片、外送志工申請審核，以及管理員／行政人員、最新消息公告、配送預估與逾時通知、企業統一編號、黑名單和物資盤點。
-合併遷移檔取代以下四個元件遷移檔的逐一執行方式；請勿在執行合併檔後再重複執行元件檔：
-
-- `20261017_remove_live_gps_tracking.sql`
-- `20261017_remove_seal_add_pickup_photo.sql`
-- `20261017_rider_application.sql`
-- `20261018_roles_news_arrival_blacklist.sql`
-
-`database/schema.sql` 仍是新安裝的主 SQL，不可用於升級既有資料庫。若先前已套用部分元件遷移，合併檔使用「若尚未存在才新增／移除」的結構操作，可接續完成變更。
 
 駕照照片存放於 `storage/rider_licenses/`（不在網站根目錄內），部署時請確認 PHP 可寫入該資料夾，並由網站伺服器禁止直接存取 `storage/`。
 物資捐贈表單在「商家取貨地址」與「配送地址」都填寫完成後，會呼叫伺服器端的 `?action=calculate_distance` API 自動計算兩地之間的路程距離與預估運送時間並帶入表單。此功能透過 OpenStreetMap 的 Nominatim（地理編碼）與 OSRM（路徑規劃）公開服務運作，**需要伺服器可對外連線**（PHP 需啟用 `curl` 擴充套件）；由於台灣部分門牌號碼未完整收錄於 OpenStreetMap，系統會自動從完整地址逐步簡化為路段層級查詢，若僅能定位到路段會標示為概略估算。
@@ -138,8 +128,7 @@ foodbank-project/
 │       ├── js/               # JavaScript
 │       └── images/           # 圖片資源
 ├── database/
-│   ├── schema.sql            # 新安裝唯一主 SQL
-│   └── migrations/           # 既有資料庫升級用
+│   └── schema.sql            # 唯一 SQL；僅供新安裝
 └── README.md                 # 項目文檔
 ```
 

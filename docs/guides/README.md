@@ -52,8 +52,7 @@ foodbank-project/
 │   ├── controllers/          # 控制器
 │   └── views/                # 視圖文件
 ├── database/                 # 數據庫相關
-│   ├── schema.sql           # 新安裝唯一主 SQL
-│   └── migrations/          # 既有資料庫升級用
+│   └── schema.sql           # 唯一 SQL；僅供新安裝
 ├── tests/                    # 測試文件
 ├── .gitignore               # Git 忽略文件
 └── README.md                # 項目文檔

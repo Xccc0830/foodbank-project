@@ -1,7 +1,7 @@
 <?php
 /**
- * 補齊 users 資料表的新欄位，讓尚未套用遷移的舊資料庫也能登入。
- * 完整的升級仍應執行 database/migrations/ 內的遷移檔（含權限矩陣與新資料表）。
+ * 補齊 users 資料表的新欄位，讓舊資料庫在不匯入破壞性 schema.sql 的情況下仍可登入。
+ * 此相容處理不會完成資料庫升級；需要新功能的資料庫應使用全新安裝。
  */
 function ensureUserColumns(mysqli $connection) {
     $check = $connection->query("SHOW COLUMNS FROM users LIKE 'blacklist_reason'");
