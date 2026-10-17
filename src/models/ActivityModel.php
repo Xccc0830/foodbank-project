@@ -9,7 +9,15 @@ class ActivityModel extends BaseModel {
     protected $table = 'activities';
 
     public function getAllActivities() {
-        return $this->query("SELECT a.*, COUNT(aa.assignment_id) AS participant_count FROM activities a LEFT JOIN activity_assignments aa ON aa.activity_id = a.activity_id AND aa.status <> 'cancelled' GROUP BY a.activity_id ORDER BY a.start_at ASC");
+        return $this->query(
+            "SELECT a.*,
+                    COALESCE(SUM(CASE WHEN aa.status <> 'cancelled' THEN aa.participant_count ELSE 0 END), 0) AS participant_count,
+                    MAX(CASE WHEN aa.status <> 'cancelled' AND aa.assignment_type = 'company' THEN 1 ELSE 0 END) AS has_company_claim
+             FROM activities a
+             LEFT JOIN activity_assignments aa ON aa.activity_id = a.activity_id
+             GROUP BY a.activity_id
+             ORDER BY a.start_at ASC"
+        );
     }
 
     public function createActivity($data) {
@@ -20,6 +28,43 @@ class ActivityModel extends BaseModel {
         $activityId = (int) $activityId;
         $result = $this->db->query("SELECT a.*, u.role AS creator_role FROM activities a LEFT JOIN users u ON u.user_id = a.created_by WHERE a.activity_id = {$activityId} LIMIT 1");
         return $result ? $result->fetch_assoc() : null;
+    }
+
+    public function getRemainingCapacity($activityId) {
+        $activityId = (int) $activityId;
+        $result = $this->db->query(
+            "SELECT a.capacity,
+                    COALESCE(SUM(CASE WHEN aa.status <> 'cancelled' THEN aa.participant_count ELSE 0 END), 0) AS participant_count
+             FROM activities a
+             LEFT JOIN activity_assignments aa ON aa.activity_id = a.activity_id
+             WHERE a.activity_id = {$activityId}
+             GROUP BY a.activity_id
+             LIMIT 1"
+        );
+        if (!$result) {
+            error_log('無法取得活動剩餘名額：' . $this->db->error);
+            return false;
+        }
+
+        $activity = $result->fetch_assoc();
+        if (!$activity) {
+            return false;
+        }
+
+        $capacity = (int) ($activity['capacity'] ?? 0);
+        return $capacity > 0 ? max(0, $capacity - (int) $activity['participant_count']) : null;
+    }
+
+    public function getParticipants($activityId) {
+        $activityId = (int) $activityId;
+        return $this->query(
+            "SELECT aa.assignment_id, aa.user_id, aa.assignment_type, aa.organization_name, aa.participant_count, aa.status AS assignment_status,
+                    u.full_name, u.username, u.email, u.phone
+             FROM activity_assignments aa
+             JOIN users u ON u.user_id = aa.user_id
+             WHERE aa.activity_id = {$activityId} AND aa.status <> 'cancelled'
+             ORDER BY aa.created_at ASC"
+        );
     }
 
     public function canManageActivity($activityId, $userId, $userRole = null) {
@@ -34,11 +79,15 @@ class ActivityModel extends BaseModel {
         $creatorRole = $activity['creator_role'] ?? 'foodbank_staff';
         $role = $userRole ?? 'foodbank_staff';
 
+        if ($role === 'member') {
+            return false;
+        }
+
         if ($isCreator) {
             return true;
         }
 
-        $foodbankRoles = ['admin', 'foodbank_staff'];
+        $foodbankRoles = ['foodbank_staff'];
         if (in_array($creatorRole, $foodbankRoles, true)) {
             return in_array($role, $foodbankRoles, true);
         }
@@ -52,7 +101,7 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $allowedKeys = ['title', 'activity_type', 'description', 'start_at', 'end_at', 'capacity'];
+        $allowedKeys = ['title', 'activity_type', 'activity_type_detail', 'description', 'start_at', 'end_at', 'capacity'];
         $set = [];
         foreach ($data as $key => $value) {
             if (!in_array($key, $allowedKeys, true)) {
@@ -94,107 +143,148 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
-        $cancelledAt = $existing['cancelled_at'] ?? null;
-        if ($cancelledAt === null) {
-            return true;
-        }
-
-        $cooldownUntil = new DateTime($cancelledAt, new DateTimeZone('UTC'));
-        $cooldownUntil->modify('+24 hours');
-        return new DateTime('now', new DateTimeZone('UTC')) >= $cooldownUntil;
+        return true;
     }
 
-    public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null) {
+    public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null, $headcount = null) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
+        $userResult = $this->db->query("SELECT role, member_type, enterprise_name, full_name FROM users WHERE user_id = {$userId} AND status = 'active' LIMIT 1");
+        $userInfo = $userResult ? $userResult->fetch_assoc() : null;
+        if (!$userInfo) {
+            return false;
+        }
 
-        $existingAssignmentResult = $this->db->query(
-            "SELECT assignment_id, status, cancelled_at FROM activity_assignments
-             WHERE activity_id = {$activityId} AND user_id = {$userId}
-             ORDER BY assignment_id DESC LIMIT 1"
-        );
+        if (($userInfo['role'] ?? '') !== 'member') {
+            return false;
+        }
 
-        if ($existingAssignmentResult && $existingAssignmentResult->num_rows > 0) {
-            $existingAssignment = $existingAssignmentResult->fetch_assoc();
-            $status = $existingAssignment['status'] ?? 'registered';
-            $cancelledAt = $existingAssignment['cancelled_at'] ?? null;
+        if (($userInfo['role'] ?? '') === 'member' && !in_array($userInfo['member_type'] ?? '', ['general', 'enterprise'], true)) {
+            return false;
+        }
 
-            if ($status === 'registered') {
-               return false;
+        $isEnterpriseMember = ($userInfo['member_type'] ?? '') === 'enterprise';
+        $assignmentType = $isEnterpriseMember ? 'company' : 'individual';
+        if ($isEnterpriseMember) {
+            $organizationName = trim((string) ($userInfo['enterprise_name'] ?: $organizationName ?: $userInfo['full_name']));
+        }
+
+        // 僅企業會員可自填活動參與人數，個人會員一律以 1 人計。
+        $headcount = $isEnterpriseMember ? (int) $headcount : 1;
+        if ($headcount < 1) {
+            $headcount = 1;
+        }
+
+        if ($assignmentType === 'company') {
+            if (trim((string) $organizationName) === '') {
+                return false;
             }
+        }
 
-            if ($status === 'cancelled' && $cancelledAt !== null) {
-               $cooldownUntil = new DateTime($cancelledAt, new DateTimeZone('UTC'));
-               $cooldownUntil->modify('+24 hours');
-               if (new DateTime('now', new DateTimeZone('UTC')) < $cooldownUntil) {
-                   return false;
-               }
-            }
-
-            $activityResult = $this->db->query("SELECT capacity FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
+        $this->db->begin_transaction();
+        try {
+            $activityResult = $this->db->query(
+                "SELECT capacity FROM activities
+                 WHERE activity_id = {$activityId} AND status IN ('planned', 'ongoing')
+                 LIMIT 1 FOR UPDATE"
+            );
             $activity = $activityResult ? $activityResult->fetch_assoc() : null;
             if (!$activity) {
-               return false;
+                $this->db->rollback();
+                return false;
             }
 
-            $participantResult = $this->db->query("SELECT COUNT(*) AS total FROM activity_assignments WHERE activity_id = {$activityId} AND status <> 'cancelled'");
-            $participantCount = $participantResult ? (int) $participantResult->fetch_assoc()['total'] : 0;
-            if ($activity['capacity'] !== null && $participantCount >= (int) $activity['capacity']) {
-               return false;
+            $existingResult = $this->db->query(
+                "SELECT assignment_id, status FROM activity_assignments
+                 WHERE activity_id = {$activityId} AND user_id = {$userId}
+                 ORDER BY assignment_id DESC LIMIT 1"
+            );
+            if (!$existingResult) {
+                $this->db->rollback();
+                return false;
+            }
+            $existingAssignment = $existingResult->fetch_assoc();
+            if ($existingAssignment && ($existingAssignment['status'] ?? '') === 'registered') {
+                $this->db->rollback();
+                return false;
             }
 
-            $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
+            $assignedRows = $this->db->query(
+                "SELECT participant_count, assignment_type FROM activity_assignments
+                 WHERE activity_id = {$activityId} AND status <> 'cancelled'
+                 FOR UPDATE"
+            );
+            if (!$assignedRows) {
+                $this->db->rollback();
+                return false;
+            }
+            $assignedCount = 0;
+            $hasCompanyClaim = false;
+            while ($assignedRow = $assignedRows->fetch_assoc()) {
+                $assignedCount += (int) $assignedRow['participant_count'];
+                $hasCompanyClaim = $hasCompanyClaim || ($assignedRow['assignment_type'] ?? '') === 'company';
+            }
+
+            $capacity = (int) ($activity['capacity'] ?? 0);
+            if (!$isEnterpriseMember && $capacity > 0 && !$hasCompanyClaim) {
+                $this->db->rollback();
+                return false;
+            }
+            if ($capacity > 0 && $assignedCount + $headcount > $capacity) {
+                $this->db->rollback();
+                return false;
+            }
+
             $points = $assignmentType === 'individual' ? 5 : 0;
-            $organizationNameEscaped = $organizationName !== null ? "'" . $this->db->real_escape_string($organizationName) . "'" : 'NULL';
+            $organizationNameEscaped = $organizationName !== null
+                ? "'" . $this->db->real_escape_string($organizationName) . "'"
+                : 'NULL';
 
-            return (bool) $this->db->query(
-               "UPDATE activity_assignments
-                SET status = 'registered', cancelled_at = NULL, points = {$points}, assignment_type = '{$assignmentType}', organization_name = {$organizationNameEscaped}
-                WHERE assignment_id = {$existingAssignment['assignment_id']}"
-            );
-        }
-
-        if (!$this->canUserRegisterActivity($activityId, $userId)) {
-            return false;
-        }
-
-        $assignmentType = $assignmentType === 'company' ? 'company' : 'individual';
-        $points = $assignmentType === 'individual' ? 5 : 0;
-        $organizationNameEscaped = $organizationName !== null ? "'" . $this->db->real_escape_string($organizationName) . "'" : 'NULL';
-
-        $activityResult = $this->db->query("SELECT capacity FROM activities WHERE activity_id = {$activityId} AND status IN ('planned','ongoing') LIMIT 1");
-        $activity = $activityResult ? $activityResult->fetch_assoc() : null;
-        if (!$activity) {
-            return false;
-        }
-
-        $participantResult = $this->db->query("SELECT COUNT(*) AS total FROM activity_assignments WHERE activity_id = {$activityId} AND status <> 'cancelled'");
-        $participantCount = $participantResult ? (int) $participantResult->fetch_assoc()['total'] : 0;
-        if ($activity['capacity'] !== null && $participantCount >= (int) $activity['capacity']) {
-            return false;
-        }
-
-        try {
-            return $this->db->query(
-               "INSERT INTO activity_assignments (activity_id, user_id, points, assignment_type, organization_name)
-                SELECT {$activityId}, {$userId}, {$points}, '{$assignmentType}', {$organizationNameEscaped}"
-            );
-        } catch (mysqli_sql_exception $e) {
-            if (str_contains($e->getMessage(), 'Duplicate entry')) {
-               return false;
+            if ($existingAssignment) {
+                $saved = $this->db->query(
+                    "UPDATE activity_assignments
+                     SET status = 'registered', cancelled_at = NULL, cancellation_reason = NULL,
+                         points = {$points}, assignment_type = '{$assignmentType}',
+                         organization_name = {$organizationNameEscaped}, participant_count = {$headcount}
+                     WHERE assignment_id = " . (int) $existingAssignment['assignment_id']
+                );
+            } else {
+                $saved = $this->db->query(
+                    "INSERT INTO activity_assignments
+                        (activity_id, user_id, points, assignment_type, organization_name, participant_count)
+                     VALUES ({$activityId}, {$userId}, {$points}, '{$assignmentType}', {$organizationNameEscaped}, {$headcount})"
+                );
             }
 
-            throw $e;
+            if (!$saved) {
+                $this->db->rollback();
+                return false;
+            }
+            if (!$this->db->commit()) {
+                $this->db->rollback();
+                return false;
+            }
+            return true;
+        } catch (Throwable $exception) {
+            $this->db->rollback();
+            throw $exception;
         }
     }
 
-    public function cancelRegistration($activityId, $userId) {
+    public function cancelRegistration($activityId, $userId, $cancellationReason) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
+        $cancellationReason = trim((string) $cancellationReason);
+
+        if ($cancellationReason === '') {
+            return false;
+        }
+
+        $cancellationReasonEscaped = $this->db->real_escape_string($cancellationReason);
 
         return (bool) $this->db->query(
             "UPDATE activity_assignments
-             SET status = 'cancelled', cancelled_at = NOW()
+             SET status = 'cancelled', cancelled_at = NOW(), cancellation_reason = '{$cancellationReasonEscaped}'
              WHERE activity_id = {$activityId} AND user_id = {$userId} AND status = 'registered' LIMIT 1"
         );
     }
@@ -216,7 +306,7 @@ class ActivityModel extends BaseModel {
     public function getUserAssignments($userId) {
         $userId = (int) $userId;
         return $this->query(
-            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.status AS assignment_status, aa.points, aa.cancelled_at,
+            "SELECT aa.assignment_id, aa.assignment_type, aa.organization_name, aa.participant_count, aa.status AS assignment_status, aa.points, aa.cancelled_at, aa.cancellation_reason,
                    a.activity_id, a.title, a.status AS activity_status, a.start_at, a.created_by
              FROM activity_assignments aa
              JOIN activities a ON a.activity_id = aa.activity_id

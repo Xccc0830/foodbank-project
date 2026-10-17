@@ -22,12 +22,12 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="showcase-copy">
                 <p class="eyebrow">FOODBANK PLATFORM / 2026</p>
                 <h1>把每一份惜食，<em>送到需要的地方。</em></h1>
-                <p>從商家上架、食物銀行評估，到志工配送與公益點數，讓每一步都清楚、可靠、可追蹤。</p>
+                <p>從企業捐贈、食物銀行評估，到會員配送與興毅幣，讓每一步都清楚、可靠、可追蹤。</p>
             </div>
             <div class="showcase-features">
                 <div><span><i class="fa-solid fa-box-open"></i></span><strong>物資媒合</strong><small>掌握每批物資的期限與狀態</small></div>
-                <div><span><i class="fa-solid fa-route"></i></span><strong>公益配送</strong><small>讓志工自由接取配送任務</small></div>
-                <div><span><i class="fa-solid fa-chart-line"></i></span><strong>社會成效</strong><small>累積點數與可量化的影響力</small></div>
+                <div><span><i class="fa-solid fa-route"></i></span><strong>公益配送</strong><small>讓一般會員自由接取配送任務</small></div>
+                <div><span><i class="fa-solid fa-chart-line"></i></span><strong>社會成效</strong><small>累積興毅幣與可量化的影響力</small></div>
             </div>
             <div class="showcase-orbit orbit-one"></div><div class="showcase-orbit orbit-two"></div>
         </section>
@@ -42,12 +42,30 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
                 <div class="form-group"><label for="password">密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" autocomplete="current-password" placeholder="輸入你的密碼" required></div></div>
                 <button class="btn btn-primary login-submit" type="submit">登入系統 <i class="fa-solid fa-arrow-right"></i></button>
             </form>
-            <div class="login-divider"><span>角色入口</span></div>
-            <div class="login-roles"><span>管理者</span><span>工作人員</span><span>志工</span></div>
+            <div class="login-divider"><span>測試帳號</span></div>
+            <div class="login-roles" aria-label="測試帳號快捷登入">
+                <button type="button" class="login-role-button" data-username="manager" data-password="manager123">食物銀行管理帳號</button>
+                <button type="button" class="login-role-button" data-username="store_demo" data-password="store123">愛心商家帳號</button>
+                <button type="button" class="login-role-button" data-username="courier_demo" data-password="courier123">GO RIDER 帳號</button>
+            </div>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
             <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>
-            <p class="login-hint">開發測試帳號：admin / admin123</p>
+            <div class="login-hint">
+                <strong>開發測試帳號</strong>
+                <span>食物銀行管理帳號：manager / manager123</span>
+                <span>愛心商家帳號：store_demo / store123</span>
+                <span>GO RIDER 帳號：courier_demo / courier123</span>
+            </div>
         </section>
     </main>
+    <script>
+        document.querySelectorAll('.login-role-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('username').value = button.dataset.username;
+                document.getElementById('password').value = button.dataset.password;
+                document.getElementById('username').form.submit();
+            });
+        });
+    </script>
 </body>
 </html>

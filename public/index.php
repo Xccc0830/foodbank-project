@@ -15,6 +15,8 @@ define('ROOT_PATH', __DIR__);
 require_once BASE_PATH . '/config/database.php';
 require_once BASE_PATH . '/src/helpers/SecurityHelper.php';
 
+date_default_timezone_set('Asia/Taipei');
+
 // 啟用會話
 session_start();
 getCsrfToken();
@@ -23,8 +25,44 @@ getCsrfToken();
 $connection = $db->getConnection();
 $action = $_GET['action'] ?? '';
 
+// 修復舊版初始化資料曾以錯誤編碼寫入的示範帳號資料。
+$demoPasswordHashes = [
+    'manager' => '866485796cfa8d7c0cf7111640205b83076433547577511d81f8030ae99ecea5',
+    'staff' => '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6',
+];
+foreach ($demoPasswordHashes as $demoUsername => $demoPasswordHash) {
+    $demoUsernameEscaped = $connection->real_escape_string($demoUsername);
+    $connection->query(
+        "UPDATE users SET password = '{$demoPasswordHash}' WHERE username = '{$demoUsernameEscaped}' AND CHAR_LENGTH(password) <> 60 AND CHAR_LENGTH(password) <> 64"
+    );
+}
+$connection->query(
+    "UPDATE users SET full_name = CASE username
+        WHEN 'official' THEN '食物銀行官方人員'
+        WHEN 'manager' THEN '忠信食物銀行'
+        WHEN 'staff' THEN '食物銀行官方人員'
+        WHEN 'volunteer' THEN '忠信GO RIDER'
+        WHEN 'donor' THEN '捐贈剩食店家'
+        ELSE full_name
+    END
+    WHERE username IN ('official', 'manager', 'staff', 'volunteer', 'donor')
+      AND (full_name LIKE '%?%' OR full_name = '')"
+);
+if (!empty($_SESSION['user']['username'])) {
+    $sessionUsername = $connection->real_escape_string($_SESSION['user']['username']);
+    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, enterprise_name, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
+    if ($sessionUserResult && ($sessionUser = $sessionUserResult->fetch_assoc())) {
+        $_SESSION['user'] = $sessionUser;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !verifyCsrfToken($_POST['csrf_token'] ?? null)) {
     http_response_code(403);
+    if ($action === 'delivery_location') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => '登入狀態已逾時，請重新登入後再分享位置。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     exit('請重新整理頁面後再提交表單。');
 }
 
@@ -43,7 +81,7 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $usernameEscaped = $connection->real_escape_string($username);
-    $result = $connection->query("SELECT user_id, username, full_name, role, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
+    $result = $connection->query("SELECT user_id, username, full_name, role, member_type, enterprise_name, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
     $user = $result ? $result->fetch_assoc() : null;
     $passwordValid = $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
 
@@ -68,24 +106,26 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
-    $requestedRole = $_POST['role'] ?? 'volunteer';
-    $allowedRegistrationRoles = ['foodbank_staff', 'volunteer', 'donor'];
+    $memberType = $_POST['member_type'] ?? '';
+    $enterpriseName = trim($_POST['enterprise_name'] ?? '');
+    $allowedMemberTypes = ['general', 'enterprise'];
 
-    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($requestedRole, $allowedRegistrationRoles, true)) {
-        $registrationError = '請完整填寫資料，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
+    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && $enterpriseName === '')) {
+        $registrationError = '請完整填寫資料；企業會員須填寫企業／組織名稱，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
     } else {
         $fullNameEscaped = $connection->real_escape_string($fullName);
         $usernameEscaped = $connection->real_escape_string($username);
         $emailEscaped = $connection->real_escape_string($email);
         $phoneEscaped = $connection->real_escape_string($phone);
-        $roleEscaped = $connection->real_escape_string($requestedRole);
-            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        $memberTypeEscaped = $connection->real_escape_string($memberType);
+        $enterpriseNameEscaped = $connection->real_escape_string($enterpriseName);
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
         $exists = $connection->query("SELECT user_id FROM users WHERE username = '{$usernameEscaped}' OR email = '{$emailEscaped}' LIMIT 1");
 
         if ($exists && $exists->num_rows > 0) {
             $registrationError = '帳號或電子郵件已經被使用。';
         } else {
-            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', '{$roleEscaped}', 'inactive')");
+            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", 'inactive')");
             $newUserId = (int) $connection->insert_id;
 
             if ($newUserId > 0) {
@@ -117,10 +157,10 @@ if ($action === 'verify_phone') {
             $connection->query("UPDATE users SET phone_verified = 1 WHERE user_id = {$pendingUserId}");
             unset($_SESSION['pending_verification_user_id'], $_SESSION['dev_otp_code']);
 
-            $roleResult = $connection->query("SELECT role FROM users WHERE user_id = {$pendingUserId} LIMIT 1");
-            $verifiedUser = $roleResult ? $roleResult->fetch_assoc() : null;
+            $memberResult = $connection->query("SELECT role, member_type FROM users WHERE user_id = {$pendingUserId} LIMIT 1");
+            $verifiedUser = $memberResult ? $memberResult->fetch_assoc() : null;
 
-            if ($verifiedUser && $verifiedUser['role'] === 'volunteer') {
+            if ($verifiedUser && $verifiedUser['role'] === 'member' && $verifiedUser['member_type'] === 'general') {
                 $_SESSION['consent_pending_user_id'] = $pendingUserId;
                 header('Location: ?action=volunteer_consent');
                 exit;
@@ -228,6 +268,27 @@ if ($action === 'register') {
     exit;
 }
 
+if (in_array($action, ['delivery_tracking', 'delivery_location'], true) && empty($_SESSION['user'])) {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => '登入狀態已逾時，請重新登入後查看配送資訊。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'notifications_poll' && empty($_SESSION['user'])) {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => '登入狀態已逾時，請重新登入後查看通知。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'calculate_distance' && empty($_SESSION['user'])) {
+    http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => '登入狀態已逾時，請重新登入後再計算距離。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($action === 'login' || empty($_SESSION['user'])) {
     $error = $loginError ?? null;
     $registered = isset($_GET['registered']);
@@ -236,24 +297,172 @@ if ($action === 'login' || empty($_SESSION['user'])) {
 }
 
 $currentUser = $_SESSION['user'];
+require_once BASE_PATH . '/src/services/AuthService.php';
+$authService = AuthService::forCurrentUser($currentUser);
+
+if ($action === 'notifications_poll') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        header('Allow: GET');
+        echo json_encode(['error' => '不支援的請求方式。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $afterId = filter_input(INPUT_GET, 'after_id', FILTER_VALIDATE_INT);
+    if ($afterId === false || $afterId === null || $afterId < 0) {
+        http_response_code(400);
+        echo json_encode(['error' => '通知編號無效。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    require_once BASE_PATH . '/src/models/NotificationModel.php';
+    $pollNotificationModel = new NotificationModel();
+    $newNotifications = $pollNotificationModel->getSince((int) $currentUser['user_id'], $afterId);
+    if ($newNotifications === false) {
+        http_response_code(500);
+        echo json_encode(['error' => '目前無法取得新通知。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode([
+        'unread_count' => $pollNotificationModel->getUnreadCount((int) $currentUser['user_id']),
+        'notifications' => $newNotifications,
+    ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+
+if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    require_once BASE_PATH . '/src/models/DeliveryModel.php';
+    $deliveryModel = new DeliveryModel();
+    $currentUserId = (int) ($currentUser['user_id'] ?? 0);
+    $currentRole = $currentUser['role'] ?? 'member';
+
+    if ($action === 'delivery_tracking' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+        $deliveryId = filter_input(INPUT_GET, 'delivery_id', FILTER_VALIDATE_INT);
+        if (!$deliveryId || $deliveryId < 1) {
+            http_response_code(400);
+            echo json_encode(['error' => '配送任務編號無效。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $tracking = $deliveryModel->getLiveTracking($deliveryId, $currentUserId, $currentRole);
+        if ($tracking === false) {
+            http_response_code(500);
+            echo json_encode(['error' => '目前無法取得配送位置。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($tracking === null) {
+            http_response_code(404);
+            echo json_encode(['error' => '找不到配送任務或您無權查看。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        echo json_encode($tracking, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
+
+    if ($action === 'delivery_location' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $deliveryId = filter_var($_POST['delivery_id'] ?? null, FILTER_VALIDATE_INT);
+        $operation = $_POST['operation'] ?? '';
+        if (!$deliveryId || $deliveryId < 1) {
+            http_response_code(400);
+            echo json_encode(['error' => '配送任務編號無效。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if ($operation === 'stop') {
+            if (!$authService->can('rider.accept_task')) {
+                http_response_code(403);
+                echo json_encode(['error' => '只有接單的配送會員可以停止分享位置。'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            if (!$deliveryModel->stopLiveLocation($deliveryId, $currentUserId)) {
+                http_response_code(500);
+                echo json_encode(['error' => '停止分享位置失敗。'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $latitude = $_POST['latitude'] ?? null;
+        $longitude = $_POST['longitude'] ?? null;
+        $accuracy = $_POST['accuracy'] ?? null;
+        if ($operation !== 'update' || !$authService->can('rider.accept_task')) {
+            http_response_code(403);
+            echo json_encode(['error' => '只有接單的配送會員可以分享位置。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if (!$deliveryModel->updateLiveLocation($deliveryId, $currentUserId, $latitude, $longitude, $accuracy)) {
+            http_response_code(400);
+            echo json_encode(['error' => '位置更新失敗；請確認任務已取貨且座標有效。'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    http_response_code(405);
+    header('Allow: ' . ($action === 'delivery_tracking' ? 'GET' : 'POST'));
+    echo json_encode(['error' => '不支援的請求方式。'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'calculate_distance') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        header('Allow: GET');
+        echo json_encode(['error' => '不支援的請求方式。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    require_once BASE_PATH . '/src/helpers/DistanceHelper.php';
+    $origin = trim((string) ($_GET['origin'] ?? ''));
+    $destination = trim((string) ($_GET['destination'] ?? ''));
+    if ($origin === '' || $destination === '') {
+        http_response_code(400);
+        echo json_encode(['error' => '請先輸入取貨地址與送達地址。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $result = calculateAddressDistance($origin, $destination);
+    if (isset($result['error'])) {
+        http_response_code(422);
+        echo json_encode(['error' => $result['error']], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'distance_km' => $result['distance_km'],
+        'duration_minutes' => $result['duration_minutes'],
+        'distance_text' => formatDistanceText($result['distance_km']),
+        'duration_text' => formatDurationText($result['duration_minutes']),
+        'approximate' => !empty($result['approximate']),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 require_once BASE_PATH . '/src/models/NotificationModel.php';
 $notificationModel = new NotificationModel();
 $unreadNotificationCount = 0;
 if (isset($currentUser['user_id'])) {
     $unreadNotificationCount = (int) $notificationModel->getUnreadCount((int) $currentUser['user_id']);
 }
+$latestNotificationId = $notificationModel->getLatestIdForUser((int) $currentUser['user_id']);
 $role = $currentUser['role'];
+$memberType = $currentUser['member_type'] ?? null;
 $roleLabels = [
-    'admin' => '系統管理者',
-    'foodbank_staff' => '食物銀行官方人員',
-    'volunteer' => '平台志工／外送員',
-    'donor' => '捐贈剩食店家',
-];
-$rolePages = [
-    'admin' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'settings', 'users', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
-    'foodbank_staff' => ['dashboard', 'donations', 'deliveries', 'activities', 'inventory', 'beneficiaries', 'purchases', 'carbon_report', 'reports', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
-    'volunteer' => ['dashboard', 'deliveries', 'activities', 'rewards', 'notifications', 'certificate', 'activity_certificate'],
-    'donor' => ['dashboard', 'donations', 'notifications', 'certificate'],
+    'foodbank_staff' => '忠信食物銀行',
+    'member' => $memberType === 'enterprise' ? '企業會員' : ($memberType === 'general' ? '一般會員' : '會員'),
 ];
 
 // 簡單的路由系統
@@ -265,23 +474,32 @@ $page = basename($page);
 // 菜單項配置
 $menu_items = [
     'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
-    'donations' => ['label' => '捐贈管理', 'icon' => 'fa-solid fa-gift'],
+    'order_tracking' => ['label' => '訂單追蹤', 'icon' => 'fa-solid fa-list-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
-    'activities' => ['label' => '活動認領', 'icon' => 'fa-solid fa-calendar-check'],
-    'inventory' => ['label' => '庫存管理', 'icon' => 'fa-solid fa-boxes-stacked'],
-    'beneficiaries' => ['label' => '受益者', 'icon' => 'fa-solid fa-users'],
-    'purchases' => ['label' => '採購管理', 'icon' => 'fa-solid fa-cart-shopping'],
-    'rewards' => ['label' => '點數兌換', 'icon' => 'fa-solid fa-gift'],
-    'carbon_report' => ['label' => '減碳報表', 'icon' => 'fa-solid fa-leaf'],
+    'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
+    'activities' => ['label' => $role === 'member' ? '活動報名' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
+    'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
+    'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift'],
+    'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell'],
+    'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open'],
+    'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
+    'volunteer_management' => ['label' => '一般會員管理', 'icon' => 'fa-solid fa-people-group'],
 ];
-$allowedPages = $rolePages[$role] ?? ['dashboard'];
+
+// 頁面存取控制：以 Permission (page.<slug>) 為準，不再使用寫死的角色判斷。
+// certificate / activity_certificate 未列在側邊選單，但仍需納入頁面白名單。
+$routablePages = array_merge(array_keys($menu_items), ['certificate', 'activity_certificate']);
+$allowedPages = array_values(array_filter($routablePages, function ($slug) use ($authService) {
+    return $authService->can('page.' . $slug);
+}));
 if (!in_array($page, $allowedPages, true)) {
     $page = 'dashboard';
 }
+ob_start();
 ?>
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -289,6 +507,8 @@ if (!in_array($page, $allowedPages, true)) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="google-maps-api-key" content="<?php echo htmlspecialchars(GOOGLE_MAPS_API_KEY, ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="mapbox-access-token" content="<?php echo htmlspecialchars(MAPBOX_ACCESS_TOKEN, ENT_QUOTES, 'UTF-8'); ?>">
     <title><?php echo APP_NAME; ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -296,7 +516,7 @@ if (!in_array($page, $allowedPages, true)) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
-<body>
+<body data-notification-poll-url="?action=notifications_poll" data-notification-last-id="<?php echo (int) $latestNotificationId; ?>">
     <div class="app-wrapper">
         <!-- 側邊欄 -->
         <aside class="sidebar">
@@ -314,11 +534,14 @@ if (!in_array($page, $allowedPages, true)) {
                     }
                     $is_active = ($page === $key) ? 'active' : '';
                     $icon = $item['icon'];
-                    $label = $item['label'];
+                    $label = ($key === 'reports' && $role === 'member') ? '榮譽榜' : $item['label'];
                     ?>
                     <a href="?page=<?php echo $key; ?>" class="nav-item <?php echo $is_active; ?>" title="<?php echo $label; ?>">
                         <span class="nav-icon"><i class="<?php echo $icon; ?>"></i></span>
                         <span class="nav-label"><?php echo $label; ?></span>
+                        <?php if ($key === 'notifications'): ?>
+                            <span class="notification-badge sidebar-notification-badge" data-notification-badge <?php echo $unreadNotificationCount > 0 ? '' : 'hidden'; ?>><?php echo (int) $unreadNotificationCount; ?></span>
+                        <?php endif; ?>
                     </a>
                 <?php endforeach; ?>
             </nav>
@@ -357,9 +580,7 @@ if (!in_array($page, $allowedPages, true)) {
                     </div>
                     <a href="?page=notifications" class="icon-btn" title="通知" aria-label="查看通知中心">
                         <i class="fas fa-bell"></i>
-                        <?php if ($unreadNotificationCount > 0): ?>
-                            <span class="notification-badge"><?php echo (int) $unreadNotificationCount; ?></span>
-                        <?php endif; ?>
+                        <span class="notification-badge" data-notification-badge <?php echo $unreadNotificationCount > 0 ? '' : 'hidden'; ?>><?php echo (int) $unreadNotificationCount; ?></span>
                     </a>
                     <a href="?page=settings" class="icon-btn" title="設置" aria-label="前往設置">
                         <i class="fas fa-cog"></i>
@@ -373,6 +594,11 @@ if (!in_array($page, $allowedPages, true)) {
                     <?php
                     // 根據頁面加載不同的視圖
                     $view_file = BASE_PATH . '/src/views/' . $page . '.php';
+                    if ($page === 'volunteer_management') {
+                        $view_file = BASE_PATH . '/src/views/users.php';
+                    } elseif ($page === 'material_transport') {
+                        $view_file = BASE_PATH . '/src/views/deliveries.php';
+                    }
 
                     if (file_exists($view_file)) {
                         include $view_file;
@@ -406,6 +632,8 @@ if (!in_array($page, $allowedPages, true)) {
         </div>
     </footer>
 
+    <script src="assets/js/google-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/google-map.js'); ?>"></script>
+    <script src="assets/js/mapbox-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/mapbox-map.js'); ?>"></script>
     <script src="assets/js/main.js?v=<?php echo filemtime(__DIR__ . '/assets/js/main.js'); ?>"></script>
 </body>
 </html>

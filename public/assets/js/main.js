@@ -8,8 +8,528 @@
     document.addEventListener('DOMContentLoaded', function () {
         initializeEventListeners();
         initializeSidebarToggle();
+        initializeLiveDeliveryTracking();
+        initializeNavigateButton();
+        initializeNotifications();
+        initializeMaterialDonationDistanceEstimate();
+        initializeDriverTripCard();
         injectRuntimeStyles();
     });
+
+    function initializeNotifications() {
+        const pollUrl = document.body.dataset.notificationPollUrl;
+        if (!pollUrl) {
+            return;
+        }
+
+        let lastNotificationId = Number(document.body.dataset.notificationLastId || 0);
+        let requestInFlight = false;
+
+        function updateBadges(unreadCount) {
+            document.querySelectorAll('[data-notification-badge]').forEach(function (badge) {
+                badge.textContent = String(unreadCount);
+                badge.hidden = unreadCount < 1;
+            });
+        }
+
+        async function pollNotifications() {
+            if (requestInFlight || document.visibilityState === 'hidden') {
+                return;
+            }
+            requestInFlight = true;
+
+            try {
+                const url = new URL(pollUrl, window.location.href);
+                url.searchParams.set('after_id', String(lastNotificationId));
+                const response = await fetch(url.toString(), {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || '無法更新通知。');
+                }
+
+                updateBadges(Number(result.unread_count) || 0);
+                (result.notifications || []).forEach(function (notification) {
+                    lastNotificationId = Math.max(lastNotificationId, Number(notification.notification_id) || 0);
+                    if (typeof window.showNotification === 'function') {
+                        window.showNotification(notification.title + '：' + notification.message, notification.type);
+                    }
+                });
+            } catch (error) {
+                console.error('通知更新失敗：', error);
+            } finally {
+                requestInFlight = false;
+            }
+        }
+
+        pollNotifications();
+        window.setInterval(pollNotifications, 5000);
+        document.addEventListener('visibilitychange', pollNotifications);
+    }
+
+    function initializeLiveDeliveryTracking() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        const trackingCards = document.querySelectorAll('.order-live-tracking[data-delivery-id]');
+        const locationControls = document.querySelectorAll('[data-live-location]');
+
+        function endpoint(action) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('action', action);
+            return url.toString();
+        }
+
+        async function requestLocationUpdate(control, values) {
+            const body = new URLSearchParams({
+                csrf_token: csrfToken ? csrfToken.content : '',
+                delivery_id: control.dataset.deliveryId,
+                ...values
+            });
+            const response = await fetch(endpoint('delivery_location'), {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: body
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || '定位更新失敗。');
+            }
+            return result;
+        }
+
+        locationControls.forEach(function (control) {
+            const startButton = control.querySelector('[data-start-location]');
+            const stopButton = control.querySelector('[data-stop-location]') || document.createElement('button');
+            const status = control.querySelector('.delivery-location-sharing-status');
+            const deliveryId = control.dataset.deliveryId;
+            let watchId = null;
+            let generation = 0;
+            let lastSentAt = 0;
+            let latestPosition = null;
+            let locationUpdateTimer = null;
+            let updateInFlight = false;
+
+            if (!startButton || !status || !deliveryId) {
+                return;
+            }
+
+            function stopWatching() {
+                generation += 1;
+                if (watchId !== null) {
+                    navigator.geolocation.clearWatch(watchId);
+                    watchId = null;
+                }
+                if (locationUpdateTimer !== null) {
+                    window.clearInterval(locationUpdateTimer);
+                    locationUpdateTimer = null;
+                }
+                latestPosition = null;
+            }
+
+            async function publishLocation(currentGeneration) {
+                if (!latestPosition || currentGeneration !== generation || updateInFlight || Date.now() - lastSentAt < 4000) {
+                    return;
+                }
+                lastSentAt = Date.now();
+                updateInFlight = true;
+
+                try {
+                    await requestLocationUpdate(control, {
+                        operation: 'update',
+                        latitude: latestPosition.coords.latitude.toString(),
+                        longitude: latestPosition.coords.longitude.toString(),
+                        accuracy: latestPosition.coords.accuracy.toString()
+                    });
+                    if (currentGeneration !== generation) {
+                        return;
+                    }
+                    control.dataset.sharing = 'true';
+                    status.textContent = '定位已自動分享給商家與食物銀行；請保持此頁面開啟。';
+                    startButton.hidden = true;
+                } catch (error) {
+                    if (currentGeneration === generation) {
+                        stopWatching();
+                        startButton.hidden = false;
+                        startButton.disabled = false;
+                        status.textContent = error.message;
+                    }
+                } finally {
+                    updateInFlight = false;
+                }
+            }
+
+            function startSharing() {
+                if (!navigator.geolocation) {
+                    status.textContent = '此瀏覽器不支援定位功能。';
+                    startButton.hidden = false;
+                    return;
+                }
+                if (watchId !== null) {
+                    return;
+                }
+
+                const currentGeneration = ++generation;
+                lastSentAt = 0;
+                startButton.hidden = true;
+                status.textContent = '正在取得定位；請允許瀏覽器存取位置。';
+                watchId = navigator.geolocation.watchPosition(function (position) {
+                    if (currentGeneration !== generation) {
+                        return;
+                    }
+                    latestPosition = position;
+                    window.goRiderPosition = { lat: position.coords.latitude, lng: position.coords.longitude };
+                    publishLocation(currentGeneration);
+                }, function (error) {
+                    if (currentGeneration !== generation) {
+                        return;
+                    }
+                    stopWatching();
+                    startButton.hidden = false;
+                    startButton.disabled = false;
+                    status.textContent = error.code === error.PERMISSION_DENIED
+                        ? '未取得定位權限；請在瀏覽器允許位置存取後重試。'
+                        : '無法取得目前位置，請確認定位服務已開啟，並使用 HTTPS 網址後重試。';
+                }, {
+                    enableHighAccuracy: true,
+                    maximumAge: 3000,
+                    timeout: 20000
+                });
+                locationUpdateTimer = window.setInterval(function () {
+                    publishLocation(currentGeneration);
+                }, 5000);
+            }
+
+            startButton.addEventListener('click', startSharing);
+
+            // 接單後自動開始分享；頁面回到前景時若定位中斷則自動恢復
+            if (control.hasAttribute('data-auto-start')) {
+                startSharing();
+                document.addEventListener('visibilitychange', function () {
+                    if (document.visibilityState === 'visible' && watchId === null && document.body.contains(control)) {
+                        startSharing();
+                    }
+                });
+            }
+        });
+
+        async function refreshTracking(card) {
+            const status = card.querySelector('.order-live-tracking-status');
+            const statusTitle = card.querySelector('.customer-delivery-status-title');
+            const eta = card.querySelector('[data-delivery-eta]');
+            const courierName = card.querySelector('[data-courier-name]');
+            const courierVehicle = card.querySelector('[data-courier-vehicle]');
+            const courierAvatar = card.querySelector('[data-courier-avatar]');
+            const stopAlert = card.querySelector('[data-other-stops]');
+            const locationUpdated = card.querySelector('[data-location-updated]');
+            const mapPlaceholder = card.querySelector('.customer-map-placeholder');
+            const mapCanvas = card.querySelector('[data-map-canvas]');
+            const progressFill = card.querySelector('.customer-progress-fill');
+            const progressSteps = card.querySelectorAll('.customer-progress-step');
+            const url = new URL(endpoint('delivery_tracking'));
+            url.searchParams.set('delivery_id', card.dataset.deliveryId);
+            try {
+                const response = await fetch(url.toString(), { credentials: 'same-origin', cache: 'no-store' });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || '目前無法取得配送狀態。');
+                }
+
+                const statusDetails = {
+                    open: { title: '等待配送員接單', message: '訂單已準備，等待配送員接單。', step: 0, progress: 8 },
+                    claimed: { title: '配送員已接單', message: '配送員已接單，正在前往取貨。', step: 1, progress: 32 },
+                    picked_up: { title: 'Go Rider 正在前往送達地點', message: '物資已取貨，Go Rider 正在前往送達地點。', step: 2, progress: 72 },
+                    in_transit: { title: 'Go Rider 正在前往送達地點', message: 'Go Rider 正在配送途中。', step: 2, progress: 72 },
+                    delivered: { title: '物資已送達', message: '配送已完成，感謝您的愛心。', step: 3, progress: 100 },
+                    exception: { title: '配送狀況處理中', message: '配送遇到狀況，食物銀行人員正在協助處理。', step: 1, progress: 36 },
+                    cancelled: { title: '配送任務已取消', message: '此配送任務已取消。', step: 0, progress: 0 }
+                };
+                const currentStatus = statusDetails[result.status] || statusDetails.open;
+                status.textContent = currentStatus.message;
+                if (statusTitle) {
+                    statusTitle.textContent = currentStatus.title;
+                }
+                if (progressFill) {
+                    progressFill.style.width = currentStatus.progress + '%';
+                    progressFill.classList.toggle('is-moving', result.status === 'picked_up' || result.status === 'in_transit');
+                }
+                progressSteps.forEach(function (step, index) {
+                    step.classList.toggle('is-active', index === currentStatus.step);
+                    step.classList.toggle('is-complete', index < currentStatus.step || result.status === 'delivered');
+                });
+
+                if (eta) {
+                    if (result.delivery_date && result.delivery_time) {
+                        const dateParts = result.delivery_date.split('-').map(Number);
+                        const timeParts = result.delivery_time.split(':').map(Number);
+                        const etaDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1]);
+                        eta.textContent = Number.isNaN(etaDate.getTime())
+                            ? '依預約時間'
+                            : etaDate.toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+                    } else {
+                        eta.textContent = result.status === 'delivered' ? '已送達' : '時間待確認';
+                    }
+                }
+
+                if (courierName) {
+                    courierName.textContent = result.courier_name || (result.status === 'open' ? '等待配送員接單' : '配送夥伴');
+                }
+                if (courierVehicle) {
+                    courierVehicle.textContent = result.vehicle_type === 'car' ? '汽車配送' : (result.vehicle_type === 'motorcycle' ? '機車配送' : '配送夥伴');
+                }
+                if (courierAvatar) {
+                    const initials = result.courier_name ? Array.from(result.courier_name.trim())[0] : '';
+                    courierAvatar.textContent = initials || '';
+                    if (!initials) {
+                        courierAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+                    }
+                }
+                if (stopAlert) {
+                    const otherStops = Number(result.other_active_delivery_count) || 0;
+                    stopAlert.hidden = otherStops === 0 || result.status === 'delivered';
+                    stopAlert.textContent = otherStops > 0
+                        ? 'Go Rider 目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
+                        : '';
+                }
+
+                const isAfterPickup = result.status === 'picked_up' || result.status === 'in_transit';
+                const hasLocation = Number(result.is_sharing) === 1 && result.latitude !== null && result.longitude !== null;
+                if (isAfterPickup && hasLocation && mapCanvas && window.FoodbankMap) {
+                    const updatedAt = Number(result.location_updated_at) * 1000;
+                    const ageSeconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+                    if (locationUpdated) {
+                        locationUpdated.textContent = ageSeconds > 60
+                            ? '位置超過 1 分鐘未更新，可能不是 Go Rider 目前位置。'
+                            : '位置' + (ageSeconds < 5 ? '剛剛更新' : ageSeconds + ' 秒前更新');
+                    }
+                    if (!card.liveMap) {
+                        card.liveMap = window.FoodbankMap.create(mapCanvas, { riderTitle: 'Go Rider' });
+                    }
+                    if (mapPlaceholder) {
+                        mapPlaceholder.hidden = true;
+                    }
+                    mapCanvas.hidden = false;
+                    try {
+                        await card.liveMap.ready();
+                        card.liveMap.setPickup(result.pickup_address);
+                        card.liveMap.setDestination(result.delivery_address);
+                        await card.liveMap.setTrail(result.trail);
+                        await card.liveMap.setRider(result.latitude, result.longitude);
+                    } catch (mapError) {
+                        mapCanvas.hidden = true;
+                        if (mapPlaceholder) {
+                            mapPlaceholder.hidden = false;
+                            mapPlaceholder.textContent = mapError.message;
+                        }
+                    }
+                } else {
+                    if (card.liveMap) {
+                        card.liveMap.clearRider();
+                    }
+                    if (mapPlaceholder) {
+                        mapPlaceholder.hidden = false;
+                        mapPlaceholder.textContent = result.status === 'delivered'
+                            ? '配送已完成。'
+                            : (isAfterPickup ? 'Go Rider 尚未開啟即時位置分享。' : 'Go Rider 取貨後，地圖會顯示即時位置');
+                    }
+                    if (mapCanvas) {
+                        mapCanvas.hidden = true;
+                    }
+                    if (locationUpdated) {
+                        locationUpdated.textContent = isAfterPickup
+                            ? 'Go Rider 尚未開啟即時位置分享。'
+                            : 'Go Rider 取貨後，這裡會顯示即時位置。';
+                    }
+                }
+            } catch (error) {
+                status.textContent = error.message;
+            }
+        }
+
+        if (trackingCards.length > 0) {
+            trackingCards.forEach(refreshTracking);
+            window.setInterval(function () {
+                trackingCards.forEach(refreshTracking);
+            }, 5000);
+        }
+    }
+
+    function initializeNavigateButton() {
+        document.querySelectorAll('[data-navigate-btn]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const position = window.goRiderPosition;
+                const origin = position ? position.lat + ',' + position.lng : (button.dataset.fallbackOrigin || '');
+                button.href = window.FoodbankMap.buildDirectionsUrl(
+                    origin,
+                    button.dataset.destination,
+                    button.dataset.travelMode
+                );
+            });
+        });
+    }
+
+    function initializeMaterialDonationDistanceEstimate() {
+        const forms = document.querySelectorAll('[data-distance-estimate-form]');
+        if (!forms.length) {
+            return;
+        }
+
+        forms.forEach(function (form) {
+            const originInput = form.querySelector('#donorAddress');
+            const destinationInput = form.querySelector('#deliveryAddress');
+            const wrapper = form.querySelector('[data-distance-estimate]');
+            const distanceValue = form.querySelector('[data-distance-value]');
+            const durationValue = form.querySelector('[data-duration-value]');
+            const distanceInput = form.querySelector('[data-distance-input]');
+            const durationInput = form.querySelector('[data-duration-input]');
+            const statusText = form.querySelector('[data-distance-status]');
+            if (!originInput || !destinationInput || !wrapper) {
+                return;
+            }
+
+            let requestToken = 0;
+
+            function endpoint(action) {
+                const url = new URL(window.location.href);
+                url.searchParams.set('action', action);
+                return url;
+            }
+
+            function setStatus(message, isError) {
+                if (!statusText) {
+                    return;
+                }
+                if (!message) {
+                    statusText.hidden = true;
+                    statusText.textContent = '';
+                    return;
+                }
+                statusText.hidden = false;
+                statusText.textContent = message;
+                statusText.classList.toggle('is-error', Boolean(isError));
+            }
+
+            function clearEstimate() {
+                wrapper.hidden = true;
+                if (distanceInput) {
+                    distanceInput.value = '';
+                }
+                if (durationInput) {
+                    durationInput.value = '';
+                }
+            }
+
+            async function fetchDistance() {
+                const origin = originInput.value.trim();
+                const destination = destinationInput.value.trim();
+                if (origin.length < 4 || destination.length < 4) {
+                    clearEstimate();
+                    setStatus('', false);
+                    return;
+                }
+
+                const currentToken = ++requestToken;
+                setStatus('正在計算配送距離與時間…', false);
+
+                const url = endpoint('calculate_distance');
+                url.searchParams.set('origin', origin);
+                url.searchParams.set('destination', destination);
+
+                try {
+                    const response = await fetch(url.toString(), { credentials: 'same-origin' });
+                    const result = await response.json();
+                    if (currentToken !== requestToken) {
+                        return;
+                    }
+                    if (!response.ok || !result.success) {
+                        clearEstimate();
+                        setStatus(result.error || '無法計算配送距離，請確認地址是否完整。', true);
+                        return;
+                    }
+
+                    if (distanceValue) {
+                        distanceValue.textContent = result.distance_text;
+                    }
+                    if (durationValue) {
+                        durationValue.textContent = result.duration_text;
+                    }
+                    if (distanceInput) {
+                        distanceInput.value = result.distance_km;
+                    }
+                    if (durationInput) {
+                        durationInput.value = result.duration_minutes;
+                    }
+                    wrapper.hidden = false;
+                    setStatus(result.approximate ? '地址門牌資料不完整，此為路段層級的概略估算。' : '', false);
+                } catch (error) {
+                    if (currentToken !== requestToken) {
+                        return;
+                    }
+                    clearEstimate();
+                    setStatus('無法連線計算配送距離，請稍後再試。', true);
+                }
+            }
+
+            [originInput, destinationInput].forEach(function (input) {
+                input.addEventListener('blur', fetchDistance);
+                input.addEventListener('change', fetchDistance);
+            });
+        });
+    }
+
+    function initializeDriverTripCard() {
+        const card = document.querySelector('[data-driver-trip]');
+        if (!card) {
+            return;
+        }
+
+        const mapArea = card.querySelector('[data-map-theme]');
+        const themeToggle = card.querySelector('[data-map-theme-toggle]');
+        const themeIcon = card.querySelector('[data-theme-icon]');
+        if (mapArea && themeToggle) {
+            themeToggle.addEventListener('click', function () {
+                const nextTheme = mapArea.dataset.theme === 'dark' ? 'light' : 'dark';
+                mapArea.dataset.theme = nextTheme;
+                if (themeIcon) {
+                    themeIcon.classList.toggle('fa-moon', nextTheme === 'dark');
+                    themeIcon.classList.toggle('fa-sun', nextTheme === 'light');
+                }
+            });
+        }
+
+        const sheetToggle = card.querySelector('[data-sheet-toggle]');
+        const sheetDetails = card.querySelector('[data-sheet-details]');
+        const sheetChevron = card.querySelector('[data-sheet-chevron]');
+        if (sheetToggle && sheetDetails) {
+            // 預設展開，讓外送員可直接看到取件/送達地址與操作按鈕
+            sheetDetails.hidden = false;
+            sheetToggle.setAttribute('aria-expanded', 'true');
+            sheetToggle.addEventListener('click', function () {
+                const isHidden = sheetDetails.hidden;
+                sheetDetails.hidden = !isHidden;
+                sheetToggle.setAttribute('aria-expanded', String(isHidden));
+                if (sheetChevron) {
+                    sheetChevron.classList.toggle('fa-chevron-up', isHidden);
+                    sheetChevron.classList.toggle('fa-chevron-down', !isHidden);
+                }
+            });
+        }
+
+        const pickupChecks = card.querySelectorAll('[data-pickup-check]');
+        const pickupSubmit = card.querySelector('[data-pickup-submit]');
+        if (pickupChecks.length && pickupSubmit) {
+            const updatePickupButton = function () {
+                const allChecked = Array.prototype.every.call(pickupChecks, function (checkbox) {
+                    return checkbox.checked;
+                });
+                pickupSubmit.disabled = !allChecked;
+            };
+            pickupChecks.forEach(function (checkbox) {
+                checkbox.addEventListener('change', updatePickupButton);
+            });
+            updatePickupButton();
+        }
+    }
 
     function initializeSidebarToggle() {
         const sidebarToggle = document.getElementById('sidebarToggle');
@@ -59,88 +579,52 @@
             });
         });
 
-        // 事件委派：處理受益者清單中 view/assign/delete 按鈕（避免依賴 inline onclick）
         document.body.addEventListener('click', function (event) {
             const btn = event.target.closest && event.target.closest('button[data-action]');
             if (!btn) return;
             const action = btn.dataset.action;
             try {
-                if (action === 'view' && typeof openViewBeneficiaryModal === 'function') {
-                    openViewBeneficiaryModal(btn);
+                if (action === 'edit-supplier' && typeof openEditSupplierModal === 'function') {
+                    openEditSupplierModal(btn);
                     event.preventDefault();
-                } else if (action === 'assign' && typeof openAssignBeneficiaryModal === 'function') {
-                    openAssignBeneficiaryModal(btn);
+                } else if (action === 'delete-supplier' && typeof confirmDeleteSupplier === 'function') {
+                    confirmDeleteSupplier(btn);
                     event.preventDefault();
-                } else if (action === 'delete' && typeof confirmDeleteBeneficiary === 'function') {
-                    confirmDeleteBeneficiary(btn);
-                    event.preventDefault();
+                } else if (action === 'edit-reward') {
+                    const card = btn.closest('.reward-card');
+                    const form = card && card.querySelector('.reward-management-form');
+                    if (form) {
+                        form.hidden = false;
+                        btn.hidden = true;
+                    }
+                } else if (action === 'cancel-edit-reward') {
+                    const card = btn.closest('.reward-card');
+                    const form = card && card.querySelector('.reward-management-form');
+                    const editButton = card && card.querySelector('[data-action="edit-reward"]');
+                    if (form && editButton) {
+                        form.hidden = true;
+                        editButton.hidden = false;
+                    }
+                } else if (action === 'edit-donor-reward') {
+                    const displayRow = btn.closest('tr');
+                    const editRow = displayRow && displayRow.nextElementSibling;
+                    if (editRow) {
+                        editRow.hidden = false;
+                        btn.hidden = true;
+                    }
+                } else if (action === 'cancel-donor-reward-edit') {
+                    const editRow = btn.closest('tr');
+                    const displayRow = editRow && editRow.previousElementSibling;
+                    const editButton = displayRow && displayRow.querySelector('[data-action="edit-donor-reward"]');
+                    if (editRow && editButton) {
+                        editRow.hidden = true;
+                        editButton.hidden = false;
+                    }
                 }
             } catch (err) {
-                console.error('Beneficiary action handler error:', err);
+                console.error('Table action handler error:', err);
             }
         });
-
-        // Click diagnostics (capture-phase) — 用於偵錯：顯示被點擊元素是否有動作屬性或可能的處理器
-        let clickDiagnosticsEnabled = false;
-        function diagnosticListener(ev) {
-            const el = ev.target;
-            const btn = el.closest ? el.closest('button, a, input, [role="button"]') : null;
-            const item = btn || el;
-            if (!item) return;
-
-            const info = {
-                tag: item.tagName,
-                id: item.id || null,
-                classes: item.className || null,
-                hasOnclickAttr: !!item.getAttribute && item.getAttribute('onclick') ? true : false,
-                hasDataAction: !!item.dataset && Object.prototype.hasOwnProperty.call(item.dataset, 'action'),
-                isAnchorWithHref: item.tagName === 'A' && !!item.getAttribute('href'),
-                isSubmitButton: (item.tagName === 'BUTTON' && (item.type === 'submit' || item.getAttribute('type') === 'submit')) || (item.tagName === 'INPUT' && item.type === 'submit'),
-                insideForm: !!item.closest && !!item.closest('form'),
-                computedRole: item.getAttribute ? item.getAttribute('role') : null
-            };
-
-            console.groupCollapsed('[Click Diagnostics] element clicked');
-            console.log(info);
-            console.log('DOM element:', item);
-            console.groupEnd();
-
-            // 顯示快速 toast 在頁面右上，協助無法看 console 的情況
-            const toast = document.createElement('div');
-            toast.className = 'diagnostic-toast';
-            toast.textContent = `${info.tag}${info.hasDataAction? ' [data-action]' : ''}${info.hasOnclickAttr? ' [onclick]' : ''}${info.isAnchorWithHref? ' [href]' : ''}${info.isSubmitButton? ' [submit]' : ''}`;
-            Object.assign(toast.style, {
-                position: 'fixed',
-                right: '20px',
-                top: '80px',
-                background: '#111827',
-                color: '#fff',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                zIndex: 4000,
-                fontSize: '12px',
-                boxShadow: '0 6px 18px rgba(0,0,0,0.2)'
-            });
-            document.body.appendChild(toast);
-            setTimeout(function () { toast.remove(); }, 1800);
-        }
-
-        // 開放切換診斷器的全域函式
-        function enableClickDiagnostics(enable) {
-            if (enable && !clickDiagnosticsEnabled) {
-                document.addEventListener('click', diagnosticListener, true);
-                clickDiagnosticsEnabled = true;
-                console.log('Click diagnostics enabled');
-            } else if (!enable && clickDiagnosticsEnabled) {
-                document.removeEventListener('click', diagnosticListener, true);
-                clickDiagnosticsEnabled = false;
-                console.log('Click diagnostics disabled');
-            }
-        }
-
-        window.enableClickDiagnostics = enableClickDiagnostics;
-        // 預設開啟偵錯（頁面載入即啟用）
-        enableClickDiagnostics(true);
 
         updateActiveNavItem();
     }
@@ -151,7 +635,8 @@
 
         navItems.forEach(function (item) {
             const href = item.getAttribute('href') || '';
-            item.classList.toggle('active', href.indexOf('page=' + currentPage) !== -1);
+            const itemPage = new URL(href, window.location.href).searchParams.get('page') || 'dashboard';
+            item.classList.toggle('active', itemPage === currentPage);
         });
     }
 
@@ -195,8 +680,8 @@
             }
 
             const statusCell = row.querySelector('.status');
-            const statusText = statusCell ? statusCell.textContent.toLowerCase() : '';
-            row.style.display = statusText.indexOf(normalized) !== -1 ? '' : 'none';
+            const statusValue = statusCell ? (statusCell.dataset.status || statusCell.textContent).toLowerCase() : '';
+            row.style.display = statusValue.indexOf(normalized) !== -1 ? '' : 'none';
         });
     }
 
@@ -271,9 +756,8 @@
                 <div class="form-group">
                     <label>配送方式*</label>
                     <select name="delivery_option" required>
-                        <option value="volunteer_delivery">志工配送</option>
-                        <option value="donor_delivery">商家自行運送</option>
-                        <option value="food_bank_pickup">食物銀行派車</option>
+                        <option value="food_bank_pickup">忠信派車</option>
+                        <option value="volunteer_delivery">忠信GO RIDER派車</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -326,7 +810,7 @@
                     <input type="text" name="unit" value="件" required />
                 </div>
                 <div class="form-group">
-                    <label>重訂點</label>
+                    <label>預定數量</label>
                     <input type="number" name="reorder_level" step="0.01" />
                 </div>
                 <div class="form-group">
@@ -396,6 +880,7 @@
     // 開啟檢視受益者資訊的 modal，接收按鈕元素（包含 data-* 屬性）
     function openViewBeneficiaryModal(btn) {
         const d = btn.dataset;
+        const incomeLabels = { low: '低', medium: '中', high: '高' };
         const html = `
             <div class="beneficiary-view">
                 <p><strong>編號：</strong>${escapeHtml(d.beneficiaryCode || '')}</p>
@@ -404,7 +889,7 @@
                 <p><strong>郵箱：</strong>${escapeHtml(d.email || '')}</p>
                 <p><strong>地址：</strong>${escapeHtml(d.address || '')}</p>
                 <p><strong>家庭成員數：</strong>${escapeHtml(d.familySize || '')}</p>
-                <p><strong>收入級別：</strong>${escapeHtml(d.incomeLevel || '')}</p>
+                <p><strong>收入級別：</strong>${escapeHtml(incomeLabels[String(d.incomeLevel || '').toLowerCase()] || d.incomeLevel || '')}</p>
                 <p><strong>備註：</strong>${escapeHtml(d.notes || '')}</p>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
@@ -436,6 +921,47 @@
         showModal('受益者分配', html);
     }
 
+    function openDistributionHistoryModal(btn) {
+        let history = [];
+        try {
+            history = JSON.parse(btn.dataset.history || '[]');
+        } catch (error) {
+            console.error('Unable to load distribution history:', error);
+        }
+
+        const statusLabels = {
+            pending: '已分配',
+            approved: '已批准',
+            completed: '已完成',
+            cancelled: '已取消'
+        };
+        const rows = history.length
+            ? history.map(function (record) {
+                const quantity = Number(record.quantity);
+                const formattedQuantity = Number.isInteger(quantity) ? String(quantity) : String(quantity).replace(/0+$/, '').replace(/\.$/, '');
+                return `<tr>
+                    <td>${escapeHtml(record.date)}</td>
+                    <td>${escapeHtml(record.item)}</td>
+                    <td>${escapeHtml(formattedQuantity + (record.unit || ''))}</td>
+                    <td>${escapeHtml(statusLabels[record.status] || record.status)}</td>
+                    <td>${escapeHtml(record.notes || '-')}</td>
+                </tr>`;
+            }).join('')
+            : '<tr><td colspan="5" class="muted-text">尚未有分配紀錄</td></tr>';
+
+        showModal('分配歷史 - ' + escapeHtml(btn.dataset.fullName || ''), `
+            <div class="inventory-table-body">
+                <table class="data-table distribution-history-table">
+                    <thead><tr><th>分配時間</th><th>物資</th><th>數量</th><th>狀態</th><th>備註</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
+            </div>
+        `);
+    }
+
     // 小型的 HTML escape 函式
     function escapeHtml(str) {
         if (!str) return '';
@@ -445,29 +971,40 @@
     }
 
 
-    function openNewPurchaseModal() {
-        showModal('新增採購單', `
-            <form onsubmit="event.preventDefault(); closeModal(); showNotification('採購單已暫存', 'success');">
-                <div class="form-group">
-                    <label>供應商*</label>
-                    <select required>
-                        <option value="">--請選擇--</option>
-                        <option value="supplier1">ABC 食品供應公司</option>
-                        <option value="supplier2">XYZ 商貿公司</option>
-                    </select>
+    function openViewInventoryModal(btn) {
+        const d = btn.dataset;
+        showModal('庫存項目詳情', `
+            <div class="beneficiary-view">
+                <p><strong>項目代碼：</strong>${escapeHtml(d.code)}</p>
+                <p><strong>項目名稱：</strong>${escapeHtml(d.name)}</p>
+                <p><strong>分類：</strong>${escapeHtml(d.category)}</p>
+                <p><strong>現有數量：</strong>${escapeHtml(d.quantity)}</p>
+                <p><strong>預定數量：</strong>${escapeHtml(d.reorderLevel)}</p>
+                <p><strong>保質期：</strong>${escapeHtml(d.expiry)}</p>
+                <p><strong>位置：</strong>${escapeHtml(d.location)}</p>
+                <p><strong>狀態：</strong>${escapeHtml(d.status)}</p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">關閉</button>
                 </div>
-                <div class="form-group">
-                    <label>採購日期*</label>
-                    <input type="date" required />
-                </div>
-                <div class="form-group">
-                    <label>預計交貨日期</label>
-                    <input type="date" />
-                </div>
-                <div class="form-group">
-                    <label>備註</label>
-                    <textarea></textarea>
-                </div>
+            </div>
+        `);
+    }
+
+    function openEditInventoryModal(btn) {
+        const d = btn.dataset;
+        const quantity = formatInventoryNumber(d.quantity);
+        const reorderLevel = formatInventoryNumber(d.reorderLevel);
+        showModal('編輯庫存項目', `
+            <form method="post" action="?page=inventory">
+                <input type="hidden" name="action" value="update_inventory" />
+                <input type="hidden" name="inventory_id" value="${escapeHtml(d.inventoryId)}" />
+                <div class="form-group"><label>項目代碼</label><input type="text" value="${escapeHtml(d.code)}" disabled /></div>
+                <div class="form-group"><label>項目名稱*</label><input type="text" name="item_name" value="${escapeHtml(d.name)}" required /></div>
+                <div class="form-group"><label>分類</label><select name="category"><option value="food" ${d.category === 'food' ? 'selected' : ''}>食物</option><option value="supplies" ${d.category === 'supplies' ? 'selected' : ''}>用品</option><option value="other" ${d.category === 'other' ? 'selected' : ''}>其他</option></select></div>
+                <div class="form-group"><label>現有數量</label><input type="number" name="quantity_on_hand" value="${escapeHtml(quantity)}" min="0" step="0.01" required /></div>
+                <div class="form-group"><label>預定數量</label><input type="number" name="reorder_level" value="${escapeHtml(reorderLevel)}" min="0" step="0.01" /></div>
+                <div class="form-group"><label>保質期</label><input type="date" name="expiry_date" value="${escapeHtml(d.expiry === '-' ? '' : d.expiry)}" /></div>
+                <div class="form-group"><label>位置</label><input type="text" name="location" value="${escapeHtml(d.location)}" /></div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
@@ -476,39 +1013,12 @@
         `);
     }
 
-    function openAddSupplierModal() {
-        showModal('新增供應商', `
-            <form onsubmit="event.preventDefault(); closeModal(); showNotification('供應商資料已暫存', 'success');">
-                <div class="form-group">
-                    <label>供應商名稱*</label>
-                    <input type="text" required />
-                </div>
-                <div class="form-group">
-                    <label>聯繫人</label>
-                    <input type="text" />
-                </div>
-                <div class="form-group">
-                    <label>電話</label>
-                    <input type="tel" />
-                </div>
-                <div class="form-group">
-                    <label>郵箱</label>
-                    <input type="email" />
-                </div>
-                <div class="form-group">
-                    <label>城市</label>
-                    <input type="text" />
-                </div>
-                <div class="form-group">
-                    <label>地址</label>
-                    <textarea></textarea>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
-                    <button type="submit" class="btn btn-primary">保存</button>
-                </div>
-            </form>
-        `);
+    function formatInventoryNumber(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) {
+            return '';
+        }
+        return Number.isInteger(number) ? String(number) : String(number).replace(/0+$/, '').replace(/\.$/, '');
     }
 
     function showModal(title, content) {
@@ -522,7 +1032,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>${title}</h3>
-                        <button type="button" class="modal-close" onclick="closeModal()" aria-label="Close">×</button>
+                        <button type="button" class="modal-close" aria-label="Close">×</button>
                     </div>
                     <div class="modal-body">${content}</div>
                 </div>
@@ -544,6 +1054,15 @@
                 input.name = 'csrf_token';
                 input.value = csrfToken.content;
                 form.appendChild(input);
+            });
+        }
+
+        const closeButton = modal.querySelector('.modal-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeModal();
             });
         }
 
@@ -740,6 +1259,7 @@
     // 受益者：檢視、分配、刪除的輔助函式（在 IIFE 中定義，再暴露到 window）
     function openViewBeneficiaryModal(btn) {
         const d = btn ? btn.dataset : {};
+        const incomeLabels = { low: '低', medium: '中', high: '高' };
         const html = `
             <div class="beneficiary-view">
                 <p><strong>編號：</strong>${escapeHtml(d.beneficiaryCode || '')}</p>
@@ -748,7 +1268,7 @@
                 <p><strong>郵箱：</strong>${escapeHtml(d.email || '')}</p>
                 <p><strong>地址：</strong>${escapeHtml(d.address || '')}</p>
                 <p><strong>家庭成員數：</strong>${escapeHtml(d.familySize || '')}</p>
-                <p><strong>收入級別：</strong>${escapeHtml(d.incomeLevel || '')}</p>
+                <p><strong>收入級別：</strong>${escapeHtml(incomeLabels[String(d.incomeLevel || '').toLowerCase()] || d.incomeLevel || '')}</p>
                 <p><strong>註冊日期：</strong>${escapeHtml(d.registrationDate || '')}</p>
                 <p><strong>備註：</strong>${escapeHtml(d.notes || '')}</p>
                 <div class="modal-actions">
@@ -762,11 +1282,30 @@
     function openAssignBeneficiaryModal(btn) {
         const benId = btn ? btn.dataset.beneficiaryId : '';
         const fullName = btn ? (btn.dataset.fullName || '') : '';
+        let inventoryOptions = [];
+        try {
+            inventoryOptions = JSON.parse(btn.dataset.inventoryOptions || '[]');
+        } catch (error) {
+            console.error('Unable to load inventory options:', error);
+        }
+        const inventorySelectOptions = inventoryOptions.length
+            ? inventoryOptions.map(function (item) {
+                return `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}（可分配 ${escapeHtml(item.available)} ${escapeHtml(item.unit)}）</option>`;
+            }).join('')
+            : '<option value="">目前沒有可分配物資</option>';
         const html = `
             <form method="post" action="?page=beneficiaries">
                 <input type="hidden" name="action" value="assign_beneficiary" />
                 <input type="hidden" name="beneficiary_id" value="${escapeHtml(benId)}" />
                 <p>為受益者 <strong>${escapeHtml(fullName)}</strong> 建立分配紀錄：</p>
+                <div class="form-group">
+                    <label>分配物資*</label>
+                    <select name="inventory_id" required>${inventorySelectOptions}</select>
+                </div>
+                <div class="form-group">
+                    <label>分配數量*</label>
+                    <input type="number" name="quantity" min="0.01" step="0.01" required />
+                </div>
                 <div class="form-group">
                     <label>備註（選填）</label>
                     <textarea name="notes"></textarea>
@@ -827,28 +1366,10 @@
     }
 
     // 將需要被全域呼叫的函式暴露到 window
-    window.openAddDonationModal = openAddDonationModal;
-    window.openAddInventoryModal = openAddInventoryModal;
-    window.openAddBeneficiaryModal = openAddBeneficiaryModal;
-    window.openNewPurchaseModal = openNewPurchaseModal;
-    window.openAddSupplierModal = openAddSupplierModal;
     window.closeModal = closeModal;
     window.switchTab = switchTab;
     window.exportToCSV = exportToCSV;
     window.printTable = printTable;
     window.showNotification = showNotification;
 
-    // 受益者相關全域函式（供 onclick 屬性使用）
-    if (typeof openViewBeneficiaryModal === 'function') {
-        window.openViewBeneficiaryModal = openViewBeneficiaryModal;
-    }
-    if (typeof openAssignBeneficiaryModal === 'function') {
-        window.openAssignBeneficiaryModal = openAssignBeneficiaryModal;
-    }
-    if (typeof escapeHtml === 'function') {
-        window.escapeHtml = escapeHtml;
-    }
-    if (typeof confirmDeleteBeneficiary === 'function') {
-        window.confirmDeleteBeneficiary = confirmDeleteBeneficiary;
-    }
 })();

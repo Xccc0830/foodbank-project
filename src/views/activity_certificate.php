@@ -9,7 +9,7 @@ $activityModel = new ActivityModel();
 $assignmentId = (int) ($_GET['assignment_id'] ?? 0);
 $assignment = $assignmentId > 0 ? $activityModel->getAssignmentForCertificate($assignmentId) : null;
 
-$isOfficial = in_array($currentUser['role'] ?? '', ['admin', 'foodbank_staff'], true);
+$isOfficial = ($currentUser['role'] ?? '') === 'foodbank_staff';
 $isOwner = $assignment && (int) $assignment['user_id'] === (int) $currentUser['user_id'];
 
 if (!$assignment || (!$isOwner && !$isOfficial)) {
