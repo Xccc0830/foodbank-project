@@ -16,12 +16,15 @@
 `database/migrations/` 僅供既有資料庫逐步升級使用；不可在新安裝匯入主 SQL 後再重複套用。
 依 2026/10/13 專題會議決議，系統不提供即時 GPS 定位；配送進度以狀態（接單、取貨、送達）呈現。
 
-既有資料庫依檔名順序套用 2026/10/17、10/18 的遷移檔：
+既有資料庫先備份，再執行 `database/migrations/20261018_meeting_decisions_consolidated.sql` 一次，即可套用上述會議決議的資料庫變更。此合併遷移檔涵蓋 GPS 移除、防拆封條改取貨照片、外送志工申請審核，以及管理員／行政人員、最新消息公告、配送預估與逾時通知、企業統一編號、黑名單和物資盤點。
+合併遷移檔取代以下四個元件遷移檔的逐一執行方式；請勿在執行合併檔後再重複執行元件檔：
 
-1. `20261017_remove_live_gps_tracking.sql`：移除定位資料表。
-2. `20261017_remove_seal_add_pickup_photo.sql`：取消防拆封條欄位，新增志工取貨照片欄位。
-3. `20261017_rider_application.sql`：一般會員改為申請並經審核才具外送權限（既有一般會員先保留外送權限）。
-4. `20261018_roles_news_arrival_blacklist.sql`：食物銀行管理員／行政人員、最新消息公告與廣告、預估送達時間與逾時通知、企業統一編號、黑名單與物資盤點權限。
+- `20261017_remove_live_gps_tracking.sql`
+- `20261017_remove_seal_add_pickup_photo.sql`
+- `20261017_rider_application.sql`
+- `20261018_roles_news_arrival_blacklist.sql`
+
+`database/schema.sql` 仍是新安裝的主 SQL，不可用於升級既有資料庫。若先前已套用部分元件遷移，合併檔使用「若尚未存在才新增／移除」的結構操作，可接續完成變更。
 
 駕照照片存放於 `storage/rider_licenses/`（不在網站根目錄內），部署時請確認 PHP 可寫入該資料夾，並由網站伺服器禁止直接存取 `storage/`。
 物資捐贈表單在「商家取貨地址」與「配送地址」都填寫完成後，會呼叫伺服器端的 `?action=calculate_distance` API 自動計算兩地之間的路程距離與預估運送時間並帶入表單。此功能透過 OpenStreetMap 的 Nominatim（地理編碼）與 OSRM（路徑規劃）公開服務運作，**需要伺服器可對外連線**（PHP 需啟用 `curl` 擴充套件）；由於台灣部分門牌號碼未完整收錄於 OpenStreetMap，系統會自動從完整地址逐步簡化為路段層級查詢，若僅能定位到路段會標示為概略估算。
