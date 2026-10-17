@@ -6,6 +6,7 @@
 -- 產生時間： 2026 年 09 月 22 日 11:07
 -- 伺服器版本： 10.4.28-MariaDB
 -- PHP 版本： 8.2.4
+-- 新安裝唯一主 SQL；既有資料庫升級請使用 migrations/ 中對應的遷移檔。
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -188,6 +189,21 @@ CREATE TABLE `delivery_locations` (
   `is_sharing` tinyint(1) NOT NULL DEFAULT 0,
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`delivery_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 資料表結構 `delivery_location_trail`
+--
+
+DROP TABLE IF EXISTS `delivery_location_trail`;
+CREATE TABLE `delivery_location_trail` (
+  `point_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  `delivery_id` int(11) NOT NULL,
+  `latitude` decimal(10,7) NOT NULL,
+  `longitude` decimal(10,7) NOT NULL,
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`point_id`),
+  KEY `idx_delivery_recorded` (`delivery_id`,`point_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
