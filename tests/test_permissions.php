@@ -10,11 +10,11 @@ require __DIR__ . '/../src/models/PermissionModel.php';
 
 function oldRolePages($role, $memberType) {
     $rolePages = [
-        'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'activities', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
+        'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'news', 'inventory', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'rider_review', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
         'member' => $memberType === 'enterprise'
-            ? ['dashboard', 'order_tracking', 'activities', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate']
+            ? ['dashboard', 'order_tracking', 'news', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate']
             : ($memberType === 'general'
-                ? ['dashboard', 'deliveries', 'material_transport', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate']
+                ? ['dashboard', 'rider_application', 'news', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate']
                 : ['dashboard']),
     ];
     return $rolePages[$role] ?? ['dashboard'];
@@ -63,8 +63,9 @@ $testUser = $testUserResult ? $testUserResult->fetch_assoc() : null;
 
 if ($testUser) {
     $testUserId = (int) $testUser['user_id'];
-    $before = $permissionModel->getEffectivePermissions($testUserId, 'member', 'general');
-    $hadRiderPermission = in_array('rider.accept_task', $before, true);
+    $originalResult = $dbHandle->query("SELECT granted FROM user_permission_overrides WHERE user_id = {$testUserId} AND permission_key = 'rider.accept_task'");
+    $originalOverride = $originalResult ? $originalResult->fetch_assoc() : null;
+    $defaultHasRider = in_array('rider.accept_task', $permissionModel->getEffectivePermissions(0, 'member', 'general'), true);
 
     // 退選 Rider 任務，驗證 override granted=0 會蓋過角色預設值。
     $permissionModel->revokeOverride($testUserId, 'rider.accept_task');
@@ -79,11 +80,20 @@ if ($testUser) {
     // 清除 override，應恢復為角色預設值。
     $permissionModel->clearOverride($testUserId, 'rider.accept_task');
     $afterClear = $permissionModel->getEffectivePermissions($testUserId, 'member', 'general');
-    if (in_array('rider.accept_task', $afterClear, true) === $hadRiderPermission) {
+    if (in_array('rider.accept_task', $afterClear, true) === $defaultHasRider) {
         echo "PASS override-clear-restores-default (user #{$testUserId})\n";
     } else {
         echo "FAIL override-clear-restores-default (user #{$testUserId})\n";
         $failures++;
+    }
+
+    // 還原此帳號原本的個人覆寫，避免測試改變實際資料。
+    if ($originalOverride !== null) {
+        if ((int) $originalOverride['granted'] === 1) {
+            $permissionModel->grantOverride($testUserId, 'rider.accept_task');
+        } else {
+            $permissionModel->revokeOverride($testUserId, 'rider.accept_task');
+        }
     }
 } else {
     echo "SKIP override-tests (no active general member found in database)\n";

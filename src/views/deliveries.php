@@ -13,13 +13,15 @@ $currentRole = $currentUser['role'] ?? 'volunteer';
 $memberType = $currentUser['member_type'] ?? null;
 $currentUserId = (int) ($currentUser['user_id'] ?? 0);
 $isOfficial = $currentRole === 'foodbank_staff';
-$isVolunteer = $currentRole === 'member' && $memberType === 'general';
+$canManageDeliveries = $isOfficial && $authService->can('delivery.manage');
+$canConfirmArrival = $isOfficial && $authService->can('delivery.confirm_arrival');
+$isVolunteer = $currentRole === 'member' && $memberType === 'general' && $authService->can('rider.accept_task');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'create_delivery') {
-        if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '配送會員只能選擇接單，無法發布配送任務。'];
+        if (!$canManageDeliveries) {
+            $message = ['type' => 'error', 'text' => '只有管理員可以發布配送任務。'];
         } elseif ($addressError = validateAddress($_POST['pickup_address'] ?? '', '取貨地址') ?? validateAddress($_POST['delivery_address'] ?? '', '送達地址')) {
             $message = ['type' => 'error', 'text' => $addressError];
         } else {
@@ -44,15 +46,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '任務已由目前配送會員接單。']
             : ['type' => 'error', 'text' => '接單失敗，任務可能已被其他配送會員接取。'];
     } elseif ($action === 'confirm_pickup') {
-        $message = $isVolunteer && $deliveryModel->confirmPickup((int) $_POST['delivery_id'], $currentUserId, isset($_POST['seal_intact']), isset($_POST['item_count_confirmed']))
+        require_once BASE_PATH . '/src/helpers/UploadHelper.php';
+        $pickupPhotoPath = $isVolunteer && !empty($_FILES['pickup_photo']['name'])
+            ? uploadPickupPhoto($_FILES['pickup_photo'])
+            : false;
+        $message = $pickupPhotoPath !== false && $deliveryModel->confirmPickup((int) $_POST['delivery_id'], $currentUserId, $pickupPhotoPath)
             ? ['type' => 'success', 'text' => '取貨已確認，請將物資送往食物銀行。']
-            : ['type' => 'error', 'text' => '取貨確認失敗，請確認防拆貼紙與物資數量。'];
+            : ['type' => 'error', 'text' => '取貨確認失敗，請上傳取貨照片（JPG、PNG 或 WebP，5MB 以內）。'];
     } elseif ($action === 'report_exception') {
         $message = $isVolunteer && $deliveryModel->reportException((int) $_POST['delivery_id'], $currentUserId, $_POST['exception_notes'] ?? '')
             ? ['type' => 'success', 'text' => '異常已回報，食物銀行官方人員會進行處理。']
             : ['type' => 'error', 'text' => '請填寫異常原因後再送出。'];
     } elseif ($action === 'resolve_exception') {
-        $resolved = $isOfficial && $deliveryModel->resolveException(
+        $resolved = $canManageDeliveries && $deliveryModel->resolveException(
             (int) $_POST['delivery_id'],
             $currentUserId,
             $_POST['exception_response'] ?? '',
@@ -62,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '異常已處理，回覆已通知配送會員。']
             : ['type' => 'error', 'text' => '異常處理失敗，請填寫處理結果或確認任務狀態。'];
     } elseif ($action === 'reject_exception') {
-        $rejected = $isOfficial && $deliveryModel->rejectException(
+        $rejected = $canManageDeliveries && $deliveryModel->rejectException(
             (int) $_POST['delivery_id'],
             $currentUserId,
             $_POST['exception_response'] ?? ''
@@ -71,16 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '異常回報已駁回，任務已恢復為已接單。']
             : ['type' => 'error', 'text' => '駁回異常回報失敗，請填寫回覆內容。'];
     } elseif ($action === 'complete_delivery') {
-        $message = $isOfficial && $deliveryModel->completeDelivery((int) $_POST['delivery_id'])
+        $message = $canConfirmArrival && $deliveryModel->completeDelivery((int) $_POST['delivery_id'])
             ? ['type' => 'success', 'text' => '已確認送達，公益點數已記錄。']
             : ['type' => 'error', 'text' => '送達確認失敗。'];
-    } elseif ($action === 'complete_delivery_volunteer') {
-        $message = $isVolunteer && $deliveryModel->completeDeliveryByVolunteer((int) $_POST['delivery_id'], $currentUserId)
-            ? ['type' => 'success', 'text' => '行程已完成，公益點數已記錄。']
-            : ['type' => 'error', 'text' => '完成行程失敗，請確認任務狀態為已取貨。'];
     } elseif ($action === 'load_edit_delivery') {
-        if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '配送會員無法編輯配送任務。'];
+        if (!$canManageDeliveries) {
+            $message = ['type' => 'error', 'text' => '只有管理員可以編輯配送任務。'];
         } else {
         $editingDelivery = $deliveryModel->getDeliveryById((int) $_POST['delivery_id']);
         if (!$editingDelivery || !$deliveryModel->canManageDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole)) {
@@ -89,8 +91,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         }
     } elseif ($action === 'update_delivery') {
-        if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '配送會員無法更新配送任務。'];
+        if (!$canManageDeliveries) {
+            $message = ['type' => 'error', 'text' => '只有管理員可以更新配送任務。'];
             $updated = false;
         } elseif ($addressError = validateAddress($_POST['pickup_address'] ?? '', '取貨地址') ?? validateAddress($_POST['delivery_address'] ?? '', '送達地址')) {
             $message = ['type' => 'error', 'text' => $addressError];
@@ -112,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ['type' => 'error', 'text' => '更新失敗，只有任務發起人或食物銀行／管理者可編輯。'];
         }
     } elseif ($action === 'update_exception') {
-        $updated = $isOfficial && $deliveryModel->updateException(
+        $updated = $canManageDeliveries && $deliveryModel->updateException(
             (int) $_POST['delivery_id'],
             $currentUserId,
             $currentRole,
@@ -123,8 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ['type' => 'success', 'text' => '異常回報內容已更新。']
             : ['type' => 'error', 'text' => '異常回報更新失敗。'];
     } elseif ($action === 'delete_delivery') {
-        if (!$isOfficial) {
-            $message = ['type' => 'error', 'text' => '配送會員無法刪除配送任務。'];
+        if (!$canManageDeliveries) {
+            $message = ['type' => 'error', 'text' => '只有管理員可以刪除配送任務。'];
         } else {
         $message = $deliveryModel->deleteDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole)
             ? ['type' => 'success', 'text' => '已刪除配送任務。']
@@ -133,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$deliveryModel->notifyOverdueDeliveries();
 $deliveries = $deliveryModel->getAllDeliveries();
 $completedDeliveries = array_filter($deliveries, static function ($delivery) use ($isOfficial, $currentUserId) {
     return $delivery['status'] === 'delivered'
@@ -275,18 +278,13 @@ if ($isVolunteer) {
                 <div class="driver-trip-note"><i class="fas fa-circle-info"></i> 這趟路線中，您沿途還有一站停靠點，請依序完成配送。</div>
             <?php endif; ?>
 
-            <div class="delivery-location-sharing" data-live-location data-auto-start data-delivery-id="<?php echo (int) $activeDriverTrip['delivery_id']; ?>" data-sharing="<?php echo !empty($activeDriverTrip['is_location_sharing']) ? 'true' : 'false'; ?>">
-                <p class="delivery-location-sharing-status" aria-live="polite">正在自動啟用即時定位分享；請在瀏覽器允許位置存取。</p>
-                <button type="button" class="btn btn-primary btn-sm" data-start-location hidden>重新取得定位</button>
-            </div>
             <?php if ($tripIsPickupPhase): ?>
-                <form method="post" class="driver-trip-action-form" data-pickup-form>
+                <form method="post" class="driver-trip-action-form" enctype="multipart/form-data" data-pickup-form>
                     <?php echo csrfField(); ?>
                     <input type="hidden" name="action" value="confirm_pickup">
                     <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
                     <div class="driver-trip-checklist">
-                        <label><input type="checkbox" name="seal_intact" data-pickup-check required> 防拆貼紙完整</label>
-                        <label><input type="checkbox" name="item_count_confirmed" data-pickup-check required> 已清點物資</label>
+                        <label>取貨照片（拍下取得的物資）<input type="file" name="pickup_photo" accept="image/png,image/jpeg,image/webp" capture="environment" data-pickup-photo required></label>
                     </div>
                     <button type="submit" class="driver-action-button" data-pickup-submit disabled><i class="fas fa-box-open"></i> 完成取件</button>
                 </form>
@@ -298,12 +296,13 @@ if ($isVolunteer) {
                     <button class="btn btn-danger btn-sm" type="submit">回報異常</button>
                 </form>
             <?php else: ?>
-                <form method="post" class="driver-trip-action-form">
-                    <?php echo csrfField(); ?>
-                    <input type="hidden" name="action" value="complete_delivery_volunteer">
-                    <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
-                    <button type="submit" class="driver-action-button driver-action-complete"><i class="fas fa-flag-checkered"></i> 完成行程</button>
-                </form>
+                <div class="driver-trip-note">
+                    <i class="fas fa-circle-info"></i>
+                    送達食物銀行後，請將物資交給行政人員；由行政人員確認「已抵達」並清點物資後，任務才算完成。
+                    <?php if (!empty($activeDriverTrip['estimated_arrival_start']) && !empty($activeDriverTrip['estimated_arrival_end'])): ?>
+                        預估送達時間：<?php echo htmlspecialchars(date('H:i', strtotime($activeDriverTrip['estimated_arrival_start'])) . '–' . date('H:i', strtotime($activeDriverTrip['estimated_arrival_end']))); ?>
+                    <?php endif; ?>
+                </div>
                 <form method="post" class="delivery-action-form">
                     <?php echo csrfField(); ?>
                     <input type="hidden" name="action" value="report_exception">
@@ -329,7 +328,7 @@ if ($isVolunteer) {
 <?php endif; ?>
 
 <div class="grid-2">
-    <?php if ($isOfficial): ?>
+    <?php if ($canManageDeliveries): ?>
     <div class="card">
         <div class="card-header"><h2>發布配送任務</h2><p>依規劃書公式預先計算公益點數</p></div>
         <div class="card-body">
@@ -486,10 +485,24 @@ if ($isVolunteer) {
                     <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
                     <td>
                         <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' ? '待忠信派車' : (['open' => '待接單', 'claimed' => '已接單', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']); ?></span>
+                        <?php if ($isOfficial && !empty($delivery['pickup_photo_path'])): ?>
+                            <br><a href="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($delivery['pickup_photo_path'], '/'), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
+                        <?php endif; ?>
+                        <?php if ($isOfficial && !empty($delivery['volunteer_id'])): ?>
+                            <br><small>志工：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
+                            <?php if (!empty($delivery['volunteer_phone'])): ?>
+                                <a href="tel:<?php echo htmlspecialchars($delivery['volunteer_phone'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($delivery['volunteer_phone']); ?></a>
+                            <?php else: ?>（未提供電話）<?php endif; ?></small>
+                        <?php endif; ?>
+                        <?php if ($isOfficial && !empty($delivery['estimated_arrival_start']) && !empty($delivery['estimated_arrival_end']) && $delivery['status'] === 'picked_up'): ?>
+                            <?php $isOverdue = strtotime($delivery['estimated_arrival_end']) < time(); ?>
+                            <br><small>預估送達 <?php echo htmlspecialchars(date('H:i', strtotime($delivery['estimated_arrival_start'])) . '–' . date('H:i', strtotime($delivery['estimated_arrival_end']))); ?></small>
+                            <?php if ($isOverdue): ?><br><span class="status status-exception">已逾時</span><?php endif; ?>
+                        <?php endif; ?>
                     </td>
                     <td class="delivery-exception-cell">
                         <?php if ($delivery['status'] === 'exception' || !empty($delivery['exception_notes']) || !empty($delivery['exception_response'])): ?>
-                            <?php if ($isOfficial): ?>
+                            <?php if ($canManageDeliveries): ?>
                                 <form method="post" class="delivery-action-form delivery-exception-form">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="update_exception">
@@ -501,7 +514,7 @@ if ($isVolunteer) {
                             <?php else: ?>
                                 <div class="delivery-exception-details"><?php echo htmlspecialchars($delivery['exception_notes'] ?? ''); ?></div>
                             <?php endif; ?>
-                            <?php if ($isOfficial && in_array($delivery['status'], ['exception', 'cancelled'], true)): ?>
+                            <?php if ($canManageDeliveries && in_array($delivery['status'], ['exception', 'cancelled'], true)): ?>
                                 <form method="post" class="delivery-action-form delivery-exception-form">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="<?php echo $delivery['status'] === 'cancelled' ? 'reject_exception' : 'resolve_exception'; ?>">
@@ -528,9 +541,9 @@ if ($isVolunteer) {
                             <?php if ($isVolunteer && in_array($delivery['status'], ['claimed', 'picked_up'], true) && (int) $delivery['volunteer_id'] === $currentUserId): ?>
                                 <span class="text-muted"><i class="fas fa-arrow-up"></i> 請至上方「配送中任務」卡片操作</span>
                             <?php endif; ?>
-                            <?php $canCompleteDelivery = $isOfficial && (($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' || in_array($delivery['status'], ['claimed', 'picked_up', 'in_transit'], true)); ?>
-                            <?php if ($canCompleteDelivery): ?><form method="post" class="delivery-action-form"><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' ? '確認忠信派車已完成' : '確認收貨'; ?></button></form><?php endif; ?>
-                            <?php if ($isOfficial): ?>
+                            <?php $canCompleteDelivery = $canConfirmArrival && (($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' || in_array($delivery['status'], ['claimed', 'picked_up', 'in_transit'], true)); ?>
+                            <?php if ($canCompleteDelivery): ?><form method="post" class="delivery-action-form"><?php echo csrfField(); ?><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' ? '確認忠信派車已完成' : '已抵達，確認收貨'; ?></button></form><?php endif; ?>
+                            <?php if ($canManageDeliveries): ?>
                                 <div class="inline-action-group">
                                     <form method="post" class="delivery-action-form">
                                         <?php echo csrfField(); ?>

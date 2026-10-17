@@ -12,24 +12,28 @@ class DeliveryModel extends BaseModel {
         parent::__construct();
         $this->ensureDeliveryMethodColumn();
         $this->ensureExceptionResponseColumns();
-        $this->ensureDeliveryLocationsTable();
-        $this->ensureDeliveryLocationTrailTable();
+        $this->ensurePickupPhotoColumn();
+        $this->ensureArrivalWindowColumns();
     }
 
-    private function ensureDeliveryLocationTrailTable() {
-        $created = $this->db->query(
-            "CREATE TABLE IF NOT EXISTS delivery_location_trail (
-                point_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-                delivery_id INT NOT NULL,
-                latitude DECIMAL(10,7) NOT NULL,
-                longitude DECIMAL(10,7) NOT NULL,
-                recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (point_id),
-                KEY idx_delivery_recorded (delivery_id, point_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
-        );
-        if (!$created) {
-            throw new RuntimeException('無法建立配送軌跡資料表：' . $this->db->error);
+    private function ensureArrivalWindowColumns() {
+        $columns = [
+            'estimated_arrival_start' => "ALTER TABLE deliveries ADD estimated_arrival_start DATETIME DEFAULT NULL AFTER pickup_photo_path",
+            'estimated_arrival_end' => "ALTER TABLE deliveries ADD estimated_arrival_end DATETIME DEFAULT NULL AFTER estimated_arrival_start",
+            'overdue_notified_at' => "ALTER TABLE deliveries ADD overdue_notified_at DATETIME DEFAULT NULL AFTER estimated_arrival_end",
+        ];
+        foreach ($columns as $column => $alterSql) {
+            $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
+            if ($result && $result->num_rows === 0) {
+                $this->db->query($alterSql);
+            }
+        }
+    }
+
+    private function ensurePickupPhotoColumn() {
+        $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE 'pickup_photo_path'");
+        if ($result && $result->num_rows === 0) {
+            $this->db->query("ALTER TABLE deliveries ADD pickup_photo_path VARCHAR(255) DEFAULT NULL AFTER pickup_confirmed_at");
         }
     }
 
@@ -56,56 +60,78 @@ class DeliveryModel extends BaseModel {
         }
     }
 
-    private function ensureDeliveryLocationsTable() {
-        $existing = $this->db->query("SHOW TABLES LIKE 'delivery_locations'");
-        if (!$existing) {
-            throw new RuntimeException('無法確認配送定位資料表：' . $this->db->error);
-        }
-        if ($existing->num_rows > 0) {
-            return;
-        }
-
-        $created = $this->db->query(
-            "CREATE TABLE delivery_locations (
-                delivery_id INT NOT NULL,
-                latitude DECIMAL(10,7) DEFAULT NULL,
-                longitude DECIMAL(10,7) DEFAULT NULL,
-                accuracy_meters DECIMAL(8,2) DEFAULT NULL,
-                is_sharing TINYINT(1) NOT NULL DEFAULT 0,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (delivery_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
-        );
-        if (!$created) {
-            throw new RuntimeException('無法建立配送定位資料表：' . $this->db->error);
-        }
-    }
-
-    private function clearExpiredLiveLocations() {
-        $deleted = $this->db->query(
-            "DELETE FROM delivery_locations
-             WHERE updated_at < NOW() - INTERVAL 2 MINUTE"
-        );
-        if (!$deleted) {
-            throw new RuntimeException('無法清除逾時的配送定位資料：' . $this->db->error);
-        }
-        $this->db->query("DELETE FROM delivery_location_trail WHERE recorded_at < NOW() - INTERVAL 1 DAY");
-    }
-
     public function getAllDeliveries() {
-        $this->clearExpiredLiveLocations();
-        $sql = "SELECT d.*, n.order_number, n.donor_name, u.full_name AS volunteer_name,
-                       COALESCE(dl.is_sharing, 0) AS is_location_sharing
+        $sql = "SELECT d.*, n.order_number, n.donor_name, u.full_name AS volunteer_name, u.phone AS volunteer_phone
                 FROM deliveries d
                 LEFT JOIN donations n ON n.donation_id = d.donation_id
                 LEFT JOIN users u ON u.user_id = d.volunteer_id
-                LEFT JOIN delivery_locations dl ON dl.delivery_id = d.delivery_id
                 ORDER BY d.created_at DESC";
         return $this->enrichTasksWithItemSummary($this->query($sql));
     }
 
-    public function getLiveTracking($deliveryId, $userId, $userRole) {
-        $this->clearExpiredLiveLocations();
+    /**
+     * 志工取貨後依物資預估運送時間設定預估送達範圍（起點為預估時間，終點多留緩衝）。
+     */
+    private function setArrivalWindow($deliveryId) {
+        $deliveryId = (int) $deliveryId;
+        $result = $this->db->query(
+            "SELECT n.estimated_duration_minutes FROM deliveries d
+             LEFT JOIN donations n ON n.donation_id = d.donation_id
+             WHERE d.delivery_id = {$deliveryId} LIMIT 1"
+        );
+        $row = $result ? $result->fetch_assoc() : null;
+        $minutes = (int) ($row['estimated_duration_minutes'] ?? 0);
+        $duration = $minutes > 0 ? max(10, $minutes) : 30;
+        $buffer = max(15, (int) ceil($duration / 2));
+        $end = $duration + $buffer;
+        $this->db->query(
+            "UPDATE deliveries
+             SET estimated_arrival_start = DATE_ADD(NOW(), INTERVAL {$duration} MINUTE),
+                 estimated_arrival_end = DATE_ADD(NOW(), INTERVAL {$end} MINUTE),
+                 overdue_notified_at = NULL
+             WHERE delivery_id = {$deliveryId}"
+        );
+    }
+
+    /**
+     * 找出已取貨但超過預估送達時間的配送任務，通知食物銀行人員並附上志工聯絡方式。
+     * 每筆任務只通知一次；回傳本次新通知的任務數。
+     */
+    public function notifyOverdueDeliveries() {
+        $overdue = $this->query(
+            "SELECT d.delivery_id, d.estimated_arrival_start, d.estimated_arrival_end,
+                    n.order_number, u.full_name AS volunteer_name, u.phone AS volunteer_phone
+             FROM deliveries d
+             LEFT JOIN donations n ON n.donation_id = d.donation_id
+             LEFT JOIN users u ON u.user_id = d.volunteer_id
+             WHERE d.status = 'picked_up' AND d.delivery_method = 'volunteer'
+               AND d.estimated_arrival_end IS NOT NULL AND d.estimated_arrival_end < NOW()
+               AND d.overdue_notified_at IS NULL"
+        );
+
+        $notified = 0;
+        foreach ($overdue as $delivery) {
+            $deliveryId = (int) $delivery['delivery_id'];
+            $this->db->query("UPDATE deliveries SET overdue_notified_at = NOW() WHERE delivery_id = {$deliveryId} AND overdue_notified_at IS NULL");
+            if ($this->db->affected_rows !== 1) {
+                continue;
+            }
+
+            $window = date('H:i', strtotime($delivery['estimated_arrival_start'])) . '–' . date('H:i', strtotime($delivery['estimated_arrival_end']));
+            $order = !empty($delivery['order_number']) ? "（訂單 {$delivery['order_number']}）" : '';
+            $contact = ($delivery['volunteer_name'] ?? '外送志工') . '，電話：' . ($delivery['volunteer_phone'] ?: '未提供');
+            $this->notifyUsersByRoles(
+                ['foodbank_staff'],
+                '配送逾時提醒',
+                "配送任務 #{$deliveryId}{$order} 已超過預估送達時間 {$window}，請聯繫外送志工：{$contact}。",
+                'warning'
+            );
+            $notified++;
+        }
+        return $notified;
+    }
+
+    public function getDeliveryStatus($deliveryId, $userId, $userRole) {
         $deliveryId = (int) $deliveryId;
         $userId = (int) $userId;
         $accessCondition = $userRole === 'foodbank_staff'
@@ -114,7 +140,7 @@ class DeliveryModel extends BaseModel {
         $result = $this->db->query(
             "SELECT d.delivery_id, d.status, d.pickup_address, d.delivery_address,
                     u.full_name AS courier_name,
-                    d.vehicle_type,
+                    d.vehicle_type, d.estimated_arrival_start, d.estimated_arrival_end,
                     n.delivery_date, n.delivery_time,
                     (
                         SELECT COUNT(*)
@@ -123,16 +149,10 @@ class DeliveryModel extends BaseModel {
                           AND other_delivery.delivery_id <> d.delivery_id
                           AND other_delivery.delivery_method = 'volunteer'
                           AND other_delivery.status IN ('claimed', 'picked_up')
-                    ) AS other_active_delivery_count,
-                    CASE WHEN d.status IN ('claimed', 'picked_up') AND dl.is_sharing = 1 THEN dl.latitude ELSE NULL END AS latitude,
-                    CASE WHEN d.status IN ('claimed', 'picked_up') AND dl.is_sharing = 1 THEN dl.longitude ELSE NULL END AS longitude,
-                    CASE WHEN d.status IN ('claimed', 'picked_up') AND dl.is_sharing = 1 THEN dl.accuracy_meters ELSE NULL END AS accuracy_meters,
-                    CASE WHEN d.status IN ('claimed', 'picked_up') AND dl.is_sharing = 1 THEN UNIX_TIMESTAMP(dl.updated_at) ELSE NULL END AS location_updated_at,
-                    CASE WHEN d.status IN ('claimed', 'picked_up') AND dl.is_sharing = 1 THEN 1 ELSE 0 END AS is_sharing
+                    ) AS other_active_delivery_count
              FROM deliveries d
              LEFT JOIN donations n ON n.donation_id = d.donation_id
              LEFT JOIN users u ON u.user_id = d.volunteer_id
-             LEFT JOIN delivery_locations dl ON dl.delivery_id = d.delivery_id
              WHERE d.delivery_id = {$deliveryId} AND {$accessCondition}
              LIMIT 1"
         );
@@ -140,97 +160,7 @@ class DeliveryModel extends BaseModel {
             return false;
         }
         $tracking = $result->fetch_assoc();
-        if (!$tracking) {
-            return null;
-        }
-
-        $tracking['trail'] = [];
-        if ((int) $tracking['is_sharing'] === 1 && $tracking['status'] === 'picked_up') {
-            $trail = $this->db->query(
-                "SELECT latitude, longitude FROM (
-                    SELECT point_id, latitude, longitude FROM delivery_location_trail
-                    WHERE delivery_id = {$deliveryId} ORDER BY point_id DESC LIMIT 300
-                 ) recent ORDER BY point_id ASC"
-            );
-            while ($trail && ($point = $trail->fetch_assoc())) {
-                $tracking['trail'][] = [(float) $point['latitude'], (float) $point['longitude']];
-            }
-        }
-        return $tracking;
-    }
-
-    public function updateLiveLocation($deliveryId, $volunteerId, $latitude, $longitude, $accuracyMeters) {
-        $deliveryId = (int) $deliveryId;
-        $volunteerId = (int) $volunteerId;
-        if (!is_numeric($latitude) || !is_numeric($longitude) || !is_numeric($accuracyMeters)) {
-            return false;
-        }
-
-        $latitude = (float) $latitude;
-        $longitude = (float) $longitude;
-        $accuracyMeters = (float) $accuracyMeters;
-        if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180 || $accuracyMeters < 0 || $accuracyMeters > 100000) {
-            return false;
-        }
-
-        $eligible = $this->db->query(
-            "SELECT delivery_id, status FROM deliveries
-             WHERE delivery_id = {$deliveryId}
-               AND volunteer_id = {$volunteerId}
-               AND delivery_method = 'volunteer'
-               AND status IN ('claimed', 'picked_up')
-             LIMIT 1"
-        );
-        if (!$eligible) {
-            return false;
-        }
-        if ($eligible->num_rows === 0) {
-            return false;
-        }
-        $isPickedUp = $eligible->fetch_assoc()['status'] === 'picked_up';
-
-        $saved = $this->db->query(
-            "INSERT INTO delivery_locations (delivery_id, latitude, longitude, accuracy_meters, is_sharing)
-             VALUES ({$deliveryId}, {$latitude}, {$longitude}, {$accuracyMeters}, 1)
-             ON DUPLICATE KEY UPDATE
-                latitude = VALUES(latitude),
-                longitude = VALUES(longitude),
-                accuracy_meters = VALUES(accuracy_meters),
-                is_sharing = 1,
-                updated_at = CURRENT_TIMESTAMP"
-        );
-        if ($saved && $isPickedUp) {
-            // 軌跡只記錄取貨後的路線
-            $this->db->query(
-                "INSERT INTO delivery_location_trail (delivery_id, latitude, longitude)
-                 VALUES ({$deliveryId}, {$latitude}, {$longitude})"
-            );
-        }
-        return $saved;
-    }
-
-    public function stopLiveLocation($deliveryId, $volunteerId) {
-        $deliveryId = (int) $deliveryId;
-        $volunteerId = (int) $volunteerId;
-        $result = $this->db->query(
-            "DELETE dl FROM delivery_locations dl
-             INNER JOIN deliveries d ON d.delivery_id = dl.delivery_id
-             WHERE d.delivery_id = {$deliveryId} AND d.volunteer_id = {$volunteerId}"
-        );
-        if ($result) {
-            $this->db->query(
-                "DELETE t FROM delivery_location_trail t
-                 INNER JOIN deliveries d ON d.delivery_id = t.delivery_id
-                 WHERE d.delivery_id = {$deliveryId} AND d.volunteer_id = {$volunteerId}"
-            );
-        }
-        return (bool) $result;
-    }
-
-    private function clearLiveLocation($deliveryId) {
-        $deliveryId = (int) $deliveryId;
-        $this->db->query("DELETE FROM delivery_location_trail WHERE delivery_id = {$deliveryId}");
-        return $this->db->query("DELETE FROM delivery_locations WHERE delivery_id = {$deliveryId}");
+        return $tracking ?: null;
     }
 
     private function notifyDonor($deliveryId, $title, $message, $type = 'info') {
@@ -346,9 +276,6 @@ class DeliveryModel extends BaseModel {
             while ($delivery = $result->fetch_assoc()) {
                 $deliveryId = (int) $delivery['delivery_id'];
                 $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up')");
-                if (!$this->clearLiveLocation($deliveryId)) {
-                    throw new RuntimeException('無法清除已完成配送的定位資料。');
-                }
                 $volunteerId = (int) ($delivery['volunteer_id'] ?? 0);
                 if ($volunteerId > 0) {
                     $points = (int) ($delivery['points'] ?? 0);
@@ -533,7 +460,7 @@ class DeliveryModel extends BaseModel {
         $sql = "UPDATE deliveries SET donation_id = {$donationValue}, delivery_method = '{$deliveryMethod}', vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, weight_kg = {$weight}, urgency = '{$urgency}', status = '{$status}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
         $this->db->begin_transaction();
         $updated = $this->db->query($sql);
-        if (!$updated || (($status !== 'picked_up' || $deliveryMethod !== 'volunteer') && !$this->clearLiveLocation($deliveryId))) {
+        if (!$updated) {
             $this->db->rollback();
             return false;
         }
@@ -589,9 +516,6 @@ class DeliveryModel extends BaseModel {
         }
 
         $deliveryId = (int) $deliveryId;
-        if (!$this->clearLiveLocation($deliveryId)) {
-            return false;
-        }
         return $this->db->query("DELETE FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
     }
 
@@ -609,7 +533,7 @@ class DeliveryModel extends BaseModel {
             if ($notifiedCount === 0) {
                 error_log("忠信GO RIDER接單通知沒有官方收件人：delivery_id={$deliveryId}");
             }
-            $this->notifyDonor($deliveryId, 'Go Rider 已接單', "配送任務 #{$deliveryId} 已由 Go Rider 接單，正在前往取貨並分享即時定位。", 'info');
+            $this->notifyDonor($deliveryId, 'Go Rider 已接單', "配送任務 #{$deliveryId} 已由 Go Rider 接單，正在前往取貨。", 'info');
         }
         return $updated && $this->db->affected_rows === 1;
     }
@@ -621,19 +545,20 @@ class DeliveryModel extends BaseModel {
         return $updated && $this->db->affected_rows === 1;
     }
 
-    public function confirmPickup($deliveryId, $volunteerId, $sealIntact, $itemCountConfirmed) {
+    public function confirmPickup($deliveryId, $volunteerId, $pickupPhotoPath) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;
-        $sealIntact = $sealIntact ? 1 : 0;
-        $itemCountConfirmed = $itemCountConfirmed ? 1 : 0;
+        $pickupPhotoPath = trim((string) $pickupPhotoPath);
 
-        if (!$sealIntact || !$itemCountConfirmed) {
+        if ($pickupPhotoPath === '') {
             return false;
         }
 
-        $updated = $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), seal_intact = {$sealIntact}, item_count_confirmed = {$itemCountConfirmed} WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'claimed'");
+        $photoValue = $this->db->real_escape_string($pickupPhotoPath);
+        $updated = $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), pickup_photo_path = '{$photoValue}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'claimed'");
         if ($updated && $this->db->affected_rows === 1) {
-            $this->notifyDonor($deliveryId, 'Go Rider 已取貨', "配送任務 #{$deliveryId} 物資已取貨，Go Rider 正在前往送達地點，可在訂單追蹤查看即時地圖。", 'info');
+            $this->setArrivalWindow($deliveryId);
+            $this->notifyDonor($deliveryId, 'Go Rider 已取貨', "配送任務 #{$deliveryId} 物資已取貨，Go Rider 正在前往送達地點。", 'info');
         }
         return $updated;
     }
@@ -650,9 +575,6 @@ class DeliveryModel extends BaseModel {
         $updated = $this->db->query("UPDATE deliveries SET status = 'exception', exception_notes = '{$notes}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status IN ('claimed', 'picked_up')");
         $wasUpdated = $updated && $this->db->affected_rows > 0;
         if ($wasUpdated) {
-            if (!$this->clearLiveLocation($deliveryId)) {
-                error_log("配送異常後清除定位失敗：delivery_id={$deliveryId}");
-            }
             $notificationMessage = "配送任務 #{$deliveryId}：{$notes}";
             $notifiedCount = $this->notifyUsersByRoles(['foodbank_staff'], '配送異常回報', $notificationMessage, 'warning');
             if ($notifiedCount === 0) {
@@ -769,25 +691,12 @@ class DeliveryModel extends BaseModel {
     }
 
     public function completeDelivery($deliveryId) {
-        return $this->finalizeDeliveryCompletion($deliveryId, null);
+        return $this->finalizeDeliveryCompletion($deliveryId);
     }
 
-    /**
-     * 供配送會員在自己的配送任務「完成行程」時呼叫，僅限本人已取貨的任務。
-     */
-    public function completeDeliveryByVolunteer($deliveryId, $volunteerId) {
-        $volunteerId = (int) $volunteerId;
-        if ($volunteerId <= 0) {
-            return false;
-        }
-        return $this->finalizeDeliveryCompletion($deliveryId, $volunteerId);
-    }
-
-    private function finalizeDeliveryCompletion($deliveryId, $requiredVolunteerId) {
+    private function finalizeDeliveryCompletion($deliveryId) {
         $deliveryId = (int) $deliveryId;
-        $ownerCondition = $requiredVolunteerId !== null
-            ? " AND volunteer_id = {$requiredVolunteerId} AND delivery_method = 'volunteer' AND status = 'picked_up'"
-            : " AND status IN ('claimed', 'picked_up', 'in_transit')";
+        $ownerCondition = " AND status IN ('claimed', 'picked_up', 'in_transit')";
 
         $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
@@ -801,9 +710,6 @@ class DeliveryModel extends BaseModel {
             $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId}{$ownerCondition}");
             if ($this->db->affected_rows !== 1) {
                 throw new RuntimeException('配送任務狀態已變更，無法完成行程。');
-            }
-            if (!$this->clearLiveLocation($deliveryId)) {
-                throw new RuntimeException('無法清除已完成配送的定位資料。');
             }
             $volunteerId = (int) $delivery['volunteer_id'];
             $points = (int) $delivery['points'];

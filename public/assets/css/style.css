@@ -1718,29 +1718,6 @@ form {
    color: var(--text-secondary);
 }
 
-.delivery-location-sharing {
-   display: grid;
-   gap: 8px;
-   min-width: 190px;
-   padding: 10px;
-   border: 1px solid var(--gray-200);
-   border-radius: var(--radius-md);
-   background: var(--bg-secondary);
-}
-
-.delivery-location-sharing p,
-.delivery-location-sharing small {
-   margin: 0;
-   color: var(--text-secondary);
-   font-size: 12px;
-   white-space: normal;
-}
-
-.delivery-location-sharing [hidden] {
-   display: none !important;
-}
-
-
 .status {
     display: inline-flex;
     align-items: center;
@@ -2474,4 +2451,146 @@ form {
         border: 1px solid var(--gray-300);
         page-break-inside: avoid;
     }
+}
+
+/* 最新消息公告／主頁：跑馬燈、廣告卡片、排行榜 */
+.news-marquee {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    border: 1px solid var(--gray-200);
+}
+
+.news-marquee > i {
+    flex: 0 0 auto;
+    color: var(--primary-color);
+}
+
+.news-marquee-viewport {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.news-marquee-track {
+    display: inline-flex;
+    white-space: nowrap;
+    animation: news-marquee-scroll 40s linear infinite;
+}
+
+.news-marquee:hover .news-marquee-track {
+    animation-play-state: paused;
+}
+
+.news-marquee-item {
+    padding-right: 48px;
+    font-size: 14px;
+}
+
+@keyframes news-marquee-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .news-marquee-track { animation: none; }
+}
+
+.news-section {
+    margin-bottom: 40px;
+}
+
+.news-section-title {
+    margin: 0 0 16px;
+    font-size: 20px;
+}
+
+.news-ad-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+}
+
+.news-ad-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg, 16px);
+    background: var(--bg-primary, #fff);
+}
+
+.news-ad-card img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+}
+
+.news-ad-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+}
+
+.news-ad-body h3,
+.news-ad-body p {
+    margin: 0;
+}
+
+.news-ad-body small {
+    color: var(--text-secondary);
+}
+
+.news-ad-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.home-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.leaderboard-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.leaderboard-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.leaderboard-rank {
+    display: grid;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    font-weight: 700;
+}
+
+.leaderboard-list li:nth-child(-n+3) .leaderboard-rank {
+    background: #fde68a;
+    color: #92400e;
+}
+
+.leaderboard-name {
+    flex: 1;
 }

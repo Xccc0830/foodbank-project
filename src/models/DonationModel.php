@@ -240,7 +240,6 @@ class DonationModel extends BaseModel {
         $itemCategory = $this->db->real_escape_string((string) ($existingDonation['donation_type'] ?? 'other'));
         $itemDescription = $this->db->real_escape_string((string) ($publishData['item_name'] ?? $existingDonation['item_name'] ?? '物資'));
         $pickupAddress = $this->db->real_escape_string($pickupAddress);
-        $sealCode = $this->db->real_escape_string((string) ($existingDonation['seal_code'] ?? ''));
 
         // 拆單系統：split_count > 1 時，除了原有的配送任務，額外建立正式的主單/子單關聯
         // （donation_allocations 子單 + sub_order_number，並將對應物資項目依比例分配到各子單）。
@@ -284,8 +283,8 @@ class DonationModel extends BaseModel {
             $allocationColumn = $allocationId !== null ? ", allocation_id" : '';
             $allocationValue = $allocationId !== null ? ", {$allocationId}" : '';
             $taskSql = "INSERT INTO deliveries
-                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, seal_code, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
-                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', 0, {$weight}, '{$sealCode}', 'normal', 0, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
+                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', 0, {$weight}, 'normal', 0, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
                 $this->db->rollback();
                 return false;
@@ -373,6 +372,7 @@ class DonationModel extends BaseModel {
                        n.donation_date, n.status AS donation_status, n.current_status,
                        COUNT(d.delivery_id) AS delivery_count,
                        GROUP_CONCAT(d.delivery_id ORDER BY d.delivery_id) AS delivery_ids,
+                       GROUP_CONCAT(DISTINCT CONCAT(uv.full_name, '：', COALESCE(NULLIF(uv.phone, ''), '未提供電話')) SEPARATOR '；') AS volunteer_contacts,
                        SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) AS completed_delivery_count,
                        MAX(d.status) AS latest_delivery_status,
                        CASE
@@ -384,6 +384,7 @@ class DonationModel extends BaseModel {
                        END AS order_status
                 FROM donations n
                 LEFT JOIN deliveries d ON d.donation_id = n.donation_id
+                LEFT JOIN users uv ON uv.user_id = d.volunteer_id AND d.delivery_method = 'volunteer'
                 {$where}
                 GROUP BY n.donation_id
                 {$having}
