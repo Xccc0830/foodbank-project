@@ -1,175 +1,95 @@
-# 食物銀行管理系統 (Shinig Yi Food Bank Management System)
+# 🍽️ 食物銀行配送系統 (Food Bank Delivery Platform)
 
-## 📋 項目概述
-
-這是一個食物銀行管理系統，用於管理會員、物資捐贈、配送、關懷戶服務、訂單追蹤與永續成效。系統以「管理介面」及「一般會員／企業會員」為主要使用情境。
-
-## 🏗️ 系統架構
-
-### 主要部門與功能：
-
-1. **外援服務部**
-   - 捐贈管理（食物、用品、現金等）
-   - 捐獻者管理
-   - 捐贈狀態追蹤
-
-2. **關懷戶服務**
-   - 關懷戶管理
-   - 物資分配
-   - 必要的內部庫存異動記錄
-
-3. **外運營配置**
-   - 受益者管理
-   - 案例管理
-   - 受益者分配
-
-4. **管理介面**
-   - 部門管理
-   - 人員管理
-5. **公眾與宣傳**
-   - 公眾宣傳事件
-   - 社區活動管理
-
-## 📁 項目結構
-
-```
-foodbank-project/
-├── config/                    # 配置文件
-│   └── database.php          # 數據庫連接配置
-├── public/                    # 公開文件夾
-│   ├── index.php             # 主入口文件
-│   └── assets/               # 靜態資源
-│       ├── css/              # 樣式表
-│       ├── js/               # JavaScript 文件
-│       └── images/           # 圖片資源
-├── src/                      # 源代碼
-│   ├── models/               # 數據模型
-│   │   ├── BaseModel.php
-│   │   ├── DonationModel.php
-│   │   ├── BeneficiaryModel.php
-│   │   ├── InventoryModel.php
-│   │   └── ...
-│   ├── controllers/          # 控制器
-│   └── views/                # 視圖文件
-├── database/                 # 數據庫相關
-│   └── schema.sql           # 唯一 SQL；僅供新安裝
-├── tests/                    # 測試文件
-├── .gitignore               # Git 忽略文件
-└── README.md                # 項目文檔
-```
-
-## 🚀 快速開始
-
-## 🗂️ 專案協作文件
-
-- `MEETING_PROCESS.md`：會議標準流程、紀錄模板與執行規範
-
-### 前置條件
-
-
-### 安裝步驟
-
-1. **複製項目**
-   ```bash
-   git clone <repository-url>
-   cd foodbank-project
-   ```
-
-2. **創建數據庫**
-   - 打開 phpMyAdmin（http://localhost/phpmyadmin）
-   - 創建新數據庫：`shinigyi_foodbank`
-   - 導入 `database/schema.sql` 文件
-
-3. **配置數據庫連接**
-   - 編輯 `config/database.php`
-   - 修改數據庫用戶名、密碼等配置
-
-4. **啟動應用**
-   - 確保 Apache 和 MySQL 服務運行
-   - 訪問 http://localhost/foodbank-project/foodbank-project/public
-
-### 默認登錄憑證
-
-- **用戶名**: `admin`
-- **密碼**: `admin123`
-
-⚠️ **重要**: 首次登錄後，請立即修改密碼！
-
-## 📊 數據庫表說明
-
-### 核心表
-
-| 表名 | 說明 |
-|------|------|
-| `users` | 系統用戶 |
-| `donations` | 捐贈記錄 |
-| `inventory` | 庫存項目 |
-| `beneficiaries` | 受益者信息 |
-| `purchases` | 採購單 |
-| `warehouses` | 倉庫信息 |
-| `sales` | 銷售記錄 |
-| `public_relations` | 公眾宣傳事件 |
-
-## 🔐 安全性考慮
-
-1. **密碼加密**: 使用 SHA-256 或 bcrypt 加密密碼
-2. **SQL 防注入**: 使用準備語句（Prepared Statements）
-3. **輸入驗證**: 對所有用戶輸入進行驗證
-4. **訪問控制**: 基於角色的訪問控制（RBAC）
-5. **審核日誌**: 記錄所有重要操作
-
-## 📚 開發指南
-
-### 添加新模型
-
-1. 在 `src/models/` 中創建新文件，例如 `UserModel.php`
-2. 繼承 `BaseModel` 類
-3. 實現所需的方法
-
-```php
-<?php
-require_once 'BaseModel.php';
-
-class UserModel extends BaseModel {
-    protected $table = 'users';
-    
-    // 添加自定義方法
-}
-?>
-```
-
-### 添加新視圖
-
-1. 在 `src/views/` 中創建新文件
-2. 使用 PHP 模板語法
-3. 通過 `index.php` 的路由訪問
-
-## 🧪 測試
-
-待實現...
-
-## 📝 API 文檔
-
-待完成...
-
-## 🤝 貢獻
-
-歡迎提交問題和拉取請求。
-
-## 📄 許可證
-
-待定...
-
-## 👥 聯繫方式
-
-- 項目負責人: [待填寫]
-- Email: [待填寫]
-
-## 📞 支持
-
-如有問題，請聯繫技術支持或提交 Issue。
+> 從商家上架、食物銀行評估，到忠信GO RIDER配送與公益點數，讓每一步都清楚、可靠、可追蹤。
 
 ---
 
-**最後更新**: 2026年8月18日  
-**版本**: 1.0.0
+## 📚 文檔導航
+
+**所有文檔已分類整理在 [`docs/`](docs/) 目錄中**
+
+👉 **[查看文檔索引 → `docs/INDEX.md`](docs/INDEX.md)**
+
+### 快速連結
+- 🚀 [安裝指南](docs/guides/INSTALL.md)
+- 📖 [系統概述](docs/guides/README.md)
+- 🎯 [系統設計](docs/planning/design.md)
+- ✅ [待加強清單](docs/reports/ENHANCEMENT_CHECKLIST.md) ← **開發進度在這**
+- 📝 [最新修改記錄](docs/reports/SYSTEM_MODIFICATIONS_2026-0918.md)
+
+---
+
+## 🎯 當前重點 (2026/09/18)
+
+### 🔴 高優先級
+- [x] **整合資料庫 SQL 快照** (`database/schema.sql`)
+- [ ] 商家獎勵方案功能調試
+- [ ] 企業驗證流程實作
+
+### 🟡 中優先級  
+- [ ] 獎勵兌換紀錄展示
+- [ ] 搜索功能修復
+
+詳見 → [`docs/reports/ENHANCEMENT_CHECKLIST.md`](docs/reports/ENHANCEMENT_CHECKLIST.md)
+
+---
+
+## 🏗️ 項目結構
+
+```
+foodbank-project/
+├── docs/                  # 📍 文檔目錄
+│   ├── INDEX.md          # 文檔索引
+│   ├── guides/           # 開發指南
+│   ├── planning/         # 規劃設計
+│   ├── reports/          # 實施報告
+│   └── logs/             # 會議紀錄
+├── public/               # 前端資源
+│   ├── index.php        # 主應用入口
+│   └── assets/          # CSS、JS、圖片
+├── src/                  # 後端代碼
+│   ├── models/          # 數據模型
+│   └── views/           # 視圖模板
+├── database/            # 數據庫
+│   └── schema.sql             # 唯一 SQL；僅供新安裝
+└── config/              # 配置文件
+```
+
+---
+
+## 🚀 快速開始
+
+### 新開發者
+```bash
+1. 閱讀 docs/guides/README.md
+2. 閱讀 docs/guides/INSTALL.md  
+3. 閱讀 docs/planning/design.md
+4. 檢查進度 docs/reports/ENHANCEMENT_CHECKLIST.md
+```
+
+### 掌握進度
+👉 [`docs/reports/ENHANCEMENT_CHECKLIST.md`](docs/reports/ENHANCEMENT_CHECKLIST.md)
+
+---
+
+## 👤 當前團隊角色
+
+| 角色 | 功能 | 特權 |
+|------|------|------|
+| **管理員** (admin) | 系統管理、獎品設定 | 全部 |
+| **食物銀行職員** (foodbank_staff) | 捐贈評估、配送管理 | 查看活動、配送 |
+| **忠信GO RIDER** (volunteer) | 領取配送任務、兌換點數 | 認領活動、兌換獎勵 |
+| **愛心商家** (donor) | 上架商品、設定獎勵 | 管理獎勵方案、查看兌換 |
+
+---
+
+## 📞 需要幫助？
+
+1. 檢查 [`docs/guides/`](docs/guides/) - 開發指南
+2. 查看 [`docs/planning/design.md`](docs/planning/design.md) - 系統設計文檔
+3. 查看會議紀錄 [`docs/logs/`](docs/logs/)
+
+---
+
+**更新時間**: 2026/09/18  
+**進度追蹤**: [`docs/reports/ENHANCEMENT_CHECKLIST.md`](docs/reports/ENHANCEMENT_CHECKLIST.md)
