@@ -1,5 +1,5 @@
 /**
- * Google 共用模組：地址自動完成（Places）、地址格式檢核與 Google Maps 導航連結。即時地圖已改用 mapbox-map.js。
+ * Google 共用模組：地址自動完成（Places）、地址格式檢核與 Google Maps 導航連結。
  */
 (function () {
     'use strict';

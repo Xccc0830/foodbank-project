@@ -8,7 +8,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         initializeEventListeners();
         initializeSidebarToggle();
-        initializeLiveDeliveryTracking();
+        initializeDeliveryStatusTracking();
         initializeNavigateButton();
         initializeNotifications();
         initializeMaterialDonationDistanceEstimate();
@@ -69,149 +69,14 @@
         document.addEventListener('visibilitychange', pollNotifications);
     }
 
-    function initializeLiveDeliveryTracking() {
-        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    function initializeDeliveryStatusTracking() {
         const trackingCards = document.querySelectorAll('.order-live-tracking[data-delivery-id]');
-        const locationControls = document.querySelectorAll('[data-live-location]');
 
         function endpoint(action) {
             const url = new URL(window.location.href);
             url.searchParams.set('action', action);
             return url.toString();
         }
-
-        async function requestLocationUpdate(control, values) {
-            const body = new URLSearchParams({
-                csrf_token: csrfToken ? csrfToken.content : '',
-                delivery_id: control.dataset.deliveryId,
-                ...values
-            });
-            const response = await fetch(endpoint('delivery_location'), {
-                method: 'POST',
-                credentials: 'same-origin',
-                body: body
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.error || '定位更新失敗。');
-            }
-            return result;
-        }
-
-        locationControls.forEach(function (control) {
-            const startButton = control.querySelector('[data-start-location]');
-            const stopButton = control.querySelector('[data-stop-location]') || document.createElement('button');
-            const status = control.querySelector('.delivery-location-sharing-status');
-            const deliveryId = control.dataset.deliveryId;
-            let watchId = null;
-            let generation = 0;
-            let lastSentAt = 0;
-            let latestPosition = null;
-            let locationUpdateTimer = null;
-            let updateInFlight = false;
-
-            if (!startButton || !status || !deliveryId) {
-                return;
-            }
-
-            function stopWatching() {
-                generation += 1;
-                if (watchId !== null) {
-                    navigator.geolocation.clearWatch(watchId);
-                    watchId = null;
-                }
-                if (locationUpdateTimer !== null) {
-                    window.clearInterval(locationUpdateTimer);
-                    locationUpdateTimer = null;
-                }
-                latestPosition = null;
-            }
-
-            async function publishLocation(currentGeneration) {
-                if (!latestPosition || currentGeneration !== generation || updateInFlight || Date.now() - lastSentAt < 4000) {
-                    return;
-                }
-                lastSentAt = Date.now();
-                updateInFlight = true;
-
-                try {
-                    await requestLocationUpdate(control, {
-                        operation: 'update',
-                        latitude: latestPosition.coords.latitude.toString(),
-                        longitude: latestPosition.coords.longitude.toString(),
-                        accuracy: latestPosition.coords.accuracy.toString()
-                    });
-                    if (currentGeneration !== generation) {
-                        return;
-                    }
-                    control.dataset.sharing = 'true';
-                    status.textContent = '定位已自動分享給商家與食物銀行；請保持此頁面開啟。';
-                    startButton.hidden = true;
-                } catch (error) {
-                    if (currentGeneration === generation) {
-                        stopWatching();
-                        startButton.hidden = false;
-                        startButton.disabled = false;
-                        status.textContent = error.message;
-                    }
-                } finally {
-                    updateInFlight = false;
-                }
-            }
-
-            function startSharing() {
-                if (!navigator.geolocation) {
-                    status.textContent = '此瀏覽器不支援定位功能。';
-                    startButton.hidden = false;
-                    return;
-                }
-                if (watchId !== null) {
-                    return;
-                }
-
-                const currentGeneration = ++generation;
-                lastSentAt = 0;
-                startButton.hidden = true;
-                status.textContent = '正在取得定位；請允許瀏覽器存取位置。';
-                watchId = navigator.geolocation.watchPosition(function (position) {
-                    if (currentGeneration !== generation) {
-                        return;
-                    }
-                    latestPosition = position;
-                    window.goRiderPosition = { lat: position.coords.latitude, lng: position.coords.longitude };
-                    publishLocation(currentGeneration);
-                }, function (error) {
-                    if (currentGeneration !== generation) {
-                        return;
-                    }
-                    stopWatching();
-                    startButton.hidden = false;
-                    startButton.disabled = false;
-                    status.textContent = error.code === error.PERMISSION_DENIED
-                        ? '未取得定位權限；請在瀏覽器允許位置存取後重試。'
-                        : '無法取得目前位置，請確認定位服務已開啟，並使用 HTTPS 網址後重試。';
-                }, {
-                    enableHighAccuracy: true,
-                    maximumAge: 3000,
-                    timeout: 20000
-                });
-                locationUpdateTimer = window.setInterval(function () {
-                    publishLocation(currentGeneration);
-                }, 5000);
-            }
-
-            startButton.addEventListener('click', startSharing);
-
-            // 接單後自動開始分享；頁面回到前景時若定位中斷則自動恢復
-            if (control.hasAttribute('data-auto-start')) {
-                startSharing();
-                document.addEventListener('visibilitychange', function () {
-                    if (document.visibilityState === 'visible' && watchId === null && document.body.contains(control)) {
-                        startSharing();
-                    }
-                });
-            }
-        });
 
         async function refreshTracking(card) {
             const status = card.querySelector('.order-live-tracking-status');
@@ -221,9 +86,6 @@
             const courierVehicle = card.querySelector('[data-courier-vehicle]');
             const courierAvatar = card.querySelector('[data-courier-avatar]');
             const stopAlert = card.querySelector('[data-other-stops]');
-            const locationUpdated = card.querySelector('[data-location-updated]');
-            const mapPlaceholder = card.querySelector('.customer-map-placeholder');
-            const mapCanvas = card.querySelector('[data-map-canvas]');
             const progressFill = card.querySelector('.customer-progress-fill');
             const progressSteps = card.querySelectorAll('.customer-progress-step');
             const url = new URL(endpoint('delivery_tracking'));
@@ -259,7 +121,15 @@
                 });
 
                 if (eta) {
-                    if (result.delivery_date && result.delivery_time) {
+                    if (result.estimated_arrival_start && result.estimated_arrival_end && result.status !== 'delivered') {
+                        const formatTime = function (value) {
+                            const parsed = new Date(value.replace(' ', 'T'));
+                            return Number.isNaN(parsed.getTime())
+                                ? ''
+                                : parsed.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        };
+                        eta.textContent = formatTime(result.estimated_arrival_start) + ' – ' + formatTime(result.estimated_arrival_end);
+                    } else if (result.delivery_date && result.delivery_time) {
                         const dateParts = result.delivery_date.split('-').map(Number);
                         const timeParts = result.delivery_time.split(':').map(Number);
                         const etaDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1]);
@@ -291,56 +161,6 @@
                         ? 'Go Rider 目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
                         : '';
                 }
-
-                const isAfterPickup = result.status === 'picked_up' || result.status === 'in_transit';
-                const hasLocation = Number(result.is_sharing) === 1 && result.latitude !== null && result.longitude !== null;
-                if (isAfterPickup && hasLocation && mapCanvas && window.FoodbankMap) {
-                    const updatedAt = Number(result.location_updated_at) * 1000;
-                    const ageSeconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
-                    if (locationUpdated) {
-                        locationUpdated.textContent = ageSeconds > 60
-                            ? '位置超過 1 分鐘未更新，可能不是 Go Rider 目前位置。'
-                            : '位置' + (ageSeconds < 5 ? '剛剛更新' : ageSeconds + ' 秒前更新');
-                    }
-                    if (!card.liveMap) {
-                        card.liveMap = window.FoodbankMap.create(mapCanvas, { riderTitle: 'Go Rider' });
-                    }
-                    if (mapPlaceholder) {
-                        mapPlaceholder.hidden = true;
-                    }
-                    mapCanvas.hidden = false;
-                    try {
-                        await card.liveMap.ready();
-                        card.liveMap.setPickup(result.pickup_address);
-                        card.liveMap.setDestination(result.delivery_address);
-                        await card.liveMap.setTrail(result.trail);
-                        await card.liveMap.setRider(result.latitude, result.longitude);
-                    } catch (mapError) {
-                        mapCanvas.hidden = true;
-                        if (mapPlaceholder) {
-                            mapPlaceholder.hidden = false;
-                            mapPlaceholder.textContent = mapError.message;
-                        }
-                    }
-                } else {
-                    if (card.liveMap) {
-                        card.liveMap.clearRider();
-                    }
-                    if (mapPlaceholder) {
-                        mapPlaceholder.hidden = false;
-                        mapPlaceholder.textContent = result.status === 'delivered'
-                            ? '配送已完成。'
-                            : (isAfterPickup ? 'Go Rider 尚未開啟即時位置分享。' : 'Go Rider 取貨後，地圖會顯示即時位置');
-                    }
-                    if (mapCanvas) {
-                        mapCanvas.hidden = true;
-                    }
-                    if (locationUpdated) {
-                        locationUpdated.textContent = isAfterPickup
-                            ? 'Go Rider 尚未開啟即時位置分享。'
-                            : 'Go Rider 取貨後，這裡會顯示即時位置。';
-                    }
-                }
             } catch (error) {
                 status.textContent = error.message;
             }
@@ -357,8 +177,7 @@
     function initializeNavigateButton() {
         document.querySelectorAll('[data-navigate-btn]').forEach(function (button) {
             button.addEventListener('click', function () {
-                const position = window.goRiderPosition;
-                const origin = position ? position.lat + ',' + position.lng : (button.dataset.fallbackOrigin || '');
+                const origin = button.dataset.fallbackOrigin || '';
                 button.href = window.FoodbankMap.buildDirectionsUrl(
                     origin,
                     button.dataset.destination,
@@ -515,18 +334,13 @@
             });
         }
 
-        const pickupChecks = card.querySelectorAll('[data-pickup-check]');
+        const pickupPhoto = card.querySelector('[data-pickup-photo]');
         const pickupSubmit = card.querySelector('[data-pickup-submit]');
-        if (pickupChecks.length && pickupSubmit) {
+        if (pickupPhoto && pickupSubmit) {
             const updatePickupButton = function () {
-                const allChecked = Array.prototype.every.call(pickupChecks, function (checkbox) {
-                    return checkbox.checked;
-                });
-                pickupSubmit.disabled = !allChecked;
+                pickupSubmit.disabled = pickupPhoto.files.length === 0;
             };
-            pickupChecks.forEach(function (checkbox) {
-                checkbox.addEventListener('change', updatePickupButton);
-            });
+            pickupPhoto.addEventListener('change', updatePickupButton);
             updatePickupButton();
         }
     }
@@ -769,7 +583,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>包裝前合照（需附上防拆貼紙）</label>
+                    <label>包裝前合照</label>
                     <input type="file" name="photo" accept="image/png,image/jpeg,image/webp" />
                 </div>
                 <div class="form-group">

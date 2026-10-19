@@ -76,23 +76,10 @@ class ActivityModel extends BaseModel {
         }
 
         $isCreator = ((int) ($activity['created_by'] ?? 0)) === $userId;
-        $creatorRole = $activity['creator_role'] ?? 'foodbank_staff';
         $role = $userRole ?? 'foodbank_staff';
 
-        if ($role === 'member') {
-            return false;
-        }
-
-        if ($isCreator) {
-            return true;
-        }
-
-        $foodbankRoles = ['foodbank_staff'];
-        if (in_array($creatorRole, $foodbankRoles, true)) {
-            return in_array($role, $foodbankRoles, true);
-        }
-
-        return false;
+        // 活動發起人（食物銀行、企業或非營利組織）可管理自己的活動；食物銀行人員也可管理所有活動。
+        return $isCreator || $role === 'foodbank_staff';
     }
 
     public function updateActivity($activityId, $userId, $userRole, $data) {

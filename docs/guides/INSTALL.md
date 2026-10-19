@@ -11,9 +11,12 @@
 
 ### 資料庫
 
-資料庫已整合為單一檔案 `database/shinigyi_foodbank (4).sql`，包含會員角色、配送方式、物資明細、配送即時定位與行進軌跡、權限系統、拆單子單、活動報名人數及物資距離估算等所有結構。
-匯入前請先備份資料庫；新安裝或重建資料庫時，直接匯入此檔即可（檔案會先 DROP 同名資料表再重建，既有資料會被覆蓋）。
-即時定位需要配送會員取貨後明確啟用瀏覽器定位權限，並以 HTTPS（或 localhost）開啟網站；位置每 10 秒更新，停止分享或配送頁離開後會停止傳送，逾時資料也會清除。顧客可選擇開啟 OpenStreetMap 查看位置，只有點選地圖連結時才會將座標傳給該服務。
+`database/schema.sql` 是本專案唯一提供的 SQL，包含目前完整資料表、欄位、索引與權限種子資料，僅供新安裝使用。
+匯入前請先備份資料庫；新安裝時，先建立空的 `shinigyi_foodbank`，再直接匯入 `database/schema.sql`。
+此 SQL 會刪除並重建其中列出的資料表，不可匯入已有資料的資料庫。本專案目前不提供既有資料庫升級 SQL；若需保留既有資料，請勿匯入。
+依 2026/10/13 專題會議決議，系統不提供即時 GPS 定位；配送進度以狀態（接單、取貨、送達）呈現。
+
+駕照照片存放於 `storage/rider_licenses/`（不在網站根目錄內），部署時請確認 PHP 可寫入該資料夾，並由網站伺服器禁止直接存取 `storage/`。
 物資捐贈表單在「商家取貨地址」與「配送地址」都填寫完成後，會呼叫伺服器端的 `?action=calculate_distance` API 自動計算兩地之間的路程距離與預估運送時間並帶入表單。此功能透過 OpenStreetMap 的 Nominatim（地理編碼）與 OSRM（路徑規劃）公開服務運作，**需要伺服器可對外連線**（PHP 需啟用 `curl` 擴充套件）；由於台灣部分門牌號碼未完整收錄於 OpenStreetMap，系統會自動從完整地址逐步簡化為路段層級查詢，若僅能定位到路段會標示為概略估算。
 
 ### 第 1 步：獲取項目文件
@@ -55,13 +58,13 @@ CREATE DATABASE shinigyi_foodbank CHARACTER SET utf8mb4 COLLATE utf8mb4_general_
 
 1. 在 phpMyAdmin 中，選擇 `shinigyi_foodbank` 數據庫
 2. 點擊 **導入** 選項卡
-3. 選擇文件：`database/shinigyi_foodbank (4).sql`
+3. 選擇文件：`database/schema.sql`
 4. 點擊 **執行**
 
 **或者** 使用命令行：
 
 ```bash
-mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\foodbank-project\database\shinigyi_foodbank (4).sql"
+mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\foodbank-project\database\schema.sql"
 ```
 
 ### 第 5 步：驗證安裝
@@ -125,7 +128,7 @@ foodbank-project/
 │       ├── js/               # JavaScript
 │       └── images/           # 圖片資源
 ├── database/
-│   └── schema.sql            # 數據庫架構
+│   └── schema.sql            # 唯一 SQL；僅供新安裝
 └── README.md                 # 項目文檔
 ```
 
@@ -181,7 +184,7 @@ ini_set('display_errors', 1);
 如遇到問題，請檢查以下資源：
 
 - README.md - 項目文檔
-- database/schema.sql - 數據庫結構說明
+- database/schema.sql - 完整資料庫架構與必要種子資料
 - 瀏覽器控制台 - JavaScript 錯誤信息
 - PHP 錯誤日誌 - `C:\xampp\apache\logs\error.log`
 

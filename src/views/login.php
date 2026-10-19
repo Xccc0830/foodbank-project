@@ -33,7 +33,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
         </section>
         <section class="login-panel">
             <div class="login-panel-heading"><p class="eyebrow">SECURE ACCESS</p><h2>登入工作平台</h2><p class="login-subtitle">使用你的帳號進入專屬工作頁面。</p></div>
-            <?php if (!empty($registered)): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>電話驗證完成，申請已送出，請等待管理者審核開通。</span></div><?php endif; ?>
+            <?php if (!empty($registered)): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>電話驗證完成。一般會員可直接登入；企業會員請等待管理者審核開通。</span></div><?php endif; ?>
             <?php if (!empty($_GET['password_reset'])): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>密碼已重設完成，請使用新密碼登入。</span></div><?php endif; ?>
             <?php if ($error): ?><div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><span><?php echo htmlspecialchars($error); ?></span></div><?php endif; ?>
             <form method="post" action="?action=login">

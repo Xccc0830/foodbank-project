@@ -10,7 +10,7 @@ $activityModel = new ActivityModel();
 $notificationModel = new NotificationModel();
 $currentRole = $currentUser['role'] ?? 'foodbank_staff';
 $isEnterpriseMember = ($currentUser['member_type'] ?? null) === 'enterprise';
-$canCreateActivity = $currentRole === 'foodbank_staff';
+$canCreateActivity = $authService->can('activity.publish');
 $canRegisterActivities = $currentRole === 'member';
 $message = null;
 $editingActivity = null;
@@ -19,7 +19,7 @@ $participantLists = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['action'] ?? '') === 'create_activity') {
         if (!$canCreateActivity) {
-            $message = ['type' => 'error', 'text' => '只有食物銀行人員可以發布公益活動。'];
+            $message = ['type' => 'error', 'text' => '您沒有發布公益活動的權限。'];
         } else {
         $activityType = $_POST['activity_type'] ?? 'other';
         $activityTypeDetail = trim($_POST['activity_type_detail'] ?? '');
@@ -232,7 +232,9 @@ $activityStatusLabels = [
         display: none !important;
     }
 </style>
+<?php if (empty($activitiesEmbedded)): ?>
 <div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '愛心商家可優先認領並填寫企業參與人數；尚未認領的名額立即開放 Go Rider，雙方皆可同時報名' : '愛心商家認領後的剩餘名額會立即開放，Go Rider 可同步報名並參與在地行動') : '發布公益活動，邀請會員參與在地行動'; ?></p></div></div>
+<?php endif; ?>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
@@ -275,7 +277,7 @@ $activityStatusLabels = [
             <div class="form-group"><label>活動說明</label><textarea name="description"><?php echo htmlspecialchars($editingActivity['description'] ?? ''); ?></textarea></div>
             <div class="btn-group">
                 <button type="submit" class="btn btn-primary">儲存變更</button>
-                <a class="btn btn-secondary" href="?page=activities">取消</a>
+                <a class="btn btn-secondary" href="?page=news#activities">取消</a>
             </div>
         </form>
     </div>

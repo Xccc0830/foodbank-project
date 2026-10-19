@@ -101,7 +101,7 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
     </div>
     <div class="card-body">
         <?php if ($volunteerRanking): ?>
-            <table class="data-table">
+            <table class="data-table ranking-table">
                 <thead><tr><th>排名</th><th>忠信GO RIDER</th><th>完成配送次數</th><th>累積興毅幣</th></tr></thead>
                 <tbody>
                 <?php foreach ($volunteerRanking as $index => $row): ?>

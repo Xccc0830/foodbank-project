@@ -46,7 +46,7 @@ foodbank-project/
 │   └── database.php               # ⭐ 數據庫連接配置
 │
 ├── 📁 database/                    # 數據庫文件夾
-│   └── shinigyi_foodbank (4).sql  # ⭐ 整合後的單一數據庫 SQL
+│   └── schema.sql                 # ⭐ 唯一 SQL；僅供新安裝
 │
 ├── 📁 public/                      # 公開文件夾（Web 根目錄）
 │   ├── index.php                  # ⭐ 主入口文件

@@ -38,17 +38,49 @@ if ($isEnterpriseMember) {
         $enterpriseSustainability['food_waste_avoided'] = $enterpriseSustainability['total_weight'] * 2.5;
     }
 }
-$donationListPage = $isEnterpriseMember ? 'donation_materials' : 'donation_materials_review';
+$donationListPage = $isEnterpriseMember ? 'donation_materials' : (($currentUser['staff_type'] ?? null) === 'clerk' ? 'inventory' : 'donation_materials_review');
 $dashboardRoleLabels = [
-    'foodbank_staff' => '管理介面',
+    'foodbank_staff' => ($currentUser['staff_type'] ?? null) === 'clerk' ? '食物銀行行政人員' : '管理介面',
     'member' => $isEnterpriseMember ? '企業公益行動中心' : 'Go Rider服務中心',
 ];
+
+require_once BASE_PATH . '/src/models/AdvertisementModel.php';
+require_once BASE_PATH . '/src/models/ActivityModel.php';
+
+$homeAds = array_slice((new AdvertisementModel())->getActiveAds(3), 0, 3);
+
+$homeDonationRecords = [];
+$homeDonationResult = $connection->query(
+    "SELECT n.donor_name, COALESCE(n.item_name, '物資') AS item_name, n.quantity, n.unit, n.donation_date
+     FROM donations n
+     WHERE n.status <> 'rejected'
+       AND EXISTS (SELECT 1 FROM deliveries d WHERE d.donation_id = n.donation_id AND d.status = 'delivered')
+     ORDER BY n.donation_date DESC
+     LIMIT 8"
+);
+while ($homeDonationResult && ($homeDonationRow = $homeDonationResult->fetch_assoc())) {
+    $homeDonationRecords[] = $homeDonationRow;
+}
+
+$riderLeaderboard = [];
+$leaderboardResult = $connection->query(
+    "SELECT u.full_name, COUNT(*) AS delivery_count, COALESCE(SUM(d.weight_kg), 0) AS total_weight
+     FROM deliveries d
+     INNER JOIN users u ON u.user_id = d.volunteer_id
+     WHERE d.status = 'delivered' AND d.delivery_method = 'volunteer'
+     GROUP BY d.volunteer_id, u.full_name
+     ORDER BY delivery_count DESC, total_weight DESC
+     LIMIT 10"
+);
+while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc())) {
+    $riderLeaderboard[] = $leaderboardRow;
+}
 ?>
 
 <div class="view-header">
     <div>
-        <h1 class="view-title"><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '管理介面'); ?></h1>
-        <p class="view-subtitle"><?php echo date('Y-m-d'); ?>，歡迎 <?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?></p>
+        <h1 class="view-title">主頁</h1>
+        <p class="view-subtitle"><?php echo date('Y-m-d'); ?>，歡迎 <?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?>（<?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '管理介面'); ?>）</p>
     </div>
     <?php if ($isEnterpriseMember): ?>
     <a class="btn btn-primary" href="?page=donation_materials">
@@ -57,11 +89,78 @@ $dashboardRoleLabels = [
     <?php endif; ?>
 </div>
 
+<?php include BASE_PATH . '/src/views/partials/marquee.php'; ?>
+
+<div class="home-columns">
+    <div class="card">
+        <div class="card-header"><h2>企業廣告</h2><p>最新刊登的廣告</p></div>
+        <div class="card-body">
+            <?php if ($homeAds): ?>
+                <?php foreach ($homeAds as $homeAd): ?>
+                    <div class="mb-20">
+                        <strong><?php echo htmlspecialchars($homeAd['title']); ?></strong>
+                        <p><?php echo htmlspecialchars(mb_strimwidth($homeAd['content'], 0, 80, '…')); ?></p>
+                        <small><?php echo htmlspecialchars($homeAd['advertiser_name'] ?? ''); ?></small>
+                    </div>
+                <?php endforeach; ?>
+                <a href="?page=news#ads" class="btn btn-secondary btn-sm">更多廣告</a>
+            <?php else: ?>
+                <div class="empty-state"><i class="fas fa-rectangle-ad"></i><p>目前沒有刊登中的廣告</p></div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h2>企業捐贈紀錄</h2><p>已送達的愛心物資</p></div>
+        <div class="card-body">
+            <?php if ($homeDonationRecords): ?>
+                <ul class="leaderboard-list">
+                    <?php foreach ($homeDonationRecords as $record): ?>
+                        <li>
+                            <span class="leaderboard-name"><strong><?php echo htmlspecialchars($record['donor_name']); ?></strong><br><small><?php echo htmlspecialchars($record['item_name']); ?> · <?php echo htmlspecialchars(rtrim(rtrim(number_format((float) $record['quantity'], 2, '.', ''), '0'), '.')); ?> <?php echo htmlspecialchars($record['unit']); ?></small></span>
+                            <small><?php echo htmlspecialchars(substr((string) $record['donation_date'], 0, 10)); ?></small>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php else: ?>
+                <div class="empty-state"><i class="fas fa-box-open"></i><p>目前沒有已送達的捐贈紀錄</p></div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h2>志工運送任務排行榜</h2><p>依完成運送任務數排序</p></div>
+        <div class="card-body">
+            <?php if ($riderLeaderboard): ?>
+                <ol class="leaderboard-list">
+                    <?php foreach ($riderLeaderboard as $index => $rider): ?>
+                        <li>
+                            <span class="leaderboard-rank"><?php echo $index + 1; ?></span>
+                            <span class="leaderboard-name"><?php echo htmlspecialchars($rider['full_name']); ?></span>
+                            <strong><?php echo (int) $rider['delivery_count']; ?> 趟</strong>
+                        </li>
+                    <?php endforeach; ?>
+                </ol>
+            <?php else: ?>
+                <div class="empty-state"><i class="fas fa-ranking-star"></i><p>尚無完成的運送任務</p></div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
 <div class="card role-intro mb-20">
     <div class="card-body">
         <?php if ($dashboardRole === 'member' && !$isEnterpriseMember): ?>
-            <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄興毅幣。</p>
-            <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
+            <?php if ($authService->can('rider.accept_task')): ?>
+                <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄興毅幣。</p>
+                <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
+            <?php else: ?>
+                <h2>你的公益任務</h2><p>瀏覽並參加公益活動；想協助運送物資，可以申請成為外送志工。</p>
+                <a href="?page=news" class="btn btn-primary btn-sm">查看最新消息</a>
+                <a href="?page=rider_application" class="btn btn-secondary btn-sm">申請外送志工</a>
+            <?php endif; ?>
+        <?php elseif ($dashboardRole === 'foodbank_staff' && ($currentUser['staff_type'] ?? null) === 'clerk'): ?>
+            <h2>配送與清點</h2><p>確認志工已抵達並清點、檢查現場物資，再於系統確認查收。</p>
+            <a href="?page=deliveries" class="btn btn-primary btn-sm">配送任務</a>
+            <a href="?page=inventory" class="btn btn-secondary btn-sm">物資盤點</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
             <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
             <a href="?page=rewards" class="btn btn-secondary btn-sm">管理興毅幣兌換</a>
@@ -164,7 +263,9 @@ $dashboardRoleLabels = [
             <?php if ($isEnterpriseMember): ?>
             <a class="btn btn-primary" href="?page=donation_materials"><i class="fas fa-gift"></i> 新增捐贈</a>
             <?php endif; ?>
+            <?php if ($authService->can('page.settings')): ?>
             <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
+            <?php endif; ?>
             <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>
         </div>
     </div>

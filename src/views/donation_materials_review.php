@@ -524,7 +524,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <div class="publish-options">
                                 <strong>是否需協助檢查物資</strong>
                                 <label><input type="checkbox" name="need_inspection" value="1" checked> 檢查物資</label>
-                                <label><input type="text" name="inspection_notes" placeholder="不需檢查時可填寫防弊貼紙提醒"></label>
+                                <label><input type="text" name="inspection_notes" placeholder="檢查備註"></label>
                             </div>
                             <div class="publish-options">
                                 <strong>是否要拆單</strong>
@@ -560,8 +560,8 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <div class="publish-options">
                             <strong>是否需協助檢查物資</strong>
                             <label><input type="radio" name="need_inspection" value="1" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 1 ? 'checked' : ''; ?>> 檢查物資</label>
-                            <label><input type="radio" name="need_inspection" value="0" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 0 ? 'checked' : ''; ?>> 不需檢查（請商家貼防弊貼紙）</label>
-                            <input type="text" name="inspection_notes" value="<?php echo htmlspecialchars($viewingDonation['inspection_notes'] ?? '', ENT_QUOTES); ?>" placeholder="檢查備註或防弊貼紙提醒">
+                            <label><input type="radio" name="need_inspection" value="0" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 0 ? 'checked' : ''; ?>> 不需檢查</label>
+                            <input type="text" name="inspection_notes" value="<?php echo htmlspecialchars($viewingDonation['inspection_notes'] ?? '', ENT_QUOTES); ?>" placeholder="檢查備註">
                         </div>
                         <div class="publish-options">
                             <strong>是否要拆單</strong>

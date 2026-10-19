@@ -24,6 +24,13 @@ class PermissionModel extends BaseModel {
         $normalizedMemberType = ($role !== 'foodbank_staff' && $memberType !== null && $memberType !== '')
             ? (string) $memberType
             : '';
+        // 食物銀行帳號分管理員（''）與行政人員（'clerk'），行政人員的預設權限較少。
+        if ($role === 'foodbank_staff' && $userId > 0) {
+            $staff = $this->query("SELECT staff_type FROM users WHERE user_id = {$userId} LIMIT 1");
+            if (($staff[0]['staff_type'] ?? null) === 'clerk') {
+                $normalizedMemberType = 'clerk';
+            }
+        }
         $memberTypeCondition = "member_type = '" . $this->db->real_escape_string($normalizedMemberType) . "'";
 
         $defaults = $this->query(

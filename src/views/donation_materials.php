@@ -26,7 +26,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $deliveryAddress = trim((string) ($_POST['delivery_address'] ?? ''));
     $estimatedDistanceKm = is_numeric($_POST['estimated_distance_km'] ?? null) ? round((float) $_POST['estimated_distance_km'], 2) : null;
     $estimatedDurationMinutes = is_numeric($_POST['estimated_duration_minutes'] ?? null) ? (int) round((float) $_POST['estimated_duration_minutes']) : null;
-    $beneficiaryId = (int) ($_POST['beneficiary_id'] ?? 0);
     $notes = trim((string) ($_POST['notes'] ?? ''));
 
     $itemNames = is_array($_POST['item_name'] ?? null) ? $_POST['item_name'] : [];
@@ -143,7 +142,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         'vehicle_type' => $vehicleTypeValue === 'none' ? 'none' : $vehicleTypeValue,
         'photo_path' => $photoPath,
         'evaluation_notes' => null,
-        'seal_code' => null,
         'need_inspection' => 1,
         'inspection_notes' => null,
         'delivery_date' => $deliveryDate,
@@ -151,7 +149,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         'delivery_address' => $deliveryAddress !== '' ? $deliveryAddress : null,
         'estimated_distance_km' => $estimatedDistanceKm,
         'estimated_duration_minutes' => $estimatedDurationMinutes,
-        'beneficiary_id' => $beneficiaryId > 0 ? $beneficiaryId : null,
     ];
 
     $hasInvalidItem = empty($items);
@@ -299,13 +296,6 @@ $formatDateTime = static function ($value) {
     $timestamp = strtotime((string) $value);
     return $timestamp ? date('Y年m月d日 H:i', $timestamp) : '未填寫';
 };
-$beneficiaries = [];
-$beneficiaryResult = $connection->query("SELECT beneficiary_id, beneficiary_code, first_name, last_name, address FROM beneficiaries WHERE status = 'active' ORDER BY last_name, first_name");
-if ($beneficiaryResult) {
-    while ($beneficiary = $beneficiaryResult->fetch_assoc()) {
-        $beneficiaries[] = $beneficiary;
-    }
-}
 ?>
 
 <div class="view-header">
@@ -358,7 +348,7 @@ if ($beneficiaryResult) {
                     <div class="form-group"><label for="donorName">捐贈企業／組織</label><input id="donorName" type="text" value="<?php echo htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
                     <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
                 </div>
-                <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點與關懷戶。</p></div>
+                <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點。</p></div>
                 <div class="form-group">
                     <label>配送方式 <span class="required-mark">*</span></label>
                     <div class="delivery-mode-options">
@@ -381,7 +371,6 @@ if ($beneficiaryResult) {
                     <input type="hidden" name="estimated_duration_minutes" data-duration-input>
                 </div>
                 <p class="distance-estimate-status" data-distance-status hidden></p>
-                <div class="form-group"><label for="beneficiaryId">關懷戶</label><select id="beneficiaryId" name="beneficiary_id"><option value="">選擇關懷戶</option><?php foreach ($beneficiaries as $beneficiary): ?><option value="<?php echo (int) $beneficiary['beneficiary_id']; ?>"><?php echo htmlspecialchars($beneficiary['beneficiary_code'] . '｜' . $beneficiary['last_name'] . $beneficiary['first_name'] . ($beneficiary['address'] ? '｜' . $beneficiary['address'] : '')); ?></option><?php endforeach; ?></select></div>
                 <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 選擇 Rider 媒合後，配送會員接單時才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
                 <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step>下一步：填寫物資</button></div>

@@ -31,7 +31,6 @@ if ($isEnterpriseMember) {
     $summary = [
         'donation_quantity' => 0,
         'donation_count' => 0,
-        'beneficiary_count' => 0,
         'delivery_count' => 0,
         'volunteer_count' => 0,
         'activity_count' => 0,
@@ -49,7 +48,6 @@ if ($isEnterpriseMember) {
 
     $deliverySummaryResult = $connection->query(
         "SELECT COUNT(DISTINCT d.delivery_id) AS delivery_count,
-                COUNT(DISTINCT CASE WHEN n.beneficiary_id IS NOT NULL THEN n.beneficiary_id END) AS beneficiary_count,
                 COUNT(DISTINCT d.volunteer_id) AS volunteer_count
          FROM deliveries d
          INNER JOIN donations n ON n.donation_id = d.donation_id
@@ -133,7 +131,6 @@ if ($isEnterpriseMember) {
         fputcsv($output, ['企業年度永續報告', $selectedYear]);
         fputcsv($output, ['捐贈總量', $summary['donation_quantity']]);
         fputcsv($output, ['捐贈筆數', $summary['donation_count']]);
-        fputcsv($output, ['受助人次', $summary['beneficiary_count']]);
         fputcsv($output, ['公益配送次數', $summary['delivery_count']]);
         fputcsv($output, ['合作配送會員', $summary['volunteer_count']]);
         fputcsv($output, ['公益活動紀錄', $summary['activity_count']]);
@@ -164,7 +161,6 @@ if ($isEnterpriseMember) {
 
     <div class="stats-grid sustainability-stats">
         <div class="stat-card"><h3>捐贈總量</h3><div class="stat-number"><?php echo number_format((float) $summary['donation_quantity']); ?></div><p class="stat-label">件／包／箱等合計</p></div>
-        <div class="stat-card"><h3>受助人次</h3><div class="stat-number"><?php echo number_format((int) $summary['beneficiary_count']); ?></div><p class="stat-label">已完成配送的關懷戶</p></div>
         <div class="stat-card"><h3>公益配送次數</h3><div class="stat-number"><?php echo number_format((int) $summary['delivery_count']); ?></div><p class="stat-label">已完成配送</p></div>
         <div class="stat-card"><h3>合作配送會員</h3><div class="stat-number"><?php echo number_format((int) $summary['volunteer_count']); ?></div><p class="stat-label">參與完成配送的人數</p></div>
     </div>

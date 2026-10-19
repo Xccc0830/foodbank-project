@@ -14,6 +14,7 @@ define('ROOT_PATH', __DIR__);
 // 引入配置文件
 require_once BASE_PATH . '/config/database.php';
 require_once BASE_PATH . '/src/helpers/SecurityHelper.php';
+require_once BASE_PATH . '/src/helpers/SchemaHelper.php';
 
 date_default_timezone_set('Asia/Taipei');
 
@@ -23,6 +24,7 @@ getCsrfToken();
 
 // 登入與登出流程
 $connection = $db->getConnection();
+ensureUserColumns($connection);
 $action = $_GET['action'] ?? '';
 
 // 修復舊版初始化資料曾以錯誤編碼寫入的示範帳號資料。
@@ -50,7 +52,7 @@ $connection->query(
 );
 if (!empty($_SESSION['user']['username'])) {
     $sessionUsername = $connection->real_escape_string($_SESSION['user']['username']);
-    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, enterprise_name, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
+    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, staff_type, enterprise_name, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
     if ($sessionUserResult && ($sessionUser = $sessionUserResult->fetch_assoc())) {
         $_SESSION['user'] = $sessionUser;
     }
@@ -58,11 +60,6 @@ if (!empty($_SESSION['user']['username'])) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !verifyCsrfToken($_POST['csrf_token'] ?? null)) {
     http_response_code(403);
-    if ($action === 'delivery_location') {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['error' => '登入狀態已逾時，請重新登入後再分享位置。'], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
     exit('請重新整理頁面後再提交表單。');
 }
 
@@ -81,7 +78,7 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $usernameEscaped = $connection->real_escape_string($username);
-    $result = $connection->query("SELECT user_id, username, full_name, role, member_type, enterprise_name, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
+    $result = $connection->query("SELECT user_id, username, full_name, role, member_type, staff_type, enterprise_name, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
     $user = $result ? $result->fetch_assoc() : null;
     $passwordValid = $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
 
@@ -108,10 +105,17 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $memberType = $_POST['member_type'] ?? '';
     $enterpriseName = trim($_POST['enterprise_name'] ?? '');
+    $taxId = trim($_POST['tax_id'] ?? '');
+    $referralSource = trim($_POST['referral_source'] ?? '');
     $allowedMemberTypes = ['general', 'enterprise'];
+    require_once BASE_PATH . '/src/helpers/ValidationHelper.php';
 
     if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && $enterpriseName === '')) {
         $registrationError = '請完整填寫資料；企業會員須填寫企業／組織名稱，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
+    } elseif ($memberType === 'enterprise' && !isValidTaiwanTaxId($taxId)) {
+        $registrationError = '請輸入正確的 8 碼統一編號，作為企業或商家身分認證。';
+    } elseif ($referralSource !== '' && !in_array($referralSource, registrationReferralSources(), true)) {
+        $registrationError = '「從何得知此系統」的選項無效。';
     } else {
         $fullNameEscaped = $connection->real_escape_string($fullName);
         $usernameEscaped = $connection->real_escape_string($username);
@@ -119,13 +123,18 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $phoneEscaped = $connection->real_escape_string($phone);
         $memberTypeEscaped = $connection->real_escape_string($memberType);
         $enterpriseNameEscaped = $connection->real_escape_string($enterpriseName);
+        $taxIdSql = $memberType === 'enterprise' ? "'" . $connection->real_escape_string($taxId) . "'" : 'NULL';
+        $referralSql = ($memberType === 'enterprise' && $referralSource !== '') ? "'" . $connection->real_escape_string($referralSource) . "'" : 'NULL';
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
         $exists = $connection->query("SELECT user_id FROM users WHERE username = '{$usernameEscaped}' OR email = '{$emailEscaped}' LIMIT 1");
+        $blacklisted = $connection->query("SELECT user_id FROM users WHERE blacklisted_at IS NOT NULL AND (phone = '{$phoneEscaped}' OR email = '{$emailEscaped}') LIMIT 1");
 
-        if ($exists && $exists->num_rows > 0) {
+        if ($blacklisted && $blacklisted->num_rows > 0) {
+            $registrationError = '此電話或電子郵件已被停止合作，無法註冊。如有疑問請聯絡食物銀行。';
+        } elseif ($exists && $exists->num_rows > 0) {
             $registrationError = '帳號或電子郵件已經被使用。';
         } else {
-            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", 'inactive')");
+            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, tax_id, referral_source, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", {$taxIdSql}, {$referralSql}, 'inactive')");
             $newUserId = (int) $connection->insert_id;
 
             if ($newUserId > 0) {
@@ -160,10 +169,9 @@ if ($action === 'verify_phone') {
             $memberResult = $connection->query("SELECT role, member_type FROM users WHERE user_id = {$pendingUserId} LIMIT 1");
             $verifiedUser = $memberResult ? $memberResult->fetch_assoc() : null;
 
+            // 一般會員完成手機驗證即可開通；外送權限需另外申請並經審核。
             if ($verifiedUser && $verifiedUser['role'] === 'member' && $verifiedUser['member_type'] === 'general') {
-                $_SESSION['consent_pending_user_id'] = $pendingUserId;
-                header('Location: ?action=volunteer_consent');
-                exit;
+                $connection->query("UPDATE users SET status = 'active' WHERE user_id = {$pendingUserId} AND status = 'inactive'");
             }
 
             header('Location: ?action=login&registered=1');
@@ -175,34 +183,6 @@ if ($action === 'verify_phone') {
     $error = $verifyError;
     $devOtpCode = $_SESSION['dev_otp_code'] ?? null;
     include BASE_PATH . '/src/views/verify_phone.php';
-    exit;
-}
-
-if ($action === 'volunteer_consent') {
-    $consentUserId = (int) ($_SESSION['consent_pending_user_id'] ?? 0);
-    if ($consentUserId === 0) {
-        header('Location: ?action=login');
-        exit;
-    }
-
-    $consentError = null;
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $agreedDisclaimer = isset($_POST['agreed_disclaimer']);
-        $agreedMutualAid = isset($_POST['agreed_mutual_aid']);
-        $videoWatched = isset($_POST['video_watched']);
-
-        if ($agreedDisclaimer && $agreedMutualAid && $videoWatched) {
-            $connection->query("INSERT INTO volunteer_consents (user_id, agreed_disclaimer, agreed_mutual_aid, video_watched, completed_at) VALUES ({$consentUserId}, 1, 1, 1, NOW()) ON DUPLICATE KEY UPDATE agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = NOW()");
-            unset($_SESSION['consent_pending_user_id']);
-            header('Location: ?action=login&registered=1');
-            exit;
-        }
-        $consentError = '請完整觀看影片並勾選所有同意事項後才能送出申請。';
-    }
-
-    $error = $consentError;
-    include BASE_PATH . '/src/views/volunteer_consent.php';
     exit;
 }
 
@@ -268,7 +248,7 @@ if ($action === 'register') {
     exit;
 }
 
-if (in_array($action, ['delivery_tracking', 'delivery_location'], true) && empty($_SESSION['user'])) {
+if ($action === 'delivery_tracking' && empty($_SESSION['user'])) {
     http_response_code(401);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['error' => '登入狀態已逾時，請重新登入後查看配送資訊。'], JSON_UNESCAPED_UNICODE);
@@ -318,6 +298,14 @@ if ($action === 'notifications_poll') {
     }
 
     require_once BASE_PATH . '/src/models/NotificationModel.php';
+
+    // 逾時偵測沒有排程器，改由食物銀行人員的通知輪詢順便檢查（最多每 30 秒一次）。
+    if (($currentUser['role'] ?? '') === 'foodbank_staff' && time() - (int) ($_SESSION['last_overdue_check'] ?? 0) >= 30) {
+        $_SESSION['last_overdue_check'] = time();
+        require_once BASE_PATH . '/src/models/DeliveryModel.php';
+        (new DeliveryModel())->notifyOverdueDeliveries();
+    }
+
     $pollNotificationModel = new NotificationModel();
     $newNotifications = $pollNotificationModel->getSince((int) $currentUser['user_id'], $afterId);
     if ($newNotifications === false) {
@@ -333,7 +321,30 @@ if ($action === 'notifications_poll') {
     exit;
 }
 
-if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
+if ($action === 'rider_license') {
+    require_once BASE_PATH . '/src/models/RiderApplicationModel.php';
+    $applicationId = filter_input(INPUT_GET, 'application_id', FILTER_VALIDATE_INT);
+    $application = ($applicationId && $authService->can('page.rider_review'))
+        ? (new RiderApplicationModel())->getById($applicationId)
+        : null;
+    $storageRoot = realpath(BASE_PATH . '/storage');
+    $licenseFile = ($application && $storageRoot) ? realpath($storageRoot . '/' . $application['license_photo_path']) : false;
+
+    if (!$licenseFile || strpos($licenseFile, $storageRoot . DIRECTORY_SEPARATOR) !== 0 || !is_file($licenseFile)) {
+        http_response_code(404);
+        exit('找不到駕照照片或您無權查看。');
+    }
+
+    $licenseMime = (new finfo(FILEINFO_MIME_TYPE))->file($licenseFile);
+    header('Content-Type: ' . $licenseMime);
+    header('Content-Length: ' . filesize($licenseFile));
+    header('Cache-Control: no-store, private');
+    header('X-Content-Type-Options: nosniff');
+    readfile($licenseFile);
+    exit;
+}
+
+if ($action === 'delivery_tracking') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');
     require_once BASE_PATH . '/src/models/DeliveryModel.php';
@@ -341,7 +352,7 @@ if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
     $currentUserId = (int) ($currentUser['user_id'] ?? 0);
     $currentRole = $currentUser['role'] ?? 'member';
 
-    if ($action === 'delivery_tracking' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $deliveryId = filter_input(INPUT_GET, 'delivery_id', FILTER_VALIDATE_INT);
         if (!$deliveryId || $deliveryId < 1) {
             http_response_code(400);
@@ -349,10 +360,10 @@ if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
             exit;
         }
 
-        $tracking = $deliveryModel->getLiveTracking($deliveryId, $currentUserId, $currentRole);
+        $tracking = $deliveryModel->getDeliveryStatus($deliveryId, $currentUserId, $currentRole);
         if ($tracking === false) {
             http_response_code(500);
-            echo json_encode(['error' => '目前無法取得配送位置。'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => '目前無法取得配送狀態。'], JSON_UNESCAPED_UNICODE);
             exit;
         }
         if ($tracking === null) {
@@ -365,50 +376,8 @@ if (in_array($action, ['delivery_tracking', 'delivery_location'], true)) {
         exit;
     }
 
-    if ($action === 'delivery_location' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $deliveryId = filter_var($_POST['delivery_id'] ?? null, FILTER_VALIDATE_INT);
-        $operation = $_POST['operation'] ?? '';
-        if (!$deliveryId || $deliveryId < 1) {
-            http_response_code(400);
-            echo json_encode(['error' => '配送任務編號無效。'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        if ($operation === 'stop') {
-            if (!$authService->can('rider.accept_task')) {
-                http_response_code(403);
-                echo json_encode(['error' => '只有接單的配送會員可以停止分享位置。'], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-            if (!$deliveryModel->stopLiveLocation($deliveryId, $currentUserId)) {
-                http_response_code(500);
-                echo json_encode(['error' => '停止分享位置失敗。'], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
-            echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        $latitude = $_POST['latitude'] ?? null;
-        $longitude = $_POST['longitude'] ?? null;
-        $accuracy = $_POST['accuracy'] ?? null;
-        if ($operation !== 'update' || !$authService->can('rider.accept_task')) {
-            http_response_code(403);
-            echo json_encode(['error' => '只有接單的配送會員可以分享位置。'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        if (!$deliveryModel->updateLiveLocation($deliveryId, $currentUserId, $latitude, $longitude, $accuracy)) {
-            http_response_code(400);
-            echo json_encode(['error' => '位置更新失敗；請確認任務已取貨且座標有效。'], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-
-        echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
     http_response_code(405);
-    header('Allow: ' . ($action === 'delivery_tracking' ? 'GET' : 'POST'));
+    header('Allow: GET');
     echo json_encode(['error' => '不支援的請求方式。'], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -461,7 +430,7 @@ $latestNotificationId = $notificationModel->getLatestIdForUser((int) $currentUse
 $role = $currentUser['role'];
 $memberType = $currentUser['member_type'] ?? null;
 $roleLabels = [
-    'foodbank_staff' => '忠信食物銀行',
+    'foodbank_staff' => ($currentUser['staff_type'] ?? null) === 'clerk' ? '食物銀行行政人員' : '忠信食物銀行',
     'member' => $memberType === 'enterprise' ? '企業會員' : ($memberType === 'general' ? '一般會員' : '會員'),
 ];
 
@@ -473,11 +442,12 @@ $page = basename($page);
 
 // 菜單項配置
 $menu_items = [
-    'dashboard' => ['label' => '儀表板', 'icon' => 'fa-solid fa-chart-line'],
+    'dashboard' => ['label' => '主頁', 'icon' => 'fa-solid fa-chart-line'],
     'order_tracking' => ['label' => '訂單追蹤', 'icon' => 'fa-solid fa-list-check'],
     'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
     'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
-    'activities' => ['label' => $role === 'member' ? '活動報名' : '活動發布', 'icon' => 'fa-solid fa-calendar-check'],
+    'news' => ['label' => '最新消息公告', 'icon' => 'fa-solid fa-newspaper'],
+    'inventory' => ['label' => '物資盤點', 'icon' => 'fa-solid fa-boxes-stacked'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
     'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift'],
     'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf'],
@@ -488,6 +458,8 @@ $menu_items = [
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
     'volunteer_management' => ['label' => '一般會員管理', 'icon' => 'fa-solid fa-people-group'],
+    'rider_application' => ['label' => '申請外送志工', 'icon' => 'fa-solid fa-id-card'],
+    'rider_review' => ['label' => '外送志工審核', 'icon' => 'fa-solid fa-user-shield'],
 ];
 
 // 頁面存取控制：以 Permission (page.<slug>) 為準，不再使用寫死的角色判斷。
@@ -508,7 +480,6 @@ ob_start();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="google-maps-api-key" content="<?php echo htmlspecialchars(GOOGLE_MAPS_API_KEY, ENT_QUOTES, 'UTF-8'); ?>">
-    <meta name="mapbox-access-token" content="<?php echo htmlspecialchars(MAPBOX_ACCESS_TOKEN, ENT_QUOTES, 'UTF-8'); ?>">
     <title><?php echo APP_NAME; ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -633,7 +604,6 @@ ob_start();
     </footer>
 
     <script src="assets/js/google-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/google-map.js'); ?>"></script>
-    <script src="assets/js/mapbox-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/mapbox-map.js'); ?>"></script>
     <script src="assets/js/main.js?v=<?php echo filemtime(__DIR__ . '/assets/js/main.js'); ?>"></script>
 </body>
 </html>

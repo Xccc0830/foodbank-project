@@ -1,4 +1,5 @@
 <?php
+require_once BASE_PATH . '/src/helpers/ValidationHelper.php';
 $error = $error ?? null;
 $success = $success ?? null;
 $registerCssPath = BASE_PATH . '/public/assets/css/style.css';
@@ -24,7 +25,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
             <div class="showcase-features"><div><span><i class="fa-solid fa-user-check"></i></span><strong>安全審核</strong><small>每個會員帳號都經過審核</small></div><div><span><i class="fa-solid fa-people-group"></i></span><strong>一起協作</strong><small>和食物銀行與平台會員合作</small></div><div><span><i class="fa-solid fa-award"></i></span><strong>累積貢獻</strong><small>記錄你的公益參與</small></div></div>
         </section>
         <section class="login-panel">
-            <div class="login-panel-heading"><p class="eyebrow">CREATE ACCOUNT</p><h2>申請平台帳號</h2><p class="login-subtitle">送出後由系統管理者審核開通。</p></div>
+            <div class="login-panel-heading"><p class="eyebrow">CREATE ACCOUNT</p><h2>申請平台帳號</h2><p class="login-subtitle">一般會員完成手機驗證即可使用；企業會員送出後由管理者審核開通。</p></div>
             <?php if ($error): ?><div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><span><?php echo htmlspecialchars($error); ?></span></div><?php endif; ?>
             <form method="post" action="?action=register">
                 <?php echo csrfField(); ?>
@@ -32,8 +33,16 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
                 <div class="form-group"><label for="username">帳號</label><div class="input-with-icon"><i class="fa-regular fa-user"></i><input id="username" name="username" required autocomplete="username" placeholder="設定登入帳號"></div></div>
                 <div class="form-group"><label for="email">電子郵件</label><div class="input-with-icon"><i class="fa-regular fa-envelope"></i><input id="email" name="email" type="email" required placeholder="name@example.com"></div></div>
                 <div class="form-group"><label for="phone">手機號碼</label><div class="input-with-icon"><i class="fa-solid fa-mobile-screen"></i><input id="phone" name="phone" type="tel" pattern="09\d{8}" required placeholder="09xxxxxxxx"></div></div>
-                <div class="form-group"><label for="member_type">會員類型</label><select id="member_type" name="member_type" required><option value="general">一般會員（活動報名、公益配送）</option><option value="enterprise">企業會員（活動報名、剩餘物資捐贈）</option></select></div>
+                <div class="form-group"><label for="member_type">會員類型</label><select id="member_type" name="member_type" required><option value="general">一般會員（公益活動、可另外申請外送志工）</option><option value="enterprise">企業會員（活動報名、剩餘物資捐贈）</option></select></div>
                 <div class="form-group" id="enterprise-name-field" hidden><label for="enterprise_name">企業／組織名稱</label><input id="enterprise_name" name="enterprise_name" maxlength="150" placeholder="輸入企業或組織名稱"></div>
+                <div class="form-group" id="enterprise-tax-field" hidden><label for="tax_id">統一編號（商家身分認證）</label><input id="tax_id" name="tax_id" inputmode="numeric" pattern="\d{8}" maxlength="8" placeholder="8 碼統一編號"></div>
+                <div class="form-group" id="enterprise-referral-field" hidden>
+                    <label for="referral_source">從何得知此系統（選填）</label>
+                    <select id="referral_source" name="referral_source">
+                        <option value="">不指定</option>
+                        <?php foreach (registrationReferralSources() as $referralOption): ?><option value="<?php echo htmlspecialchars($referralOption); ?>"><?php echo htmlspecialchars($referralOption); ?></option><?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="form-group"><label for="password">設定密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" minlength="8" required placeholder="至少 8 個字元"></div></div>
                 <button class="btn btn-primary login-submit" type="submit">送出申請 <i class="fa-solid fa-arrow-right"></i></button>
             </form>
@@ -42,12 +51,14 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
     </main>
     <script>
         const memberType = document.getElementById('member_type');
-        const enterpriseNameField = document.getElementById('enterprise-name-field');
+        const enterpriseFields = ['enterprise-name-field', 'enterprise-tax-field', 'enterprise-referral-field'].map(function (id) { return document.getElementById(id); });
         const enterpriseName = document.getElementById('enterprise_name');
+        const taxId = document.getElementById('tax_id');
         function updateEnterpriseField() {
             const isEnterprise = memberType.value === 'enterprise';
-            enterpriseNameField.hidden = !isEnterprise;
+            enterpriseFields.forEach(function (field) { field.hidden = !isEnterprise; });
             enterpriseName.required = isEnterprise;
+            taxId.required = isEnterprise;
         }
         memberType.addEventListener('change', updateEnterpriseField);
         updateEnterpriseField();

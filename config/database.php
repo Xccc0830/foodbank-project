@@ -35,10 +35,6 @@ if (!defined('APP_DEBUG')) {
 if (file_exists(__DIR__ . '/local.php')) {
     require_once __DIR__ . '/local.php';
 }
-// Mapbox public token (pk.*)，供愛心商家端即時地圖使用。
-if (!defined('MAPBOX_ACCESS_TOKEN')) {
-    define('MAPBOX_ACCESS_TOKEN', getenv('MAPBOX_ACCESS_TOKEN') ?: '');
-}
 if (!defined('GOOGLE_MAPS_API_KEY')) {
     define('GOOGLE_MAPS_API_KEY', getenv('GOOGLE_MAPS_API_KEY') ?: '');
 }

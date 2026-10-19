@@ -66,10 +66,6 @@ $subOrderStatusLabels = [
     .customer-progress-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
     .customer-progress-step { color: #94a3b8; font-size: 12px; }
     .customer-progress-step.is-active, .customer-progress-step.is-complete { color: #0f766e; font-weight: 700; }
-    .customer-delivery-map { position: relative; display: grid; min-height: 320px; overflow: hidden; place-items: center; border-radius: 14px; background: radial-gradient(ellipse at 50% 42%, #f0fdfa 0, #e7f5f0 38%, #e8eef4 100%); }
-    .customer-map-placeholder { position: relative; z-index: 1; max-width: 230px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,.94); color: #475569; text-align: center; font-size: 13px; box-shadow: 0 3px 12px rgba(15,23,42,.12); }
-    .customer-map-canvas { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; }
-    .customer-map-canvas[hidden], .customer-map-placeholder[hidden] { display: none; }
     .customer-delivery-side { display: flex; flex-direction: column; justify-content: space-between; gap: 18px; padding: 24px; border-left: 1px solid #eef2f7; background: #fbfcfe; }
     .customer-courier { display: flex; align-items: center; gap: 14px; }
     .customer-courier-avatar { display: grid; flex: 0 0 54px; width: 54px; height: 54px; place-items: center; border-radius: 50%; background: #ccfbf1; color: #0f766e; font-size: 19px; font-weight: 800; }
@@ -77,17 +73,11 @@ $subOrderStatusLabels = [
     .customer-courier p { margin: 0; color: #64748b; font-size: 13px; }
     .customer-stop-alert { padding: 12px 14px; border: 1px solid #fde68a; border-radius: 12px; background: #fffbeb; color: #92400e; font-size: 13px; }
     .customer-stop-alert[hidden] { display: none; }
-    .customer-tracking-update { color: #64748b; font-size: 12px; }
-    .customer-tracking-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    .customer-tracking-actions button { width: fit-content; }
-    .customer-location-status { min-height: 36px; margin: 0; color: #64748b; font-size: 12px; overflow-wrap: anywhere; }
-    .order-live-tracking-privacy { margin-top: 18px; color: #64748b; font-size: 12px; }
     @media (max-width: 760px) {
         .customer-order-heading { align-items: flex-start; padding: 16px; }
         .customer-delivery-card { grid-template-columns: minmax(0, 1fr); }
         .customer-delivery-main, .customer-delivery-side { padding: 18px; }
         .customer-delivery-side { border-top: 1px solid #eef2f7; border-left: 0; }
-        .customer-delivery-map { min-height: 220px; }
         .customer-progress-step { font-size: 11px; }
     }
 </style>
@@ -160,10 +150,6 @@ $subOrderStatusLabels = [
                                                 <span class="customer-progress-step">已送達</span>
                                             </div>
                                         </div>
-                                        <div class="customer-delivery-map" aria-label="配送位置地圖">
-                                            <p class="customer-map-placeholder">Go Rider 取貨後，地圖會顯示即時位置</p>
-                                            <div class="customer-map-canvas" data-map-canvas hidden></div>
-                                        </div>
                                     </div>
                                     <aside class="customer-delivery-side">
                                         <div>
@@ -173,15 +159,11 @@ $subOrderStatusLabels = [
                                             </div>
                                         </div>
                                         <p class="customer-stop-alert" data-other-stops hidden></p>
-                                        <div>
-                                            <p class="customer-location-status" aria-live="polite">Go Rider 取貨後，即時位置與行進軌跡會直接顯示在左側地圖。</p>
-                                            <p class="customer-tracking-update" data-location-updated></p>
-                                        </div>
                                     </aside>
                                 </article>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <div class="customer-delivery-main"><p>配送任務建立後，這裡會顯示配送進度與即時位置。</p></div>
+                            <div class="customer-delivery-main"><p>配送任務建立後，這裡會顯示配送進度。</p></div>
                         <?php endif; ?>
                     </section>
                 <?php endforeach; ?>
@@ -195,6 +177,7 @@ $subOrderStatusLabels = [
                         <th>物資</th>
                         <th>建立日期</th>
                         <th>配送任務</th>
+                        <th>外送志工聯絡方式</th>
                         <th>完成進度</th>
                         <th>拆單狀態</th>
                         <th>目前狀態</th>
@@ -210,6 +193,7 @@ $subOrderStatusLabels = [
                             <td><?php echo htmlspecialchars($order['item_name'] ?? '-'); ?><br><small><?php echo htmlspecialchars($order['quantity'] . ' ' . $order['unit']); ?></small></td>
                             <td><?php echo htmlspecialchars(date('Y-m-d H:i', strtotime($order['donation_date']))); ?></td>
                             <td><?php echo (int) $order['delivery_count']; ?> 個任務</td>
+                            <td><?php echo !empty($order['volunteer_contacts']) ? htmlspecialchars($order['volunteer_contacts']) : '<span class="text-muted">尚無志工接單</span>'; ?></td>
                             <td><?php echo (int) $order['completed_delivery_count']; ?> / <?php echo (int) $order['delivery_count']; ?> 完成</td>
                             <td>
                                 <?php if (!empty($order['sub_orders'])): ?>
@@ -229,6 +213,5 @@ $subOrderStatusLabels = [
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-box-open"></i><p>目前沒有符合條件的訂單</p></div>
         <?php endif; ?>
-        <p class="order-live-tracking-privacy">配送位置僅供該訂單捐贈者、配送會員及官方人員查看；地圖由 Mapbox 提供，載入地圖時會依 Mapbox 的服務條款傳送瀏覽資訊。</p>
     </div>
 </div>
