@@ -448,6 +448,10 @@ body {
     border: 2px solid var(--bg-primary);
 }
 
+.notification-badge[hidden] {
+    display: none;
+}
+
 .sidebar-notification-badge {
     top: 50%;
     right: 10px;

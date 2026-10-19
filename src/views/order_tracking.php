@@ -73,6 +73,14 @@ $subOrderStatusLabels = [
     .customer-courier p { margin: 0; color: #64748b; font-size: 13px; }
     .customer-stop-alert { padding: 12px 14px; border: 1px solid #fde68a; border-radius: 12px; background: #fffbeb; color: #92400e; font-size: 13px; }
     .customer-stop-alert[hidden] { display: none; }
+    .order-tracking-table-wrap { width: 100%; overflow-x: auto; }
+    .order-tracking-table { min-width: 1600px; }
+    .order-tracking-table th, .order-tracking-table td { white-space: nowrap; word-break: keep-all; }
+    .order-tracking-table th:nth-child(4), .order-tracking-table td:nth-child(4),
+    .order-tracking-table th:nth-child(5), .order-tracking-table td:nth-child(5) { min-width: 130px; }
+    .order-tracking-table td:nth-child(7) { min-width: 240px; }
+    .order-tracking-table td:nth-child(9) { min-width: 220px; }
+    .order-tracking-table td:nth-child(9) > div { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     @media (max-width: 760px) {
         .customer-order-heading { align-items: flex-start; padding: 16px; }
         .customer-delivery-card { grid-template-columns: minmax(0, 1fr); }
@@ -146,7 +154,7 @@ $subOrderStatusLabels = [
                                             <div class="customer-progress-steps">
                                                 <span class="customer-progress-step">準備中</span>
                                                 <span class="customer-progress-step">Go Rider 接單</span>
-                                                <span class="customer-progress-step">前往送達</span>
+                                                <span class="customer-progress-step">運送中</span>
                                                 <span class="customer-progress-step">已送達</span>
                                             </div>
                                         </div>
@@ -162,20 +170,20 @@ $subOrderStatusLabels = [
                                     </aside>
                                 </article>
                             <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="customer-delivery-main"><p>配送任務建立後，這裡會顯示配送進度。</p></div>
                         <?php endif; ?>
                     </section>
                 <?php endforeach; ?>
             </div>
         <?php elseif ($isOfficial && $trackingOrders): ?>
-            <table class="data-table">
+            <div class="order-tracking-table-wrap">
+            <table class="data-table order-tracking-table">
                 <thead>
                     <tr>
                         <th>訂單編號</th>
                         <?php if ($isOfficial): ?><th>捐贈者</th><?php endif; ?>
                         <th>物資</th>
                         <th>建立日期</th>
+                        <th>建立時間</th>
                         <th>配送任務</th>
                         <th>外送志工聯絡方式</th>
                         <th>完成進度</th>
@@ -191,7 +199,8 @@ $subOrderStatusLabels = [
                             <td><strong><code><?php echo htmlspecialchars($order['order_number']); ?></code></strong></td>
                             <?php if ($isOfficial): ?><td><?php echo htmlspecialchars($order['donor_name']); ?></td><?php endif; ?>
                             <td><?php echo htmlspecialchars($order['item_name'] ?? '-'); ?><br><small><?php echo htmlspecialchars($order['quantity'] . ' ' . $order['unit']); ?></small></td>
-                            <td><?php echo htmlspecialchars(date('Y-m-d H:i', strtotime($order['donation_date']))); ?></td>
+                            <td><?php echo htmlspecialchars(date('Y-m-d', strtotime($order['donation_date']))); ?></td>
+                            <td><?php echo htmlspecialchars(date('H:i', strtotime($order['donation_date']))); ?></td>
                             <td><?php echo (int) $order['delivery_count']; ?> 個任務</td>
                             <td><?php echo !empty($order['volunteer_contacts']) ? htmlspecialchars($order['volunteer_contacts']) : '<span class="text-muted">尚無志工接單</span>'; ?></td>
                             <td><?php echo (int) $order['completed_delivery_count']; ?> / <?php echo (int) $order['delivery_count']; ?> 完成</td>
@@ -210,6 +219,7 @@ $subOrderStatusLabels = [
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
         <?php else: ?>
             <div class="empty-state"><i class="fas fa-box-open"></i><p>目前沒有符合條件的訂單</p></div>
         <?php endif; ?>

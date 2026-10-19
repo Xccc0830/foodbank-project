@@ -556,11 +556,12 @@ class DeliveryModel extends BaseModel {
 
         $photoValue = $this->db->real_escape_string($pickupPhotoPath);
         $updated = $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), pickup_photo_path = '{$photoValue}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'claimed'");
-        if ($updated && $this->db->affected_rows === 1) {
+        $wasUpdated = $updated && $this->db->affected_rows === 1;
+        if ($wasUpdated) {
             $this->setArrivalWindow($deliveryId);
             $this->notifyDonor($deliveryId, 'Go Rider 已取貨', "配送任務 #{$deliveryId} 物資已取貨，Go Rider 正在前往送達地點。", 'info');
         }
-        return $updated;
+        return $wasUpdated;
     }
 
     public function reportException($deliveryId, $volunteerId, $notes) {
@@ -764,7 +765,7 @@ class DeliveryModel extends BaseModel {
         return $notifiedCount;
     }
 
-    public function calculatePoints($vehicle, $distance, $weight, $urgency) {
+    public static function calculatePoints($vehicle, $distance, $weight, $urgency) {
         $isCar = $vehicle === 'car';
         $points = $isCar ? 10 : 5;
 

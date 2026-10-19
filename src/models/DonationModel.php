@@ -5,6 +5,7 @@
  */
 
 require_once 'BaseModel.php';
+require_once __DIR__ . '/DeliveryModel.php';
 
 class DonationModel extends BaseModel {
     protected $table = 'donations';
@@ -175,7 +176,50 @@ class DonationModel extends BaseModel {
         $donation_id = intval($donation_id);
         $sql = "SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} LIMIT 1";
         $result = $this->db->query($sql);
-        return $result ? $result->fetch_assoc() : null;
+        $donation = $result ? $result->fetch_assoc() : null;
+        if (!$donation || !$this->hasDonationItemsTable()) {
+            return $donation;
+        }
+
+        $summaryResult = $this->db->query(
+            "SELECT COALESCE(SUM(item_weight_kg), 0) AS total_item_weight
+             FROM donation_items WHERE donation_id = {$donation_id}"
+        );
+        $summary = $summaryResult ? $summaryResult->fetch_assoc() : null;
+        if ((float) ($donation['weight_kg'] ?? 0) <= 0 && (float) ($summary['total_item_weight'] ?? 0) > 0) {
+            $donation['weight_kg'] = $summary['total_item_weight'];
+        }
+
+        $firstItemResult = $this->db->query(
+            "SELECT quantity, unit, LEFT(specification, 100) AS specification, length_cm, width_cm, height_cm
+             FROM donation_items WHERE donation_id = {$donation_id}
+             ORDER BY item_id ASC LIMIT 1"
+        );
+        $firstItem = $firstItemResult ? $firstItemResult->fetch_assoc() : null;
+        if ($firstItem) {
+            if ((float) ($donation['quantity'] ?? 0) <= 0) {
+                $donation['quantity'] = $firstItem['quantity'];
+                $donation['unit'] = $firstItem['unit'];
+            }
+
+            if (trim((string) ($donation['size_description'] ?? '')) === '') {
+                $sizeDescription = trim((string) ($firstItem['specification'] ?? ''));
+                if ($sizeDescription === '' && $firstItem['length_cm'] !== null
+                    && $firstItem['width_cm'] !== null && $firstItem['height_cm'] !== null) {
+                    $sizeDescription = sprintf(
+                        '長寬高：%s × %s × %s cm',
+                        number_format((float) $firstItem['length_cm'], 2),
+                        number_format((float) $firstItem['width_cm'], 2),
+                        number_format((float) $firstItem['height_cm'], 2)
+                    );
+                }
+                if ($sizeDescription !== '') {
+                    $donation['size_description'] = $sizeDescription;
+                }
+            }
+        }
+
+        return $donation;
     }
 
     public function publishDonation($donation_id, $publishData = []) {
@@ -233,6 +277,10 @@ class DonationModel extends BaseModel {
             ? $existingDonation['vehicle_type']
             : 'motorcycle';
         $weight = ((float) ($publishData['weight_kg'] ?? $existingDonation['weight_kg'] ?? 0)) / $splitCount;
+        $distance = max(0, (float) ($existingDonation['estimated_distance_km'] ?? 0));
+        $points = $deliveryMethod === 'volunteer'
+            ? max(0, DeliveryModel::calculatePoints($vehicleType, $distance, $weight, 'normal'))
+            : 0;
         $pickupAddress = trim((string) ($publishData['donor_address'] ?? $existingDonation['donor_address'] ?? ''));
         if ($pickupAddress === '') {
             $pickupAddress = (string) ($publishData['donor_name'] ?? $existingDonation['donor_name'] ?? '商家取貨地點');
@@ -284,7 +332,7 @@ class DonationModel extends BaseModel {
             $allocationValue = $allocationId !== null ? ", {$allocationId}" : '';
             $taskSql = "INSERT INTO deliveries
                 (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
-                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', 0, {$weight}, 'normal', 0, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, 'normal', {$points}, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
                 $this->db->rollback();
                 return false;

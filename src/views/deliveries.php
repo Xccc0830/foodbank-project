@@ -17,6 +17,11 @@ $canManageDeliveries = $isOfficial && $authService->can('delivery.manage');
 $canConfirmArrival = $isOfficial && $authService->can('delivery.confirm_arrival');
 $isVolunteer = $currentRole === 'member' && $memberType === 'general' && $authService->can('rider.accept_task');
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
+    && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    $message = ['type' => 'error', 'text' => '上傳內容超過伺服器允許的大小，請縮小照片後再試。'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'create_delivery') {
@@ -47,12 +52,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ['type' => 'error', 'text' => '接單失敗，任務可能已被其他配送會員接取。'];
     } elseif ($action === 'confirm_pickup') {
         require_once BASE_PATH . '/src/helpers/UploadHelper.php';
-        $pickupPhotoPath = $isVolunteer && !empty($_FILES['pickup_photo']['name'])
-            ? uploadPickupPhoto($_FILES['pickup_photo'])
-            : false;
-        $message = $pickupPhotoPath !== false && $deliveryModel->confirmPickup((int) $_POST['delivery_id'], $currentUserId, $pickupPhotoPath)
-            ? ['type' => 'success', 'text' => '取貨已確認，請將物資送往食物銀行。']
-            : ['type' => 'error', 'text' => '取貨確認失敗，請上傳取貨照片（JPG、PNG 或 WebP，5MB 以內）。'];
+        $photoFile = $_FILES['pickup_photo'] ?? null;
+        if (!$isVolunteer) {
+            $message = ['type' => 'error', 'text' => '只有目前接單的配送會員可以確認取貨。'];
+        } elseif (!$photoFile || ($photoFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $uploadError = (int) ($photoFile['error'] ?? UPLOAD_ERR_NO_FILE);
+            $uploadMessage = $uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE
+                ? '照片超過伺服器允許的上傳大小，請縮小照片後重試。'
+                : '請先選取取貨照片，再按「完成取件」。';
+            $message = ['type' => 'error', 'text' => $uploadMessage];
+        } else {
+            $pickupPhotoPath = uploadPickupPhoto($photoFile);
+            $confirmed = $pickupPhotoPath !== false
+                && $deliveryModel->confirmPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId, $pickupPhotoPath);
+            $message = $confirmed
+                ? ['type' => 'success', 'text' => '取貨已確認，請將物資送往食物銀行。']
+                : ['type' => 'error', 'text' => '取貨照片無法儲存，請確認格式為 JPG、PNG 或 WebP 且不超過 5MB，並重試。'];
+        }
     } elseif ($action === 'report_exception') {
         $message = $isVolunteer && $deliveryModel->reportException((int) $_POST['delivery_id'], $currentUserId, $_POST['exception_notes'] ?? '')
             ? ['type' => 'success', 'text' => '異常已回報，食物銀行官方人員會進行處理。']
@@ -286,7 +302,7 @@ if ($isVolunteer) {
                     <div class="driver-trip-checklist">
                         <label>取貨照片（拍下取得的物資）<input type="file" name="pickup_photo" accept="image/png,image/jpeg,image/webp" capture="environment" data-pickup-photo required></label>
                     </div>
-                    <button type="submit" class="driver-action-button" data-pickup-submit disabled><i class="fas fa-box-open"></i> 完成取件</button>
+                    <button type="submit" class="driver-action-button" data-pickup-submit><i class="fas fa-box-open"></i> 完成取件</button>
                 </form>
                 <form method="post" class="delivery-action-form">
                     <?php echo csrfField(); ?>
