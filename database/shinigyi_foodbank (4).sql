@@ -191,6 +191,21 @@ CREATE TABLE `delivery_locations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- 資料表結構 `delivery_location_trail`
+--
+
+DROP TABLE IF EXISTS `delivery_location_trail`;
+CREATE TABLE `delivery_location_trail` (
+  `point_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `delivery_id` int(11) NOT NULL,
+  `latitude` decimal(10,7) NOT NULL,
+  `longitude` decimal(10,7) NOT NULL,
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`point_id`),
+  KEY `idx_delivery_recorded` (`delivery_id`,`point_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- 傾印資料表的資料 `deliveries`
 --
 

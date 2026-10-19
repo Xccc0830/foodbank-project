@@ -8,6 +8,14 @@
             "approve": true,
             "matchCommandLine": true
         },
-        "/Applications/XAMPP/xamppfiles/bin/mysql": true
+        "/Applications/XAMPP/xamppfiles/bin/mysql": true,
+        "/^git rm -r -q database/migrations && ls database && git status --short$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python3 - <<'EOF'\np='docs/guides/INSTALL\\.md'\nL=open\\(p,encoding='utf-8'\\)\\.read\\(\\)\\.split\\('\\\\n'\\)\n# lines 14-24 \\(1-based 14\\.\\.24 => idx 13\\.\\.23\\) replace\nstart=13\nend=next\\(i for i,l in enumerate\\(L\\) if l\\.startswith\\('物資捐贈表單在'\\)\\)\nnew=\\[\n\"資料庫已整合為單一檔案 `database/shinigyi_foodbank \\(4\\)\\.sql`，包含會員角色、配送方式、物資明細、配送即時定位與行進軌跡、權限系統、拆單子單、活動報名人數及物資距離估算等所有結構。\",\n\"匯入前請先備份資料庫；新安裝或重建資料庫時，直接匯入此檔即可（檔案會先 DROP 同名資料表再重建，既有資料會被覆蓋）。\",\n\"即時定位需要配送會員取貨後明確啟用瀏覽器定位權限，並以 HTTPS（或 localhost）開啟網站；位置每 10 秒更新，停止分享或配送頁離開後會停止傳送，逾時資料也會清除。顧客可選擇開啟 OpenStreetMap 查看位置，只有點選地圖連結時才會將座標傳給該服務。\",\n\\]\nL\\[start:end\\]=new\nopen\\(p,'w',encoding='utf-8'\\)\\.write\\('\\\\n'\\.join\\(L\\)\\)\nEOF\ngit diff --stat -- docs$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
