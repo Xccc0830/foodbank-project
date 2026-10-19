@@ -1392,6 +1392,34 @@ UPDATE `activities` SET `title` = REPLACE(`title`, '忠信GO RIDER', '忠信GO R
 -- --------------------------------------------------------
 
 --
+-- 資料表結構 `inventory_receipts`（食物銀行入庫紀錄）
+--
+
+DROP TABLE IF EXISTS `inventory_receipts`;
+CREATE TABLE `inventory_receipts` (
+  `receipt_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `item_name` varchar(150) NOT NULL,
+  `category` varchar(50) NOT NULL,
+  `movement_type` enum('in','out') NOT NULL DEFAULT 'in',
+  `quantity` decimal(12,2) NOT NULL,
+  `unit` varchar(30) NOT NULL DEFAULT '件',
+  `donor_name` varchar(150) DEFAULT NULL,
+  `received_date` date NOT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `storage_location` varchar(150) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `received_by` int(11) NOT NULL,
+  `source_donation_id` int(11) DEFAULT NULL,
+  `source_item_id` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`receipt_id`),
+  KEY `idx_inventory_receipts_item` (`item_name`,`category`,`unit`),
+  KEY `idx_inventory_receipts_received_date` (`received_date`),
+  KEY `idx_inventory_receipts_expiry_date` (`expiry_date`),
+  UNIQUE KEY `uq_inventory_receipt_source` (`source_donation_id`,`source_item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- 資料表結構 `permissions`（權限目錄）
 --
 
