@@ -18,10 +18,12 @@ function geocodeAddress($address) {
         return false;
     }
 
-    foreach (buildAddressVariants($address) as $index => $variant) {
+    $normalizedAddress = normalizeTaiwanPostalCode($address);
+    foreach (buildAddressVariants($address) as $variant) {
         $coordinate = geocodeExactAddress($variant);
         if ($coordinate !== false) {
-            $coordinate['approximate'] = $index > 0;
+            $coordinate['approximate'] = !empty($coordinate['approximate'])
+                || normalizeTaiwanPostalCode($variant) !== $normalizedAddress;
             return $coordinate;
         }
     }
@@ -30,21 +32,34 @@ function geocodeAddress($address) {
 }
 
 /**
+ * 去除 Google Maps 地址開頭的台灣郵遞區號，避免地理編碼服務將其誤認成門牌。
+ */
+function normalizeTaiwanPostalCode($address) {
+    $address = trim((string) $address);
+    $normalizedAddress = preg_replace('/^\s*\d{3}(?:\s*-\s*\d{2,3}|\d{2,3})?\s*(?=[\p{Han}])/u', '', $address);
+    return trim((string) ($normalizedAddress ?? $address));
+}
+
+/**
  * 依「完整地址 → 去除樓層/室號 → 僅保留路段」的順序，
  * 產生數個由精確到概略的地址查詢字串
  */
 function buildAddressVariants($address) {
-    $variants = [$address];
+    $normalizedAddress = normalizeTaiwanPostalCode($address);
+    $variants = [$normalizedAddress];
+    if ($address !== $normalizedAddress) {
+        $variants[] = $address;
+    }
 
     // 去除樓層、室號、「之X」等常見的門牌附加資訊
-    $noFloor = preg_replace('/(?:\d+\s*[Ff]|地下\d+樓?|\d+樓|之\d+|\d+室)+$/u', '', $address);
+    $noFloor = preg_replace('/(?:\d+\s*[Ff]|地下\d+樓?|\d+樓|之\d+|\d+室)+$/u', '', $normalizedAddress);
     $noFloor = trim($noFloor, " \t\n\r\0\x0B,、");
     if ($noFloor !== '' && !in_array($noFloor, $variants, true)) {
         $variants[] = $noFloor;
     }
 
     // 僅保留「路／街／大道（＋段）」，捨去巷弄號等細節，退回路段層級定位
-    $base = $noFloor !== '' ? $noFloor : $address;
+    $base = $noFloor !== '' ? $noFloor : $normalizedAddress;
     if (preg_match('/^(.*?(?:路|街|大道)(?:[一二三四五六七八九十0-9]+段)?)/u', $base, $matches)) {
         $roadOnly = trim($matches[1]);
         if ($roadOnly !== '' && !in_array($roadOnly, $variants, true)) {

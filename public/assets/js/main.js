@@ -202,11 +202,16 @@
             const distanceInput = form.querySelector('[data-distance-input]');
             const durationInput = form.querySelector('[data-duration-input]');
             const statusText = form.querySelector('[data-distance-status]');
+            const nextStepButton = form.querySelector('[data-next-step]');
             if (!originInput || !destinationInput || !wrapper) {
                 return;
             }
 
             let requestToken = 0;
+            let estimateTimer = null;
+            if (nextStepButton) {
+                nextStepButton.disabled = true;
+            }
 
             function endpoint(action) {
                 const url = new URL(window.location.href);
@@ -236,9 +241,13 @@
                 if (durationInput) {
                     durationInput.value = '';
                 }
+                if (nextStepButton) {
+                    nextStepButton.disabled = true;
+                }
             }
 
             async function fetchDistance() {
+                window.clearTimeout(estimateTimer);
                 const origin = originInput.value.trim();
                 const destination = destinationInput.value.trim();
                 if (origin.length < 4 || destination.length < 4) {
@@ -250,44 +259,68 @@
                 const currentToken = ++requestToken;
                 setStatus('正在計算配送距離與時間…', false);
 
-                const url = endpoint('calculate_distance');
-                url.searchParams.set('origin', origin);
-                url.searchParams.set('destination', destination);
-
                 try {
+                    const url = endpoint('calculate_distance');
+                    url.searchParams.set('origin', origin);
+                    url.searchParams.set('destination', destination);
                     const response = await fetch(url.toString(), { credentials: 'same-origin' });
                     const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || '無法計算配送距離。');
+                    }
                     if (currentToken !== requestToken) {
                         return;
                     }
-                    if (!response.ok || !result.success) {
+                    const estimate = {
+                        distanceKm: Number(result.distance_km),
+                        durationMinutes: Number(result.duration_minutes),
+                        distanceText: result.distance_text,
+                        durationText: result.duration_text,
+                        approximate: Boolean(result.approximate)
+                    };
+                    if (!Number.isFinite(estimate.distanceKm) || !Number.isFinite(estimate.durationMinutes)) {
                         clearEstimate();
-                        setStatus(result.error || '無法計算配送距離，請確認地址是否完整。', true);
+                        setStatus('無法計算配送距離，請確認地址內容。', true);
                         return;
                     }
 
                     if (distanceValue) {
-                        distanceValue.textContent = result.distance_text;
+                        distanceValue.textContent = estimate.distanceText;
                     }
                     if (durationValue) {
-                        durationValue.textContent = result.duration_text;
+                        durationValue.textContent = estimate.durationText;
                     }
                     if (distanceInput) {
-                        distanceInput.value = result.distance_km;
+                        distanceInput.value = (Math.round(estimate.distanceKm * 100) / 100).toFixed(2);
                     }
                     if (durationInput) {
-                        durationInput.value = result.duration_minutes;
+                        durationInput.value = String(Math.round(estimate.durationMinutes));
                     }
                     wrapper.hidden = false;
-                    setStatus(result.approximate ? '地址門牌資料不完整，此為路段層級的概略估算。' : '', false);
+                    if (nextStepButton) {
+                        nextStepButton.disabled = false;
+                    }
+                    setStatus(estimate.approximate
+                        ? '地址以路段位置估算，距離可能有差異。'
+                        : '', false);
                 } catch (error) {
                     if (currentToken !== requestToken) {
                         return;
                     }
                     clearEstimate();
-                    setStatus('無法連線計算配送距離，請稍後再試。', true);
+                    setStatus(error.message || '無法連線計算配送距離，請稍後再試。', true);
                 }
             }
+
+            [originInput, destinationInput].forEach(function (input) {
+                input.addEventListener('input', function () {
+                    requestToken++;
+                    clearEstimate();
+                    setStatus('', false);
+                    window.clearTimeout(estimateTimer);
+                    estimateTimer = window.setTimeout(fetchDistance, 700);
+                });
+            });
 
             [originInput, destinationInput].forEach(function (input) {
                 input.addEventListener('blur', fetchDistance);

@@ -12,6 +12,9 @@ $notificationModel = new NotificationModel();
 $connection = $db->getConnection();
 $currentUserId = isset($currentUser['user_id']) ? (int) $currentUser['user_id'] : 0;
 $donorName = trim((string) ($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? ''));
+$deliveryAddress = array_key_exists('delivery_address', $_POST)
+    ? trim((string) $_POST['delivery_address'])
+    : '臺北市文山區明義里興隆路四段42巷3號1樓';
 $formMessage = null;
 $viewingDonation = null;
 $viewingItems = [];
@@ -352,7 +355,7 @@ $formatDateTime = static function ($value) {
                     <div class="form-group"><label for="deliveryDate">預計配送日期 <span class="required-mark">*</span></label><input id="deliveryDate" type="date" name="delivery_date" required></div>
                     <div class="form-group"><label for="deliveryTime">預計配送時間 <span class="required-mark">*</span></label><input id="deliveryTime" type="time" name="delivery_time" required></div>
                 </div>
-                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
+                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
                 <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
                     <label>預計運送距離與時間</label>
                     <div class="distance-estimate-box">
@@ -365,7 +368,7 @@ $formatDateTime = static function ($value) {
                 <p class="distance-estimate-status" data-distance-status hidden></p>
                 <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 若由 Go Rider 配送，配送會員接單後才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
-                <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step>下一步：填寫物資</button></div>
+                <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step disabled>下一步：填寫物資</button></div>
             </section>
 
             <section class="material-step-panel" data-step-panel="2" hidden>
@@ -686,6 +689,9 @@ $formatDateTime = static function ($value) {
         };
         document.querySelectorAll('[data-next-step]').forEach(function (button) {
             button.addEventListener('click', function () {
+                if (button.disabled) {
+                    return;
+                }
                 const deliveryPanel = document.querySelector('[data-step-panel="1"]');
                 const deliveryFieldsValid = deliveryPanel && Array.from(deliveryPanel.querySelectorAll('[required]')).every(function (field) {
                     return field.reportValidity();
