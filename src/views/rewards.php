@@ -322,7 +322,7 @@ if ($isDonor) {
     <div class="card-body">
         <?php if ($foodbankPendingClaims): ?>
             <div class="redemptions-table-body">
-                <table class="data-table redemptions-table">
+                <table class="data-table redemptions-table redemptions-pending-table">
                     <thead><tr><th>兌換編號</th><th>兌換品項</th><th>忠信GO RIDER</th><th>興毅幣</th><th>兌換時間</th></tr></thead>
                     <tbody>
                     <?php foreach ($foodbankPendingClaims as $claim): ?>
@@ -348,7 +348,7 @@ if ($isDonor) {
     <div class="card-body">
         <?php if ($foodbankRedemptions): ?>
             <div class="redemptions-table-body">
-                <table class="data-table redemptions-table">
+                <table class="data-table redemptions-table redemptions-history-table">
                     <thead><tr><th>兌換編號</th><th>兌換品項</th><th>忠信GO RIDER</th><th>興毅幣</th><th>狀態</th><th>時間</th></tr></thead>
                     <tbody>
                     <?php foreach ($foodbankRedemptions as $redemption): ?>
@@ -357,7 +357,7 @@ if ($isDonor) {
                             <td><?php echo htmlspecialchars($redemption['title']); ?></td>
                             <td><?php echo htmlspecialchars($redemption['volunteer_name'] ?? '未知使用者'); ?></td>
                             <td><?php echo (int) $redemption['points_spent']; ?> 點</td>
-                            <td><?php echo ['pending' => '待核銷', 'fulfilled' => '已核銷', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></td>
+                            <td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '待核銷', 'fulfilled' => '已核銷', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td>
                             <td><?php echo htmlspecialchars($redemption['redeemed_at'] ?: $redemption['created_at']); ?></td>
                         </tr>
                     <?php endforeach; ?>
@@ -376,9 +376,9 @@ if ($isDonor) {
     <div class="card-body">
         <?php if ($myRedemptions): ?>
             <div class="redemptions-table-body">
-                <table class="data-table redemptions-table"><thead><tr><th>獎勵</th><th>花費興毅幣</th><th>狀態</th><th>時間</th></tr></thead><tbody>
+                <table class="data-table redemptions-table redemptions-mine-table"><thead><tr><th>獎勵</th><th>花費興毅幣</th><th>狀態</th><th>時間</th></tr></thead><tbody>
                 <?php foreach ($myRedemptions as $redemption): ?>
-                    <tr><td><?php echo htmlspecialchars($redemption['title']); ?></td><td><?php echo (int) $redemption['points_spent']; ?></td><td><?php echo ['pending' => '處理中', 'fulfilled' => '已兌換完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></td><td><?php echo htmlspecialchars($redemption['created_at']); ?></td></tr>
+                    <tr><td><strong><?php echo htmlspecialchars($redemption['title']); ?></strong></td><td><?php echo (int) $redemption['points_spent']; ?></td><td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '處理中', 'fulfilled' => '已兌換完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td><td><?php echo htmlspecialchars($redemption['created_at']); ?></td></tr>
                 <?php endforeach; ?>
                 </tbody></table>
             </div>
@@ -391,7 +391,7 @@ if ($isDonor) {
             <div class="card-header"><h2>我的核銷紀錄</h2><p>顯示由目前帳號完成核銷的兌換憑證</p></div>
             <?php if ($myFulfillments): ?>
                 <div class="redemptions-table-body">
-                    <table class="data-table redemptions-table">
+                    <table class="data-table redemptions-table redemptions-fulfilled-table">
                         <thead><tr><th>兌換品項</th><th>兌換者</th><th>花費興毅幣</th><th>核銷時間</th></tr></thead>
                         <tbody>
                         <?php foreach ($myFulfillments as $fulfillment): ?>
@@ -514,14 +514,14 @@ if ($isDonor) {
     <div class="card-header"><h2>獎勵兌換紀錄</h2><p>查看忠信GO RIDER兌換你提供的獎勵方案</p></div>
     <div class="card-body">
         <?php if ($donorRedemptions): ?>
-            <table class="data-table"><thead><tr><th>忠信GO RIDER</th><th>獎勵方案</th><th>兌換興毅幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <table class="data-table donor-redemptions-table"><thead><tr><th>忠信GO RIDER</th><th>獎勵方案</th><th>兌換興毅幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($donorRedemptions as $redemption): ?>
                 <tr>
                     <td><?php echo htmlspecialchars($redemption['volunteer_name']); ?></td>
                     <td><?php echo htmlspecialchars($redemption['title']); ?></td>
                     <td><?php echo (int) $redemption['points_spent']; ?> 點</td>
                     <td><?php echo htmlspecialchars($redemption['created_at']); ?></td>
-                    <td><?php echo ['pending' => '待處理', 'fulfilled' => '已完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></td>
+                    <td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '待處理', 'fulfilled' => '已完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td>
                     <td>
                         <?php if ($redemption['status'] === 'pending'): ?>
                             <form method="post" class="inline-form">

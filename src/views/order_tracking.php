@@ -198,7 +198,7 @@ $subOrderStatusLabels = [
                         <tr>
                             <td><strong><code><?php echo htmlspecialchars($order['order_number']); ?></code></strong></td>
                             <?php if ($isOfficial): ?><td><?php echo htmlspecialchars($order['donor_name']); ?></td><?php endif; ?>
-                            <td><?php echo htmlspecialchars($order['item_name'] ?? '-'); ?><br><small><?php echo htmlspecialchars($order['quantity'] . ' ' . $order['unit']); ?></small></td>
+                            <td><strong><?php echo htmlspecialchars($order['item_name'] ?? '-'); ?></strong><br><small><?php echo htmlspecialchars($order['quantity'] . ' ' . $order['unit']); ?></small></td>
                             <td><?php echo htmlspecialchars(date('Y-m-d', strtotime($order['donation_date']))); ?></td>
                             <td><?php echo htmlspecialchars(date('H:i', strtotime($order['donation_date']))); ?></td>
                             <td><?php echo (int) $order['delivery_count']; ?> 個任務</td>

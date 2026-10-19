@@ -2598,3 +2598,479 @@ form {
 .leaderboard-name {
     flex: 1;
 }
+
+/* Shared information hierarchy and data-dense page styling */
+body {
+    background-color: #F8FAFC;
+    background-image: none;
+}
+
+.page-content {
+    padding: clamp(20px, 3vw, 36px);
+}
+
+.content-shell {
+    width: min(1440px, 100%);
+}
+
+.view-header {
+    align-items: flex-end;
+    margin-bottom: 26px;
+}
+
+.view-title {
+    font-size: clamp(26px, 2.4vw, 32px);
+    line-height: 1.2;
+    color: var(--gray-900);
+}
+
+.view-subtitle,
+.toolbar-meta {
+    color: var(--gray-500);
+}
+
+.card {
+    border-color: var(--gray-200);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.035);
+}
+
+.card:hover {
+    border-color: var(--gray-200);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.card-header {
+    background: var(--gray-50);
+    border-bottom-color: var(--gray-200);
+}
+
+.card-header h2,
+.card-header h3 {
+    color: var(--gray-900);
+    letter-spacing: -0.01em;
+}
+
+.card-header p {
+    color: var(--gray-500);
+}
+
+.data-table,
+.stock-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    color: var(--gray-700);
+}
+
+.data-table thead,
+.data-table thead tr,
+.stock-table thead,
+.stock-table thead tr {
+    background: #F9FAFB;
+}
+
+.data-table th,
+.stock-table th {
+    background: #F9FAFB;
+    color: var(--gray-600);
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    vertical-align: middle;
+}
+
+.data-table td,
+.stock-table td {
+    border-bottom: 1px solid #F1F3F5;
+    color: var(--gray-700);
+    vertical-align: middle;
+}
+
+.data-table tbody tr,
+.stock-table tbody tr {
+    transition: background-color 140ms ease;
+}
+
+.data-table tbody tr:hover,
+.stock-table tbody tr:hover {
+    background-color: #F9FAFB;
+}
+
+.data-table td > strong,
+.stock-table td > strong {
+    color: var(--gray-900);
+    font-weight: 600;
+}
+
+.data-table td small,
+.stock-table td small,
+.data-table td .text-muted {
+    color: var(--gray-500);
+    font-size: 12px;
+}
+
+.data-table td small {
+    display: block;
+    line-height: 1.5;
+}
+
+.data-table code,
+.stock-table code,
+.data-table [class*="order-number"],
+.data-table [class*="date"],
+.data-table [class*="time"],
+.stock-table [class*="date"],
+.stock-table [class*="time"] {
+    white-space: nowrap;
+    word-break: keep-all;
+    font-variant-numeric: tabular-nums;
+}
+
+.data-table code,
+.stock-table code {
+    padding: 3px 7px;
+    border: 1px solid rgba(99, 91, 255, 0.18);
+    border-radius: 6px;
+    background: rgba(99, 91, 255, 0.08);
+    color: var(--primary-dark);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.data-table td:has(> .status),
+.stock-table td:has(> .status),
+.data-table td:has(> .btn),
+.stock-table td:has(> .btn),
+.data-table td:has(> form .btn),
+.data-table td:has(> .inline-action-group),
+.data-table td:has(> .delivery-action-stack) {
+    text-align: center;
+}
+
+.data-table .status,
+.stock-table .status {
+    justify-content: center;
+    padding: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.status-completed,
+.status-active,
+.status-received,
+.status-success,
+.status-delivered,
+.status-inspected {
+    border-color: #D1FAE5;
+    background: #ECFDF5;
+    color: #065F46;
+}
+
+.status-pending,
+.status-warning,
+.status-in-transit,
+.status-dispatching,
+.status-arrived {
+    border-color: #FDE68A;
+    background: #FFFBEB;
+    color: #92400E;
+}
+
+.status-rejected,
+.status-low-stock,
+.status-suspended,
+.status-exception,
+.status-overdue,
+.status-expired {
+    border-color: #FECACA;
+    background: #FEF2F2;
+    color: #991B1B;
+}
+
+.status-approved {
+    border-color: #D1FAE5;
+    background: #ECFDF5;
+    color: #065F46;
+}
+
+.status-draft,
+.status-inactive,
+.status-cancelled {
+    border-color: #E5E7EB;
+    background: #F3F4F6;
+    color: #4B5563;
+}
+
+.status-info {
+    border-color: #BFDBFE;
+    background: #EFF6FF;
+    color: #1D4ED8;
+}
+
+.stock-number,
+.inventory-quantity,
+.text-right,
+.number-cell {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.stock-table th.stock-number {
+    text-align: right;
+}
+
+.data-table.activities-table th:nth-child(4),
+.data-table.activities-table td:nth-child(4),
+.data-table.activities-assignments-table th:nth-child(4),
+.data-table.activities-assignments-table td:nth-child(4),
+.data-table.recent-donations-table th:nth-child(3),
+.data-table.recent-donations-table td:nth-child(3),
+.data-table.categories-table th:nth-child(4),
+.data-table.categories-table td:nth-child(4),
+.data-table.ranking-table th:nth-child(n+3),
+.data-table.ranking-table td:nth-child(n+3),
+.data-table.deliveries-table:not(.completed-deliveries-table) th:is(:nth-child(5), :nth-child(6), :nth-child(9)),
+.data-table.deliveries-table:not(.completed-deliveries-table) td:is(:nth-child(5), :nth-child(6), :nth-child(9)),
+.data-table.completed-deliveries-table th:is(:nth-child(4), :nth-child(5), :nth-child(7)),
+.data-table.completed-deliveries-table td:is(:nth-child(4), :nth-child(5), :nth-child(7)),
+.data-table.donor-rewards-table th:is(:nth-child(2), :nth-child(4)),
+.data-table.donor-rewards-table td:is(:nth-child(2), :nth-child(4)) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.data-table.activities-table th:nth-child(3),
+.data-table.activities-table td:nth-child(3),
+.data-table.ranking-table th:first-child,
+.data-table.ranking-table td:first-child,
+.data-table.users-table [class*="date"],
+.data-table.notifications-table th:nth-child(3),
+.data-table.notifications-table td:nth-child(3),
+.data-table.redemptions-table th:last-child,
+.data-table.redemptions-table td:last-child {
+    white-space: nowrap;
+    word-break: keep-all;
+}
+
+.data-table.activities-table th:nth-child(5),
+.data-table.activities-table td:nth-child(5),
+.data-table.activities-assignments-table th:nth-child(5),
+.data-table.activities-assignments-table td:nth-child(5),
+.data-table.notifications-table th:nth-child(4),
+.data-table.notifications-table td:nth-child(4),
+.data-table.users-table th:nth-child(7),
+.data-table.users-table td:nth-child(7),
+.data-table.deliveries-table th:nth-child(10),
+.data-table.deliveries-table td:nth-child(10),
+.data-table.completed-deliveries-table th:nth-child(9),
+.data-table.completed-deliveries-table td:nth-child(9) {
+    text-align: center;
+}
+
+.data-table.activities-table th:last-child,
+.data-table.activities-table td:last-child,
+.data-table.activities-assignments-table th:last-child,
+.data-table.activities-assignments-table td:last-child,
+.data-table.notifications-table th:last-child,
+.data-table.notifications-table td:last-child,
+.data-table.users-table th:last-child,
+.data-table.users-table td:last-child,
+.data-table.donation-pending-table th:last-child,
+.data-table.donation-pending-table td:last-child,
+.data-table.donation-evaluated-table th:last-child,
+.data-table.donation-evaluated-table td:last-child,
+.data-table.review-pending-table th:last-child,
+.data-table.review-pending-table td:last-child,
+.data-table.review-assessed-table th:last-child,
+.data-table.review-assessed-table td:last-child,
+.data-table.review-publish-table th:last-child,
+.data-table.review-publish-table td:last-child,
+.data-table.review-published-table th:last-child,
+.data-table.review-published-table td:last-child,
+.data-table.review-history-table th:last-child,
+.data-table.review-history-table td:last-child,
+.data-table.donor-redemptions-table th:last-child,
+.data-table.donor-redemptions-table td:last-child,
+.data-table.rider-review-table th:last-child,
+.data-table.rider-review-table td:last-child {
+    text-align: center;
+}
+
+.data-table.donation-pending-table th:nth-child(6),
+.data-table.donation-pending-table td:nth-child(6),
+.data-table.donation-evaluated-table th:nth-child(5),
+.data-table.donation-evaluated-table td:nth-child(5),
+.data-table.review-pending-table th:nth-child(6),
+.data-table.review-pending-table td:nth-child(6),
+.data-table.review-assessed-table th:nth-child(6),
+.data-table.review-assessed-table td:nth-child(6),
+.data-table.review-publish-table th:nth-child(6),
+.data-table.review-publish-table td:nth-child(6),
+.data-table.review-published-table th:nth-child(7),
+.data-table.review-published-table td:nth-child(7),
+.data-table.review-history-table th:nth-child(6),
+.data-table.review-history-table td:nth-child(6),
+.data-table.rider-review-table th:nth-child(4),
+.data-table.rider-review-table td:nth-child(4),
+.data-table.donor-redemptions-table th:nth-child(4),
+.data-table.donor-redemptions-table td:nth-child(4),
+.data-table.carbon-donations-table th:first-child,
+.data-table.carbon-donations-table td:first-child,
+.data-table.carbon-activities-table th:nth-child(2),
+.data-table.carbon-activities-table td:nth-child(2),
+.data-table.carbon-monthly-table th:first-child,
+.data-table.carbon-monthly-table td:first-child {
+    white-space: nowrap;
+    word-break: keep-all;
+    font-variant-numeric: tabular-nums;
+}
+
+.data-table.donation-transport-table th:nth-child(4),
+.data-table.donation-transport-table td:nth-child(4),
+.data-table.donation-items-table th:is(:nth-child(4), :nth-child(5), :nth-child(6)),
+.data-table.donation-items-table td:is(:nth-child(4), :nth-child(5), :nth-child(6)),
+.data-table.review-history-table th:nth-child(5),
+.data-table.review-history-table td:nth-child(5),
+.data-table.carbon-donations-table th:nth-child(3),
+.data-table.carbon-donations-table td:nth-child(3),
+.data-table.carbon-monthly-table th:nth-child(n+2),
+.data-table.carbon-monthly-table td:nth-child(n+2),
+.data-table.order-tracking-table th:is(:nth-child(6), :nth-child(8)),
+.data-table.order-tracking-table td:is(:nth-child(6), :nth-child(8)),
+.data-table.donor-redemptions-table th:nth-child(3),
+.data-table.donor-redemptions-table td:nth-child(3),
+.data-table.redemptions-pending-table th:nth-child(4),
+.data-table.redemptions-pending-table td:nth-child(4),
+.data-table.redemptions-history-table th:nth-child(4),
+.data-table.redemptions-history-table td:nth-child(4),
+.data-table.redemptions-mine-table th:nth-child(2),
+.data-table.redemptions-mine-table td:nth-child(2),
+.data-table.redemptions-fulfilled-table th:nth-child(3),
+.data-table.redemptions-fulfilled-table td:nth-child(3) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.data-table.donation-pending-table td:first-child,
+.data-table.donation-evaluated-table td:first-child,
+.data-table.review-pending-table td:first-child,
+.data-table.review-assessed-table td:first-child,
+.data-table.review-publish-table td:first-child,
+.data-table.review-published-table td:first-child,
+.data-table.review-history-table td:first-child,
+.data-table.rider-review-table td:nth-child(6),
+.data-table.donor-redemptions-table td:nth-child(5),
+.data-table.carbon-donations-table td:nth-child(5),
+.data-table.carbon-activities-table td:nth-child(3),
+.data-table.redemptions-history-table td:nth-child(5),
+.data-table.redemptions-mine-table td:nth-child(3),
+.data-table.order-tracking-table th:is(:nth-child(9), :nth-child(10)),
+.data-table.order-tracking-table td:is(:nth-child(9), :nth-child(10)) {
+    text-align: center;
+}
+
+.data-table.donation-pending-table td:nth-child(4),
+.data-table.donation-evaluated-table td:nth-child(3),
+.data-table.donation-transport-table td:nth-child(3),
+.data-table.donation-items-table td:first-child,
+.data-table.review-pending-table td:nth-child(4),
+.data-table.review-assessed-table td:nth-child(4),
+.data-table.review-publish-table td:nth-child(4),
+.data-table.review-published-table td:nth-child(4),
+.data-table.review-history-table td:nth-child(4),
+.data-table.carbon-donations-table td:nth-child(2) {
+    color: var(--gray-900);
+    font-weight: 600;
+}
+
+.data-table.donation-pending-table th:nth-child(4),
+.data-table.donation-pending-table td:nth-child(4),
+.data-table.donation-evaluated-table th:nth-child(3),
+.data-table.donation-evaluated-table td:nth-child(3),
+.data-table.donation-transport-table th:nth-child(3),
+.data-table.donation-transport-table td:nth-child(3),
+.data-table.review-pending-table th:nth-child(4),
+.data-table.review-pending-table td:nth-child(4),
+.data-table.review-assessed-table th:nth-child(4),
+.data-table.review-assessed-table td:nth-child(4),
+.data-table.review-publish-table th:nth-child(4),
+.data-table.review-publish-table td:nth-child(4),
+.data-table.review-published-table th:nth-child(4),
+.data-table.review-published-table td:nth-child(4),
+.data-table.review-history-table th:nth-child(4),
+.data-table.review-history-table td:nth-child(4) {
+    min-width: 140px;
+}
+
+.data-table.donation-pending-table th:nth-child(6),
+.data-table.donation-pending-table td:nth-child(6),
+.data-table.donation-evaluated-table th:nth-child(5),
+.data-table.donation-evaluated-table td:nth-child(5),
+.data-table.review-pending-table th:nth-child(6),
+.data-table.review-pending-table td:nth-child(6),
+.data-table.review-assessed-table th:nth-child(6),
+.data-table.review-assessed-table td:nth-child(6),
+.data-table.review-publish-table th:nth-child(6),
+.data-table.review-publish-table td:nth-child(6),
+.data-table.review-published-table th:nth-child(7),
+.data-table.review-published-table td:nth-child(7),
+.data-table.review-history-table th:nth-child(6),
+.data-table.review-history-table td:nth-child(6),
+.data-table.rider-review-table th:nth-child(4),
+.data-table.rider-review-table td:nth-child(4) {
+    min-width: 132px;
+}
+
+.inventory-status,
+.inventory-action {
+    text-align: center;
+}
+
+.inventory-row:not(.inventory-row-header) > .inventory-quantity {
+    justify-content: flex-end;
+    text-align: right;
+}
+
+.toolbar-row input:not([type="checkbox"]):not([type="radio"]),
+.toolbar-row select,
+.form-group input:not([type="checkbox"]):not([type="radio"]),
+.form-group select,
+.form-group textarea {
+    border-color: var(--gray-300);
+    border-radius: 8px;
+}
+
+.toolbar-row input:focus,
+.toolbar-row select:focus,
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 3px rgba(99, 91, 255, 0.12);
+    outline: none;
+}
+
+@media (max-width: 768px) {
+    .view-header {
+        align-items: stretch;
+    }
+
+    .card-header,
+    .card-body {
+        padding: 18px;
+    }
+
+    .data-table th,
+    .data-table td,
+    .stock-table th,
+    .stock-table td {
+        padding: 11px 10px;
+    }
+}

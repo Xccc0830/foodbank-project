@@ -54,7 +54,7 @@ $statusClasses = ['pending' => 'pending', 'approved' => 'active', 'rejected' => 
     <div class="card-header"><h2>申請列表</h2><p>共 <?php echo count($applications); ?> 筆申請</p></div>
     <div class="card-body">
         <?php if ($applications): ?>
-            <table class="data-table">
+            <table class="data-table rider-review-table">
                 <thead><tr><th>申請人</th><th>聯絡方式</th><th>車種</th><th>申請時間</th><th>駕照</th><th>狀態</th><th>審核</th></tr></thead>
                 <tbody>
                     <?php foreach ($applications as $application): ?>

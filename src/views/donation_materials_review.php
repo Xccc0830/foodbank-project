@@ -275,7 +275,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($pendingDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-pending-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -324,7 +324,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($assessedDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-assessed-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -379,7 +379,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($pendingPublishDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-publish-table">
                 <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>配送選擇</th><th>已評估完成時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($pendingPublishDonations as $donation): ?>
@@ -408,7 +408,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($publishedDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-published-table">
                 <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>配送選擇</th><th>目前進度</th><th>發布時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($publishedDonations as $donation): ?>
@@ -459,7 +459,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     <div class="card-header"><h2>歷史紀錄</h2><p>已完成運送或婉拒的物資會出現在這裡。</p></div>
     <div class="card-body">
         <?php if (!empty($historyDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-history-table">
                 <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>數量</th><th>時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($historyDonations as $donation): ?>

@@ -658,13 +658,13 @@ foreach ($rows as $row) {
             background: #f9fafb;
             box-shadow: 0 3px 10px rgba(15, 23, 42, .08);
         }
-        .inventory-row > span { min-width: 0; white-space: nowrap; }
+        .inventory-row > span { min-width: 0; white-space: nowrap; font-size: 14px; }
         .inventory-category select { width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #374151; }
         .inventory-order-number, .inventory-date { white-space: nowrap; }
-        .inventory-order-number code { color: #635bff; font-weight: 700; }
+        .inventory-order-number code { color: #635bff; font-size: 12px; font-weight: 600; }
         .inventory-donor, .inventory-item, .inventory-category { text-align: left; }
         .inventory-item { display: flex; flex-direction: column; gap: 4px; }
-        .inventory-item strong { color: #111827; font-weight: 600; }
+        .inventory-item strong { color: #111827; font-size: 14px; font-weight: 600; line-height: 1.4; }
         .inventory-item small { color: #6b7280; font-size: 12px; }
         .inventory-row > :nth-child(5) { display: flex; justify-content: center; text-align: center; }
         .inventory-quantity { white-space: nowrap; }

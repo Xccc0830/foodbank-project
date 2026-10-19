@@ -395,7 +395,7 @@ $formatDateTime = static function ($value) {
     </div>
     <div class="card-body">
         <?php if (!empty($pendingDonations)): ?>
-            <table class="data-table">
+            <table class="data-table donation-pending-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -443,7 +443,7 @@ $formatDateTime = static function ($value) {
     </div>
     <div class="card-body">
         <?php if (!empty($evaluatedDonations)): ?>
-            <table class="data-table">
+            <table class="data-table donation-evaluated-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -490,7 +490,7 @@ $formatDateTime = static function ($value) {
     </div>
     <div class="card-body">
         <?php if (!empty($transportTasks)): ?>
-            <table class="data-table">
+            <table class="data-table donation-transport-table">
                 <thead><tr><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>數量</th><th>狀態與配送資訊</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($transportTasks as $task): ?>
@@ -627,7 +627,7 @@ $formatDateTime = static function ($value) {
                 <?php if (!empty($viewingItems)): ?>
                     <div class="material-items-summary">
                         <h3>物資規格</h3>
-                        <div class="data-table-wrapper"><table class="data-table"><thead><tr><th>物資名稱</th><th>品牌</th><th>規格</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th><th>備註</th></tr></thead><tbody>
+                        <div class="data-table-wrapper"><table class="data-table donation-items-table"><thead><tr><th>物資名稱</th><th>品牌</th><th>規格</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th><th>備註</th></tr></thead><tbody>
                             <?php foreach ($viewingItems as $item):
                                 $dimensionParts = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($value) {
                                     return $value !== null && $value !== '';
