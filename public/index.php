@@ -3,10 +3,6 @@
  * 食物銀行系統 - 主入口文件
  */
 
-// 啟用錯誤報告（開發環境）
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 // 定義基礎路徑
 define('BASE_PATH', __DIR__ . '/..');
 define('ROOT_PATH', __DIR__);
@@ -15,10 +11,28 @@ define('ROOT_PATH', __DIR__);
 require_once BASE_PATH . '/config/database.php';
 require_once BASE_PATH . '/src/helpers/SecurityHelper.php';
 require_once BASE_PATH . '/src/helpers/SchemaHelper.php';
+require_once BASE_PATH . '/src/helpers/UploadHelper.php';
 
+error_reporting(E_ALL);
+ini_set('display_errors', APP_DEBUG ? '1' : '0');
 date_default_timezone_set('Asia/Taipei');
 
 // 啟用會話
+if (DB_DRIVER === 'pgsql') {
+    $sessionConnection = $db->getConnection();
+    if (!$sessionConnection instanceof PostgresConnection) {
+        http_response_code(500);
+        error_log('PostgreSQL session storage requires a PostgreSQL connection.');
+        exit('系統暫時無法啟動，請稍後再試。');
+    }
+    session_set_save_handler(new PostgresSessionHandler($sessionConnection->getPdo()), true);
+}
+session_set_cookie_params([
+    'httponly' => true,
+    'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https',
+    'samesite' => 'Lax',
+]);
 session_start();
 getCsrfToken();
 
@@ -327,6 +341,19 @@ if ($action === 'rider_license') {
     $application = ($applicationId && $authService->can('page.rider_review'))
         ? (new RiderApplicationModel())->getById($applicationId)
         : null;
+    if ($application && strpos((string) $application['license_photo_path'], 'supabase-private:') === 0) {
+        $privateObject = downloadPrivateStorageObject($application['license_photo_path']);
+        if (!$privateObject) {
+            http_response_code(404);
+            exit('找不到駕照照片或您無權查看。');
+        }
+        header('Content-Type: ' . ($privateObject['content_type'] ?: 'application/octet-stream'));
+        header('Content-Length: ' . strlen($privateObject['body']));
+        header('Cache-Control: no-store, private');
+        header('X-Content-Type-Options: nosniff');
+        echo $privateObject['body'];
+        exit;
+    }
     $storageRoot = realpath(BASE_PATH . '/storage');
     $licenseFile = ($application && $storageRoot) ? realpath($storageRoot . '/' . $application['license_photo_path']) : false;
 

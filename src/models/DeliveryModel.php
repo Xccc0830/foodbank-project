@@ -516,7 +516,7 @@ class DeliveryModel extends BaseModel {
         }
 
         $deliveryId = (int) $deliveryId;
-        return $this->db->query("DELETE FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
+        return $this->db->query("DELETE FROM deliveries WHERE delivery_id = {$deliveryId}");
     }
 
     public function claimDelivery($deliveryId, $volunteerId) {

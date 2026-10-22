@@ -508,7 +508,7 @@ class InventoryReceiptModel extends BaseModel {
                         GROUP BY item_name, category, unit
                         HAVING SUM(CASE WHEN movement_type = 'out' THEN -quantity ELSE quantity END) > 0
                     ) AS current_stock) AS item_count,
-                    SUM(received_date = CURDATE() AND movement_type = 'in') AS today_count
+                    SUM(CASE WHEN received_date = CURDATE() AND movement_type = 'in' THEN 1 ELSE 0 END) AS today_count
              FROM inventory_receipts"
         );
         if (!$result) {

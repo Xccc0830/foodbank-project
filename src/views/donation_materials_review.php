@@ -245,7 +245,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
             <strong>安全驗證照片：</strong>
             <div>
                 <?php foreach ($photoPaths as $photoPath): ?>
-                    <img src="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($photoPath, '/')); ?>" alt="捐贈物資照片">
+                    <img src="<?php echo htmlspecialchars(storedPublicImageUrl($photoPath)); ?>" alt="捐贈物資照片">
                 <?php endforeach; ?>
             </div>
         </div>

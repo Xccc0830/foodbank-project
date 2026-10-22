@@ -502,7 +502,7 @@ if ($isVolunteer) {
                     <td>
                         <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' ? '待忠信派車' : (['open' => '待接單', 'claimed' => '已接單', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']); ?></span>
                         <?php if ($isOfficial && !empty($delivery['pickup_photo_path'])): ?>
-                            <br><a href="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($delivery['pickup_photo_path'], '/'), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
+                            <br><a href="<?php echo htmlspecialchars(storedPublicImageUrl($delivery['pickup_photo_path']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
                         <?php endif; ?>
                         <?php if ($isOfficial && !empty($delivery['volunteer_id'])): ?>
                             <br><small>志工：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>

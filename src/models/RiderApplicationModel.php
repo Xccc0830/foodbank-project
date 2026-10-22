@@ -82,11 +82,26 @@ class RiderApplicationModel extends BaseModel {
             "INSERT INTO rider_applications (user_id, vehicle_type, license_photo_path)
              VALUES ({$userId}, '{$vehicleEscaped}', '{$pathEscaped}')"
         );
-        $consented = $saved && $this->db->query(
-            "INSERT INTO volunteer_consents (user_id, agreed_disclaimer, agreed_mutual_aid, video_watched, completed_at)
-             VALUES ({$userId}, 1, 1, 1, NOW())
-             ON DUPLICATE KEY UPDATE agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = NOW()"
-        );
+        $consented = false;
+        if ($saved && $this->db instanceof PostgresConnection) {
+            $this->db->query("SELECT pg_advisory_xact_lock({$userId})");
+            $updatedConsent = $this->db->query(
+                "UPDATE volunteer_consents
+                 SET agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = CURRENT_TIMESTAMP
+                 WHERE user_id = {$userId}"
+            );
+            $consented = $updatedConsent && ($this->db->affected_rows > 0
+                || $this->db->query(
+                    "INSERT INTO volunteer_consents (user_id, agreed_disclaimer, agreed_mutual_aid, video_watched, completed_at)
+                     VALUES ({$userId}, 1, 1, 1, CURRENT_TIMESTAMP)"
+                ));
+        } elseif ($saved) {
+            $consented = $this->db->query(
+                "INSERT INTO volunteer_consents (user_id, agreed_disclaimer, agreed_mutual_aid, video_watched, completed_at)
+                 VALUES ({$userId}, 1, 1, 1, NOW())
+                 ON DUPLICATE KEY UPDATE agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = NOW()"
+            );
+        }
         if (!$consented) {
             $this->db->rollback();
             return ['success' => false, 'message' => '申請送出失敗，請稍後再試。'];

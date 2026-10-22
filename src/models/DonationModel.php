@@ -419,8 +419,8 @@ class DonationModel extends BaseModel {
         $sql = "SELECT n.donation_id, n.order_number, n.donor_name, n.item_name, n.quantity, n.unit,
                        n.donation_date, n.status AS donation_status, n.current_status,
                        COUNT(d.delivery_id) AS delivery_count,
-                       GROUP_CONCAT(d.delivery_id ORDER BY d.delivery_id) AS delivery_ids,
-                       GROUP_CONCAT(DISTINCT CONCAT(uv.full_name, '：', COALESCE(NULLIF(uv.phone, ''), '未提供電話')) SEPARATOR '；') AS volunteer_contacts,
+                       STRING_AGG(d.delivery_id::text, ',' ORDER BY d.delivery_id) AS delivery_ids,
+                       STRING_AGG(DISTINCT (uv.full_name || '：' || COALESCE(NULLIF(uv.phone, ''), '未提供電話')), '；') AS volunteer_contacts,
                        SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) AS completed_delivery_count,
                        MAX(d.status) AS latest_delivery_status,
                        CASE

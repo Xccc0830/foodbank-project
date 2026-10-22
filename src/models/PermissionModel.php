@@ -95,7 +95,8 @@ class PermissionModel extends BaseModel {
         return (bool) $this->db->query(
             "INSERT INTO user_permission_overrides (user_id, permission_key, granted)
              VALUES ({$userId}, '{$permissionKeyEscaped}', {$granted})
-             ON DUPLICATE KEY UPDATE granted = {$granted}, updated_at = NOW()"
+             ON CONFLICT (user_id, permission_key) DO UPDATE
+             SET granted = EXCLUDED.granted, updated_at = CURRENT_TIMESTAMP"
         );
     }
 
