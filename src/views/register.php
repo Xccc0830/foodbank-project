@@ -11,6 +11,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>申請帳號 | <?php echo htmlspecialchars(APP_NAME); ?></title>
+    <link rel="icon" type="image/jpeg" href="<?php echo htmlspecialchars(APP_URL . '/assets/images/foundation-logo.jpg'); ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -20,7 +21,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
 <body class="login-page">
     <main class="login-shell register-shell">
         <section class="login-showcase">
-            <div class="login-brand"><span class="login-brand-mark"><i class="fa-solid fa-hand-holding-heart"></i></span><span><?php echo htmlspecialchars(APP_NAME); ?></span></div>
+            <div class="login-brand"><img class="login-brand-image" src="<?php echo htmlspecialchars(APP_URL . '/assets/images/foundation-logo.jpg'); ?>" alt=""><span><?php echo htmlspecialchars(APP_NAME); ?></span></div>
             <div class="showcase-copy"><p class="eyebrow">JOIN THE MOVEMENT</p><h1>一起讓惜食，<em>流向更好的地方。</em></h1><p>成為平台夥伴，參與物資媒合、公益配送與社區活動。</p></div>
             <div class="showcase-features"><div><span><i class="fa-solid fa-user-check"></i></span><strong>安全審核</strong><small>每個會員帳號都經過審核</small></div><div><span><i class="fa-solid fa-people-group"></i></span><strong>一起協作</strong><small>和食物銀行與平台會員合作</small></div><div><span><i class="fa-solid fa-award"></i></span><strong>累積貢獻</strong><small>記錄你的公益參與</small></div></div>
         </section>

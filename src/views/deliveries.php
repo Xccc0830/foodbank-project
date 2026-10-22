@@ -178,20 +178,20 @@ if ($isVolunteer) {
     .driver-trip-map { position: relative; min-height: 220px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; transition: background .25s ease, color .25s ease; background: linear-gradient(160deg, #0b1222 0%, #131b31 55%, #0f172a 100%); }
     .driver-trip-map[data-theme="light"] { background: linear-gradient(160deg, #eef2ff 0%, #f8fafc 55%, #ffffff 100%); color: #1f2937; }
     .driver-trip-map-topbar { display: flex; align-items: center; justify-content: space-between; }
-    .driver-trip-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(99,91,255,.22); color: #c7c2ff; }
-    .driver-trip-map[data-theme="light"] .driver-trip-status-pill { background: rgba(99,91,255,.12); color: #4E47E5; }
+    .driver-trip-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(242,169,0,.2); color: #FFD166; }
+    .driver-trip-map[data-theme="light"] .driver-trip-status-pill { background: rgba(32,59,143,.12); color: #203B8F; }
     .driver-map-theme-toggle { border: 1px solid rgba(248,250,252,.3); background: rgba(255,255,255,.08); color: inherit; border-radius: 999px; width: 36px; height: 36px; cursor: pointer; font-size: 14px; }
     .driver-trip-map[data-theme="light"] .driver-map-theme-toggle { border-color: rgba(15,23,42,.15); background: rgba(15,23,42,.06); }
     .driver-trip-route { display: flex; align-items: center; gap: 10px; margin: 28px 0; }
     .driver-trip-pin { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 15px; flex: 0 0 auto; }
     .driver-trip-pin-start { background: #14b8a6; color: #06281f; }
     .driver-trip-pin-end { background: #f97316; color: #3a1c02; }
-    .driver-trip-route-line { flex: 1; position: relative; height: 3px; border-radius: 3px; background: repeating-linear-gradient(90deg, #635BFF 0, #635BFF 10px, transparent 10px, transparent 18px); }
-    .driver-trip-map[data-theme="light"] .driver-trip-route-line { background: repeating-linear-gradient(90deg, #4E47E5 0, #4E47E5 10px, transparent 10px, transparent 18px); }
+    .driver-trip-route-line { flex: 1; position: relative; height: 3px; border-radius: 3px; background: repeating-linear-gradient(90deg, #F2A900 0, #F2A900 10px, transparent 10px, transparent 18px); }
+    .driver-trip-map[data-theme="light"] .driver-trip-route-line { background: repeating-linear-gradient(90deg, #203B8F 0, #203B8F 10px, transparent 10px, transparent 18px); }
     .driver-trip-route-line::after { content: "\f3c5"; font-family: "Font Awesome 5 Free"; font-weight: 900; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: 14px; color: #f8fafc; }
-    .driver-trip-map[data-theme="light"] .driver-trip-route-line::after { color: #4E47E5; }
-    .driver-navigate-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: none; background: #635BFF; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; }
-    .driver-navigate-btn:hover { background: #4E47E5; }
+    .driver-trip-map[data-theme="light"] .driver-trip-route-line::after { color: #203B8F; }
+    .driver-navigate-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: none; background: #203B8F; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; }
+    .driver-navigate-btn:hover { background: #172F75; }
     .driver-trip-sheet { background: var(--bg-primary, #fff); color: var(--text-primary, #111827); padding: 18px 20px 20px; }
     .driver-trip-sheet-handle { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; border: none; background: transparent; cursor: pointer; padding: 0 0 12px; }
     .driver-trip-sheet-summary { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
@@ -200,13 +200,13 @@ if ($isVolunteer) {
     .driver-trip-sheet-details { margin-top: 16px; display: grid; gap: 14px; }
     .driver-trip-sheet-details[hidden] { display: none; }
     .driver-trip-stop { display: flex; gap: 12px; align-items: flex-start; }
-    .driver-trip-stop i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-secondary, #f7f9fc); color: var(--primary-color, #635BFF); flex: 0 0 auto; }
+    .driver-trip-stop i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-secondary, #f7f9fc); color: var(--primary-color, #203B8F); flex: 0 0 auto; }
     .driver-trip-stop strong { display: block; font-size: 13px; color: var(--text-secondary, #6b7280); }
     .driver-trip-stop span { display: block; font-size: 14px; font-weight: 600; }
     .driver-trip-note { margin-top: 4px; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-size: 12px; }
     .driver-trip-checklist { margin-top: 16px; display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--bg-secondary, #f7f9fc); }
     .driver-trip-checklist label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .driver-action-button { margin-top: 16px; width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(90deg, #635BFF, #7A73FF); box-shadow: 0 10px 24px rgba(99,91,255,.35); }
+    .driver-action-button { margin-top: 16px; width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(90deg, #203B8F, #3B5DB2); box-shadow: 0 10px 24px rgba(32,59,143,.3); }
     .driver-action-button.driver-action-complete { background: linear-gradient(90deg, #10B981, #34d399); box-shadow: 0 10px 24px rgba(16,185,129,.35); }
     .driver-action-button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
     .driver-action-button i { transition: transform .2s ease; }

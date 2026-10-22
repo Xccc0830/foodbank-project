@@ -481,6 +481,7 @@ ob_start();
     <meta name="csrf-token" content="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="google-maps-api-key" content="<?php echo htmlspecialchars(GOOGLE_MAPS_API_KEY, ENT_QUOTES, 'UTF-8'); ?>">
     <title><?php echo APP_NAME; ?></title>
+    <link rel="icon" type="image/jpeg" href="assets/images/foundation-logo.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -493,7 +494,7 @@ ob_start();
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <span class="logo-icon"><i class="fa-solid fa-hand-holding-heart"></i></span>
+                    <img class="logo-image" src="assets/images/foundation-logo.jpg" alt="">
                     <span class="logo-text"><?php echo APP_NAME; ?></span>
                 </div>
             </div>

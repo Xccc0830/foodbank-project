@@ -202,16 +202,12 @@
             const distanceInput = form.querySelector('[data-distance-input]');
             const durationInput = form.querySelector('[data-duration-input]');
             const statusText = form.querySelector('[data-distance-status]');
-            const nextStepButton = form.querySelector('[data-next-step]');
             if (!originInput || !destinationInput || !wrapper) {
                 return;
             }
 
             let requestToken = 0;
             let estimateTimer = null;
-            if (nextStepButton) {
-                nextStepButton.disabled = true;
-            }
 
             function endpoint(action) {
                 const url = new URL(window.location.href);
@@ -240,9 +236,6 @@
                 }
                 if (durationInput) {
                     durationInput.value = '';
-                }
-                if (nextStepButton) {
-                    nextStepButton.disabled = true;
                 }
             }
 
@@ -280,7 +273,7 @@
                     };
                     if (!Number.isFinite(estimate.distanceKm) || !Number.isFinite(estimate.durationMinutes)) {
                         clearEstimate();
-                        setStatus('無法計算配送距離，請確認地址內容。', true);
+                        setStatus('無法計算配送距離，請確認地址內容；您仍可繼續填寫物資。', true);
                         return;
                     }
 
@@ -297,9 +290,6 @@
                         durationInput.value = String(Math.round(estimate.durationMinutes));
                     }
                     wrapper.hidden = false;
-                    if (nextStepButton) {
-                        nextStepButton.disabled = false;
-                    }
                     setStatus(estimate.approximate
                         ? '地址以路段位置估算，距離可能有差異。'
                         : '', false);
@@ -308,7 +298,8 @@
                         return;
                     }
                     clearEstimate();
-                    setStatus(error.message || '無法連線計算配送距離，請稍後再試。', true);
+                    const reason = error.message || '無法連線計算配送距離，請稍後再試。';
+                    setStatus('距離估算失敗：' + reason + ' 您仍可繼續填寫物資。', true);
                 }
             }
 

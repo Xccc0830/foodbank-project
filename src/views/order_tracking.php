@@ -74,13 +74,26 @@ $subOrderStatusLabels = [
     .customer-stop-alert { padding: 12px 14px; border: 1px solid #fde68a; border-radius: 12px; background: #fffbeb; color: #92400e; font-size: 13px; }
     .customer-stop-alert[hidden] { display: none; }
     .order-tracking-table-wrap { width: 100%; overflow-x: auto; }
-    .order-tracking-table { min-width: 1600px; }
-    .order-tracking-table th, .order-tracking-table td { white-space: nowrap; word-break: keep-all; }
-    .order-tracking-table th:nth-child(4), .order-tracking-table td:nth-child(4),
-    .order-tracking-table th:nth-child(5), .order-tracking-table td:nth-child(5) { min-width: 130px; }
-    .order-tracking-table td:nth-child(7) { min-width: 240px; }
-    .order-tracking-table td:nth-child(9) { min-width: 220px; }
-    .order-tracking-table td:nth-child(9) > div { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .order-tracking-table { min-width: 1080px; }
+    .order-tracking-table th, .order-tracking-table td { white-space: normal; word-break: keep-all; }
+    .order-tracking-table td:first-child { min-width: 150px; }
+    .order-tracking-table td:nth-child(3) { min-width: 115px; }
+    .order-tracking-table th:last-child,
+    .order-tracking-table td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 1;
+        min-width: 120px;
+        background: #fff;
+        box-shadow: -8px 0 12px -10px rgba(15, 23, 42, .45);
+    }
+    .order-tracking-table th:last-child { z-index: 2; background: #F8FAFD; }
+    .order-tracking-table tbody tr:hover td:last-child { background: var(--bg-secondary); }
+    .order-tracking-details summary { color: #0f766e; cursor: pointer; font-weight: 600; }
+    .order-tracking-details-content { min-width: 220px; padding-top: 8px; color: #475569; font-size: 12px; line-height: 1.7; }
+    .order-tracking-details-content > div + div { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+    .order-tracking-suborder { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+    .order-tracking-action { white-space: nowrap; }
     @media (max-width: 760px) {
         .customer-order-heading { align-items: flex-start; padding: 16px; }
         .customer-delivery-card { grid-template-columns: minmax(0, 1fr); }
@@ -182,12 +195,9 @@ $subOrderStatusLabels = [
                         <th>訂單編號</th>
                         <?php if ($isOfficial): ?><th>捐贈者</th><?php endif; ?>
                         <th>物資</th>
-                        <th>建立日期</th>
                         <th>建立時間</th>
                         <th>配送任務</th>
-                        <th>外送志工聯絡方式</th>
-                        <th>完成進度</th>
-                        <th>拆單狀態</th>
+                        <th>配送細節</th>
                         <th>目前狀態</th>
                         <th>明細</th>
                     </tr>
@@ -199,22 +209,35 @@ $subOrderStatusLabels = [
                             <td><strong><code><?php echo htmlspecialchars($order['order_number']); ?></code></strong></td>
                             <?php if ($isOfficial): ?><td><?php echo htmlspecialchars($order['donor_name']); ?></td><?php endif; ?>
                             <td><strong><?php echo htmlspecialchars($order['item_name'] ?? '-'); ?></strong><br><small><?php echo htmlspecialchars($order['quantity'] . ' ' . $order['unit']); ?></small></td>
-                            <td><?php echo htmlspecialchars(date('Y-m-d', strtotime($order['donation_date']))); ?></td>
-                            <td><?php echo htmlspecialchars(date('H:i', strtotime($order['donation_date']))); ?></td>
+                            <td><?php echo htmlspecialchars(date('Y-m-d H:i', strtotime($order['donation_date']))); ?></td>
                             <td><?php echo (int) $order['delivery_count']; ?> 個任務</td>
-                            <td><?php echo !empty($order['volunteer_contacts']) ? htmlspecialchars($order['volunteer_contacts']) : '<span class="text-muted">尚無志工接單</span>'; ?></td>
-                            <td><?php echo (int) $order['completed_delivery_count']; ?> / <?php echo (int) $order['delivery_count']; ?> 完成</td>
                             <td>
-                                <?php if (!empty($order['sub_orders'])): ?>
-                                    <?php foreach ($order['sub_orders'] as $subOrder): ?>
-                                        <div><code><?php echo htmlspecialchars($subOrder['sub_order_number'] ?? ''); ?></code> <span class="status status-<?php echo htmlspecialchars($subOrder['delivery_status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($subOrderStatusLabels[$subOrder['delivery_status'] ?? ''] ?? '待指派'); ?></span></div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    -
-                                <?php endif; ?>
+                                <details class="order-tracking-details">
+                                    <summary>查看配送細節</summary>
+                                    <div class="order-tracking-details-content">
+                                        <div>
+                                            <strong>外送志工：</strong>
+                                            <?php echo !empty($order['volunteer_contacts']) ? htmlspecialchars($order['volunteer_contacts']) : '尚無志工接單'; ?>
+                                        </div>
+                                        <div><strong>完成進度：</strong><?php echo (int) $order['completed_delivery_count']; ?> / <?php echo (int) $order['delivery_count']; ?> 完成</div>
+                                        <div>
+                                            <strong>拆單狀態：</strong>
+                                            <?php if (!empty($order['sub_orders'])): ?>
+                                                <?php foreach ($order['sub_orders'] as $subOrder): ?>
+                                                    <div class="order-tracking-suborder">
+                                                        <code><?php echo htmlspecialchars($subOrder['sub_order_number'] ?? ''); ?></code>
+                                                        <span class="status status-<?php echo htmlspecialchars($subOrder['delivery_status'] ?? 'pending'); ?>"><?php echo htmlspecialchars($subOrderStatusLabels[$subOrder['delivery_status'] ?? ''] ?? '待指派'); ?></span>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </details>
                             </td>
                             <td><span class="status status-<?php echo htmlspecialchars($statusClasses[$orderStatus] ?? 'approved'); ?>"><?php echo htmlspecialchars($statusLabels[$orderStatus] ?? $orderStatus); ?></span></td>
-                            <td><a href="?page=<?php echo $isOfficial ? 'donation_materials_review' : 'donation_materials'; ?>" class="btn btn-secondary btn-sm">查看物資</a></td>
+                            <td><a href="?page=<?php echo $isOfficial ? 'donation_materials_review' : 'donation_materials'; ?>" class="btn btn-secondary btn-sm order-tracking-action">查看物資</a></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

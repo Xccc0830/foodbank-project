@@ -368,7 +368,7 @@ $formatDateTime = static function ($value) {
                 <p class="distance-estimate-status" data-distance-status hidden></p>
                 <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 若由 Go Rider 配送，配送會員接單後才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
-                <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step disabled>下一步：填寫物資</button></div>
+                <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step>下一步：填寫物資</button></div>
             </section>
 
             <section class="material-step-panel" data-step-panel="2" hidden>
