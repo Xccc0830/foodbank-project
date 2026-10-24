@@ -2,11 +2,10 @@
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
--- 主機： localhost
--- 產生時間： 2026 年 09 月 22 日 11:07
--- 伺服器版本： 10.4.28-MariaDB
--- PHP 版本： 8.2.4
--- 新安裝唯一主 SQL；既有資料庫升級請使用 migrations/20261018_meeting_decisions_consolidated.sql。
+-- 主機： 127.0.0.1
+-- 產生時間： 2026-10-22 20:14:14
+-- 伺服器版本： 10.4.32-MariaDB
+-- PHP 版本： 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -28,7 +27,6 @@ SET time_zone = "+00:00";
 -- 資料表結構 `activities`
 --
 
-DROP TABLE IF EXISTS `activities`;
 CREATE TABLE `activities` (
   `activity_id` int(11) NOT NULL,
   `title` varchar(150) NOT NULL,
@@ -58,7 +56,6 @@ INSERT INTO `activities` (`activity_id`, `title`, `activity_type`, `activity_typ
 -- 資料表結構 `activity_assignments`
 --
 
-DROP TABLE IF EXISTS `activity_assignments`;
 CREATE TABLE `activity_assignments` (
   `assignment_id` int(11) NOT NULL,
   `activity_id` int(11) NOT NULL,
@@ -77,12 +74,31 @@ CREATE TABLE `activity_assignments` (
 -- 傾印資料表的資料 `activity_assignments`
 --
 
-INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `status`, `cancelled_at`, `cancellation_reason`, `points`, `created_at`, `assignment_type`, `organization_name`) VALUES
-(4, 3, 12, 'registered', NULL, NULL, 5, '2026-09-16 08:41:39', 'individual', NULL),
-(5, 4, 12, 'registered', NULL, NULL, 5, '2026-09-16 08:42:06', 'individual', NULL),
-(6, 5, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:28', 'individual', NULL),
-(7, 4, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:29', 'individual', NULL),
-(8, 3, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:30', 'individual', NULL);
+INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `status`, `cancelled_at`, `cancellation_reason`, `points`, `created_at`, `assignment_type`, `organization_name`, `participant_count`) VALUES
+(4, 3, 12, 'registered', NULL, NULL, 5, '2026-09-16 08:41:39', 'individual', NULL, 1),
+(5, 4, 12, 'registered', NULL, NULL, 5, '2026-09-16 08:42:06', 'individual', NULL, 1),
+(6, 5, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:28', 'individual', NULL, 1),
+(7, 4, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:29', 'individual', NULL, 1),
+(8, 3, 4, 'registered', NULL, NULL, 5, '2026-09-18 07:05:30', 'individual', NULL, 1);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `advertisements`
+--
+
+CREATE TABLE `advertisements` (
+  `ad_id` int(11) NOT NULL,
+  `advertiser_id` int(11) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `content` text NOT NULL,
+  `link_url` varchar(255) DEFAULT NULL,
+  `image_path` varchar(255) DEFAULT NULL,
+  `status` enum('active','removed') NOT NULL DEFAULT 'active',
+  `start_date` date DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -90,7 +106,6 @@ INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `
 -- 資料表結構 `audit_logs`
 --
 
-DROP TABLE IF EXISTS `audit_logs`;
 CREATE TABLE `audit_logs` (
   `log_id` int(11) NOT NULL,
   `user_id` int(11) DEFAULT NULL,
@@ -109,7 +124,6 @@ CREATE TABLE `audit_logs` (
 -- 資料表結構 `beneficiaries`
 --
 
-DROP TABLE IF EXISTS `beneficiaries`;
 CREATE TABLE `beneficiaries` (
   `beneficiary_id` int(11) NOT NULL,
   `beneficiary_code` varchar(50) NOT NULL,
@@ -144,7 +158,6 @@ INSERT INTO `beneficiaries` (`beneficiary_id`, `beneficiary_code`, `first_name`,
 -- 資料表結構 `deliveries`
 --
 
-DROP TABLE IF EXISTS `deliveries`;
 CREATE TABLE `deliveries` (
   `delivery_id` int(11) NOT NULL,
   `donation_id` int(11) DEFAULT NULL,
@@ -181,13 +194,13 @@ CREATE TABLE `deliveries` (
 -- 傾印資料表的資料 `deliveries`
 --
 
-INSERT INTO `deliveries` (`delivery_id`, `donation_id`, `delivery_method`, `created_by`, `volunteer_id`, `vehicle_type`, `total_distance_km`, `weight_kg`, `urgency`, `points`, `pickup_address`, `delivery_address`, `status`, `exception_notes`, `exception_response`, `exception_resolved_at`, `exception_resolved_by`, `delivered_at`, `created_at`, `updated_at`, `pickup_confirmed_at`, `item_category`, `item_description`, `received_location`) VALUES
-(3, 8, 'volunteer', NULL, NULL, 'motorcycle', 4.50, 12.00, 'urgent', 24, '暖心好食店：台北市文山區', '忠信食物銀行', 'open', NULL, NULL, NULL, NULL, NULL, '2026-09-15 06:02:07', '2026-09-15 06:02:07', NULL, NULL, NULL, NULL),
-(4, 16, 'volunteer', NULL, 4, 'motorcycle', 0.00, 23.00, 'normal', 0, '啊喔', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 14:21:18', '2026-09-22 06:15:53', '2026-09-22 06:21:18', NULL, 'food', '白米飯', NULL),
-(5, 13, 'volunteer', NULL, 4, 'motorcycle', 0.00, 15.00, 'normal', 0, 'sabee', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:19:33', '2026-09-22 06:23:57', '2026-09-22 07:19:33', '2026-09-22 15:19:15', 'food', '巴沙魚', NULL),
-(6, 12, 'volunteer', NULL, 4, 'motorcycle', 0.00, 10.00, 'normal', 0, 'QQ', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:18:17', '2026-09-22 06:24:02', '2026-09-22 07:18:17', '2026-09-22 15:17:45', 'supplies', '衛生紙', NULL),
-(7, 17, 'volunteer', NULL, 4, 'motorcycle', 0.00, 23.00, 'normal', 0, '台北', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:19:29', '2026-09-22 06:48:12', '2026-09-22 07:19:29', '2026-09-22 15:19:13', 'supplies', '1', NULL),
-(8, 18, 'volunteer', NULL, 4, 'car', 0.00, 24.00, 'normal', 0, '台北', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:19:26', '2026-09-22 07:18:33', '2026-09-22 07:19:26', '2026-09-22 15:19:11', 'food', '衛生紙', NULL);
+INSERT INTO `deliveries` (`delivery_id`, `donation_id`, `allocation_id`, `delivery_method`, `created_by`, `volunteer_id`, `vehicle_type`, `total_distance_km`, `weight_kg`, `urgency`, `points`, `pickup_address`, `delivery_address`, `status`, `exception_notes`, `exception_response`, `exception_resolved_at`, `exception_resolved_by`, `delivered_at`, `created_at`, `updated_at`, `pickup_confirmed_at`, `pickup_photo_path`, `estimated_arrival_start`, `estimated_arrival_end`, `overdue_notified_at`, `item_category`, `item_description`, `received_location`) VALUES
+(3, 8, NULL, 'volunteer', NULL, NULL, 'motorcycle', 4.50, 12.00, 'urgent', 24, '暖心好食店：台北市文山區', '忠信食物銀行', 'open', NULL, NULL, NULL, NULL, NULL, '2026-09-15 06:02:07', '2026-09-15 06:02:07', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(4, 16, NULL, 'volunteer', NULL, 4, 'motorcycle', 0.00, 23.00, 'normal', 0, '啊喔', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 14:21:18', '2026-09-22 06:15:53', '2026-09-22 06:21:18', NULL, NULL, NULL, NULL, NULL, 'food', '白米飯', NULL),
+(5, 13, NULL, 'volunteer', NULL, 4, 'motorcycle', 0.00, 15.00, 'normal', 0, 'sabee', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:19:33', '2026-09-22 06:23:57', '2026-09-22 07:19:33', '2026-09-22 15:19:15', NULL, NULL, NULL, NULL, 'food', '巴沙魚', NULL),
+(6, 12, NULL, 'volunteer', NULL, 4, 'motorcycle', 0.00, 10.00, 'normal', 0, 'QQ', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:18:17', '2026-09-22 06:24:02', '2026-09-22 07:18:17', '2026-09-22 15:17:45', NULL, NULL, NULL, NULL, 'supplies', '衛生紙', NULL),
+(7, 17, NULL, 'volunteer', NULL, 4, 'motorcycle', 0.00, 23.00, 'normal', 0, '台北', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:19:29', '2026-09-22 06:48:12', '2026-09-22 07:19:29', '2026-09-22 15:19:13', NULL, NULL, NULL, NULL, 'supplies', '1', NULL),
+(8, 18, NULL, 'volunteer', NULL, 4, 'car', 0.00, 24.00, 'normal', 0, '台北', '忠信食物銀行', 'delivered', NULL, NULL, NULL, NULL, '2026-09-22 15:19:26', '2026-09-22 07:18:33', '2026-09-22 07:19:26', '2026-09-22 15:19:11', NULL, NULL, NULL, NULL, 'food', '衛生紙', NULL);
 
 -- --------------------------------------------------------
 
@@ -195,7 +208,6 @@ INSERT INTO `deliveries` (`delivery_id`, `donation_id`, `delivery_method`, `crea
 -- 資料表結構 `departments`
 --
 
-DROP TABLE IF EXISTS `departments`;
 CREATE TABLE `departments` (
   `department_id` int(11) NOT NULL,
   `department_code` varchar(50) NOT NULL,
@@ -213,7 +225,6 @@ CREATE TABLE `departments` (
 -- 資料表結構 `donations`
 --
 
-DROP TABLE IF EXISTS `donations`;
 CREATE TABLE `donations` (
   `donation_id` int(11) NOT NULL,
   `order_number` varchar(30) DEFAULT NULL,
@@ -267,22 +278,18 @@ CREATE TABLE `donations` (
 -- 傾印資料表的資料 `donations`
 --
 
-INSERT INTO `donations` (`donation_id`, `donor_id`, `donor_name`, `donation_type`, `quantity`, `unit`, `donation_date`, `received_by`, `status`, `evaluation_status`, `delivery_method`, `approval_notes`, `approved_at`, `approved_by`, `rejection_reason`, `rejected_at`, `published_at`, `current_status`, `status_updated_at`, `split_count`, `notes`, `created_at`, `updated_at`, `item_name`, `weight_kg`, `size_description`, `expiry_date`, `pickup_deadline`, `delivery_option`, `vehicle_type`, `photo_path`, `evaluation_notes`, `need_inspection`, `inspection_notes`, `donor_address`, `reward_options`) VALUES
-(8, 8, '暖心好食店', 'food', 20.00, '份', '2026-09-15 14:02:07', NULL, 'approved', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, 'Demo 展示用物資', '2026-09-15 06:02:07', '2026-09-15 06:02:07', '愛心便當', 12.00, '中型保冷箱 2 箱', '2026-09-17', '2026-09-15 22:02:07', 'volunteer_delivery', 'motorcycle', NULL, NULL, 1, NULL, NULL, NULL),
-(9, 8, '綠野超市', 'food', 8.00, '箱', '2026-09-15 14:02:07', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 02:12:46', NULL, NULL, NULL, '2026-09-22 02:12:46', 'waiting_pickup', NULL, 1, '請官方人員進行食安評估', '2026-09-15 06:02:07', '2026-09-21 18:12:46', '新鮮蔬果', 25.00, '大型紙箱 8 箱', '2026-09-16', '2026-09-15 19:02:00', 'volunteer_delivery', 'car', NULL, NULL, 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
-(10, NULL, '清心福泉', 'food', 1.00, '包', '2026-09-15 08:20:56', NULL, 'pending', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-09-15 06:20:56', '2026-09-15 06:20:56', '珍珠', 3.00, '一包', '2026-09-18', '2026-09-17 16:30:00', 'volunteer_delivery', 'motorcycle', 'uploads/donations/donation_20260915_082056_5f97d060c728.jpg', NULL, 1, NULL, NULL, NULL),
-(11, 11, '幸福超市', 'food', 1.00, '包', '2026-09-16 09:39:43', NULL, 'approved', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-09-16 07:39:43', '2026-09-16 08:33:52', '珍珠', 2.00, '一包', '2026-09-19', '2026-09-17 15:39:00', 'volunteer_delivery', 'motorcycle', 'uploads/donations/donation_20260916_093943_9c3cb955c97d.jpg', '', 1, NULL, NULL, NULL),
-(12, 13, 'QQ', 'supplies', 30.00, '件', '2026-09-19 17:44:28', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-19 23:59:27', NULL, NULL, NULL, '2026-09-22 14:24:02', 'waiting_pickup', NULL, 1, '運送評估：貨車', '2026-09-19 09:44:28', '2026-09-22 06:24:02', '衛生紙', 10.00, '12 × 15 × 23 cm', '2026-09-19', '2026-09-26 23:44:00', 'food_bank_pickup', 'none', NULL, '', 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
-(13, 13, 'sabee', 'food', 3.00, '條', '2026-09-19 18:14:42', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-20 00:15:18', NULL, NULL, NULL, '2026-09-22 14:23:57', 'waiting_pickup', NULL, 1, '物資類型細項：生鮮食品; 運送評估：貨車', '2026-09-19 10:14:42', '2026-09-22 06:23:57', '巴沙魚', 15.00, '11 × 25 × 35 cm', '2026-09-20', '2026-09-20 00:14:00', 'food_bank_pickup', 'none', NULL, '', 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
-(14, 13, 'Pigpig', 'food', 50.00, '袋', '2026-09-19 18:26:18', NULL, 'assessed', 'rejected', 'self_delivery', NULL, NULL, NULL, '不好吃', '2026-09-20 00:26:44', NULL, 'waiting_pickup', NULL, 1, '運送評估：貨車', '2026-09-19 10:26:18', '2026-09-19 16:26:44', '豬肉', 90.00, '12 × 12 × 12 cm', '2026-09-17', '2026-09-25 00:26:00', 'food_bank_pickup', 'none', NULL, NULL, 1, NULL, NULL, NULL),
-(15, 13, '123', 'supplies', 23.00, '瓶', '2026-09-19 18:35:14', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-20 00:35:38', NULL, NULL, NULL, '2026-09-22 13:52:04', 'waiting_pickup', NULL, 1, '運送評估選項：機車', '2026-09-19 10:35:14', '2026-09-22 05:52:04', '洗衣精', 89.00, '23 × 23 × 22.74 cm', '2026-09-19', '2026-09-26 00:35:00', 'food_bank_pickup', 'motorcycle', NULL, NULL, 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
-(16, 13, '啊喔', 'food', 23.00, '包', '2026-09-19 18:41:58', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-20 00:45:29', NULL, NULL, NULL, '2026-09-22 14:15:53', 'waiting_pickup', NULL, 1, '運送評估選項：機車', '2026-09-19 10:41:58', '2026-09-22 06:15:53', '白米飯', 23.00, '23 × 23 × 23 cm', '2026-09-25', '2026-09-26 00:41:00', 'volunteer_delivery', 'motorcycle', NULL, NULL, 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
-(17, 13, 'test1', 'supplies', 1093.00, '件', '2026-09-22 14:42:23', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 14:43:46', NULL, NULL, NULL, '2026-09-22 14:48:12', 'waiting_pickup', NULL, 1, '運送評估選項：貨車', '2026-09-22 06:42:23', '2026-09-22 06:48:12', '1', 23.00, '23 × 23 × 23 箱', '2026-09-04', '2026-09-25 14:41:00', 'food_bank_pickup', 'none', NULL, NULL, 1, NULL, '台北', '[\"points\",\"goods\",\"free\",\"service_hours\"]'),
-(18, 13, 'test2', 'food', 24.00, '件', '2026-09-22 14:43:04', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 14:43:23', NULL, NULL, NULL, '2026-09-22 15:18:33', 'waiting_pickup', NULL, 1, '運送評估選項：汽車', '2026-09-22 06:43:04', '2026-09-22 07:18:33', '衛生紙', 24.00, '24 × 24 × 24 cm', '2026-09-29', '2026-09-18 14:42:00', 'food_bank_pickup', 'car', NULL, NULL, 1, NULL, '台北', '[\"points\",\"goods\",\"free\",\"service_hours\"]');
-
-UPDATE `donations`
-SET `order_number` = CONCAT('FB-', DATE_FORMAT(`donation_date`, '%Y%m%d'), '-', LPAD(`donation_id`, 6, '0'))
-WHERE `order_number` IS NULL OR `order_number` = '';
+INSERT INTO `donations` (`donation_id`, `order_number`, `donor_id`, `donor_name`, `donation_type`, `quantity`, `unit`, `donation_date`, `received_by`, `status`, `evaluation_status`, `delivery_method`, `approval_notes`, `approved_at`, `approved_by`, `rejection_reason`, `rejected_at`, `published_at`, `current_status`, `status_updated_at`, `split_count`, `notes`, `created_at`, `updated_at`, `item_name`, `weight_kg`, `size_description`, `expiry_date`, `pickup_deadline`, `delivery_option`, `vehicle_type`, `photo_path`, `evaluation_notes`, `need_inspection`, `inspection_notes`, `donor_address`, `reward_options`, `delivery_date`, `delivery_time`, `delivery_address`, `estimated_distance_km`, `estimated_duration_minutes`, `beneficiary_id`, `dispatch_contact_name`, `dispatch_contact_phone`, `dispatch_vehicle_info`) VALUES
+(8, 'FB-20260915-000008', 8, '暖心好食店', 'food', 20.00, '份', '2026-09-15 14:02:07', NULL, 'approved', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, 'Demo 展示用物資', '2026-09-15 06:02:07', '2026-10-22 15:58:52', '愛心便當', 12.00, '中型保冷箱 2 箱', '2026-09-17', '2026-09-15 22:02:07', 'volunteer_delivery', 'motorcycle', NULL, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(9, 'FB-20260915-000009', 8, '綠野超市', 'food', 8.00, '箱', '2026-09-15 14:02:07', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 02:12:46', NULL, NULL, NULL, '2026-09-22 02:12:46', 'waiting_pickup', NULL, 1, '請官方人員進行食安評估', '2026-09-15 06:02:07', '2026-10-22 15:58:52', '新鮮蔬果', 25.00, '大型紙箱 8 箱', '2026-09-16', '2026-09-15 19:02:00', 'volunteer_delivery', 'car', NULL, NULL, 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(10, 'FB-20260915-000010', NULL, '清心福泉', 'food', 1.00, '包', '2026-09-15 08:20:56', NULL, 'pending', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-09-15 06:20:56', '2026-10-22 15:58:52', '珍珠', 3.00, '一包', '2026-09-18', '2026-09-17 16:30:00', 'volunteer_delivery', 'motorcycle', 'uploads/donations/donation_20260915_082056_5f97d060c728.jpg', NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(11, 'FB-20260916-000011', 11, '幸福超市', 'food', 1.00, '包', '2026-09-16 09:39:43', NULL, 'approved', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-09-16 07:39:43', '2026-10-22 15:58:52', '珍珠', 2.00, '一包', '2026-09-19', '2026-09-17 15:39:00', 'volunteer_delivery', 'motorcycle', 'uploads/donations/donation_20260916_093943_9c3cb955c97d.jpg', '', 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(12, 'FB-20260919-000012', 13, 'QQ', 'supplies', 30.00, '件', '2026-09-19 17:44:28', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-19 23:59:27', NULL, NULL, NULL, '2026-09-22 14:24:02', 'waiting_pickup', NULL, 1, '運送評估：貨車', '2026-09-19 09:44:28', '2026-10-22 15:58:52', '衛生紙', 10.00, '12 × 15 × 23 cm', '2026-09-19', '2026-09-26 23:44:00', 'food_bank_pickup', 'none', NULL, '', 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(13, 'FB-20260919-000013', 13, 'sabee', 'food', 3.00, '條', '2026-09-19 18:14:42', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-20 00:15:18', NULL, NULL, NULL, '2026-09-22 14:23:57', 'waiting_pickup', NULL, 1, '物資類型細項：生鮮食品; 運送評估：貨車', '2026-09-19 10:14:42', '2026-10-22 15:58:52', '巴沙魚', 15.00, '11 × 25 × 35 cm', '2026-09-20', '2026-09-20 00:14:00', 'food_bank_pickup', 'none', NULL, '', 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(14, 'FB-20260919-000014', 13, 'Pigpig', 'food', 50.00, '袋', '2026-09-19 18:26:18', NULL, 'assessed', 'rejected', 'self_delivery', NULL, NULL, NULL, '不好吃', '2026-09-20 00:26:44', NULL, 'waiting_pickup', NULL, 1, '運送評估：貨車', '2026-09-19 10:26:18', '2026-10-22 15:58:52', '豬肉', 90.00, '12 × 12 × 12 cm', '2026-09-17', '2026-09-25 00:26:00', 'food_bank_pickup', 'none', NULL, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(15, 'FB-20260919-000015', 13, '123', 'supplies', 23.00, '瓶', '2026-09-19 18:35:14', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-20 00:35:38', NULL, NULL, NULL, '2026-09-22 13:52:04', 'waiting_pickup', NULL, 1, '運送評估選項：機車', '2026-09-19 10:35:14', '2026-10-22 15:58:52', '洗衣精', 89.00, '23 × 23 × 22.74 cm', '2026-09-19', '2026-09-26 00:35:00', 'food_bank_pickup', 'motorcycle', NULL, NULL, 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(16, 'FB-20260919-000016', 13, '啊喔', 'food', 23.00, '包', '2026-09-19 18:41:58', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-20 00:45:29', NULL, NULL, NULL, '2026-09-22 14:15:53', 'waiting_pickup', NULL, 1, '運送評估選項：機車', '2026-09-19 10:41:58', '2026-10-22 15:58:52', '白米飯', 23.00, '23 × 23 × 23 cm', '2026-09-25', '2026-09-26 00:41:00', 'volunteer_delivery', 'motorcycle', NULL, NULL, 1, NULL, NULL, '[\"points\",\"goods\",\"free\",\"service_hours\"]', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(17, 'FB-20260922-000017', 13, 'test1', 'supplies', 1093.00, '件', '2026-09-22 14:42:23', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 14:43:46', NULL, NULL, NULL, '2026-09-22 14:48:12', 'waiting_pickup', NULL, 1, '運送評估選項：貨車', '2026-09-22 06:42:23', '2026-10-22 15:58:52', '1', 23.00, '23 × 23 × 23 箱', '2026-09-04', '2026-09-25 14:41:00', 'food_bank_pickup', 'none', NULL, NULL, 1, NULL, '台北', '[\"points\",\"goods\",\"free\",\"service_hours\"]', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(18, 'FB-20260922-000018', 13, 'test2', 'food', 24.00, '件', '2026-09-22 14:43:04', NULL, 'published', 'approved_volunteer', 'volunteer_assist', NULL, '2026-09-22 14:43:23', NULL, NULL, NULL, '2026-09-22 15:18:33', 'waiting_pickup', NULL, 1, '運送評估選項：汽車', '2026-09-22 06:43:04', '2026-10-22 15:58:52', '衛生紙', 24.00, '24 × 24 × 24 cm', '2026-09-29', '2026-09-18 14:42:00', 'food_bank_pickup', 'car', NULL, NULL, 1, NULL, '台北', '[\"points\",\"goods\",\"free\",\"service_hours\"]', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -290,7 +297,6 @@ WHERE `order_number` IS NULL OR `order_number` = '';
 -- 資料表結構 `donation_allocations`
 --
 
-DROP TABLE IF EXISTS `donation_allocations`;
 CREATE TABLE `donation_allocations` (
   `allocation_id` int(11) NOT NULL,
   `donation_id` int(11) NOT NULL,
@@ -306,15 +312,15 @@ CREATE TABLE `donation_allocations` (
   `assigned_to` int(11) DEFAULT NULL,
   `assigned_at` datetime DEFAULT NULL,
   `completed_at` datetime DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  UNIQUE KEY `uq_sub_order_number` (`sub_order_number`)
+  `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
 
 --
 -- 資料表結構 `donation_allocation_items`
 --
 
-DROP TABLE IF EXISTS `donation_allocation_items`;
 CREATE TABLE `donation_allocation_items` (
   `allocation_item_id` int(11) NOT NULL,
   `allocation_id` int(11) NOT NULL,
@@ -325,10 +331,49 @@ CREATE TABLE `donation_allocation_items` (
 -- --------------------------------------------------------
 
 --
+-- 資料表結構 `donation_items`
+--
+
+CREATE TABLE `donation_items` (
+  `item_id` int(11) NOT NULL,
+  `donation_id` int(11) NOT NULL,
+  `item_name` varchar(100) NOT NULL,
+  `brand` varchar(100) DEFAULT NULL,
+  `specification` varchar(150) DEFAULT NULL,
+  `quantity` decimal(10,2) NOT NULL,
+  `unit` varchar(20) NOT NULL DEFAULT '件',
+  `length_cm` decimal(6,2) DEFAULT NULL,
+  `width_cm` decimal(6,2) DEFAULT NULL,
+  `height_cm` decimal(6,2) DEFAULT NULL,
+  `item_weight_kg` decimal(8,2) DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `donation_items`
+--
+
+INSERT INTO `donation_items` (`item_id`, `donation_id`, `item_name`, `brand`, `specification`, `quantity`, `unit`, `length_cm`, `width_cm`, `height_cm`, `item_weight_kg`, `expiry_date`, `notes`, `created_at`) VALUES
+(1, 8, '愛心便當', NULL, '中型保冷箱 2 箱', 20.00, '份', NULL, NULL, NULL, NULL, '2026-09-17', NULL, '2026-10-22 15:58:54'),
+(2, 9, '新鮮蔬果', NULL, '大型紙箱 8 箱', 8.00, '箱', NULL, NULL, NULL, NULL, '2026-09-16', NULL, '2026-10-22 15:58:54'),
+(3, 10, '珍珠', NULL, '一包', 1.00, '包', NULL, NULL, NULL, NULL, '2026-09-18', NULL, '2026-10-22 15:58:54'),
+(4, 11, '珍珠', NULL, '一包', 1.00, '包', NULL, NULL, NULL, NULL, '2026-09-19', NULL, '2026-10-22 15:58:54'),
+(5, 12, '衛生紙', NULL, '12 × 15 × 23 cm', 30.00, '件', NULL, NULL, NULL, NULL, '2026-09-19', NULL, '2026-10-22 15:58:54'),
+(6, 13, '巴沙魚', NULL, '11 × 25 × 35 cm', 3.00, '條', NULL, NULL, NULL, NULL, '2026-09-20', NULL, '2026-10-22 15:58:54'),
+(7, 14, '豬肉', NULL, '12 × 12 × 12 cm', 50.00, '袋', NULL, NULL, NULL, NULL, '2026-09-17', NULL, '2026-10-22 15:58:54'),
+(8, 15, '洗衣精', NULL, '23 × 23 × 22.74 cm', 23.00, '瓶', NULL, NULL, NULL, NULL, '2026-09-19', NULL, '2026-10-22 15:58:54'),
+(9, 16, '白米飯', NULL, '23 × 23 × 23 cm', 23.00, '包', NULL, NULL, NULL, NULL, '2026-09-25', NULL, '2026-10-22 15:58:54'),
+(10, 17, '1', NULL, '23 × 23 × 23 箱', 1093.00, '件', NULL, NULL, NULL, NULL, '2026-09-04', NULL, '2026-10-22 15:58:54'),
+(11, 18, '衛生紙', NULL, '24 × 24 × 24 cm', 24.00, '件', NULL, NULL, NULL, NULL, '2026-09-29', NULL, '2026-10-22 15:58:54');
+
+-- --------------------------------------------------------
+
+--
 -- 資料表結構 `donor_reward_items`
 --
 
-DROP TABLE IF EXISTS `donor_reward_items`;
 CREATE TABLE `donor_reward_items` (
   `item_id` int(11) NOT NULL,
   `donor_id` int(11) NOT NULL,
@@ -356,7 +401,6 @@ INSERT INTO `donor_reward_items` (`item_id`, `donor_id`, `title`, `description`,
 -- 資料表結構 `donor_reward_redemptions`
 --
 
-DROP TABLE IF EXISTS `donor_reward_redemptions`;
 CREATE TABLE `donor_reward_redemptions` (
   `redemption_id` int(11) NOT NULL,
   `item_id` int(11) NOT NULL,
@@ -375,7 +419,6 @@ CREATE TABLE `donor_reward_redemptions` (
 -- 資料表結構 `enterprise_verification_requests`
 --
 
-DROP TABLE IF EXISTS `enterprise_verification_requests`;
 CREATE TABLE `enterprise_verification_requests` (
   `request_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -392,10 +435,33 @@ CREATE TABLE `enterprise_verification_requests` (
 -- --------------------------------------------------------
 
 --
+-- 資料表結構 `inventory_receipts`
+--
+
+CREATE TABLE `inventory_receipts` (
+  `receipt_id` bigint(20) UNSIGNED NOT NULL,
+  `item_name` varchar(150) NOT NULL,
+  `category` varchar(50) NOT NULL,
+  `movement_type` enum('in','out') NOT NULL DEFAULT 'in',
+  `quantity` decimal(12,2) NOT NULL,
+  `unit` varchar(30) NOT NULL DEFAULT '件',
+  `donor_name` varchar(150) DEFAULT NULL,
+  `received_date` date NOT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `storage_location` varchar(150) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `received_by` int(11) NOT NULL,
+  `source_donation_id` int(11) DEFAULT NULL,
+  `source_item_id` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- 資料表結構 `item_categories`
 --
 
-DROP TABLE IF EXISTS `item_categories`;
 CREATE TABLE `item_categories` (
   `category_id` int(11) NOT NULL,
   `category_name` varchar(50) NOT NULL,
@@ -428,7 +494,6 @@ INSERT INTO `item_categories` (`category_id`, `category_name`, `description`, `i
 -- 資料表結構 `notifications`
 --
 
-DROP TABLE IF EXISTS `notifications`;
 CREATE TABLE `notifications` (
   `notification_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -476,7 +541,6 @@ INSERT INTO `notifications` (`notification_id`, `user_id`, `title`, `message`, `
 -- 資料表結構 `otp_codes`
 --
 
-DROP TABLE IF EXISTS `otp_codes`;
 CREATE TABLE `otp_codes` (
   `otp_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -495,7 +559,6 @@ CREATE TABLE `otp_codes` (
 -- 資料表結構 `password_resets`
 --
 
-DROP TABLE IF EXISTS `password_resets`;
 CREATE TABLE `password_resets` (
   `reset_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -508,10 +571,56 @@ CREATE TABLE `password_resets` (
 -- --------------------------------------------------------
 
 --
+-- 資料表結構 `permissions`
+--
+
+CREATE TABLE `permissions` (
+  `permission_key` varchar(50) NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `category` varchar(50) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `permissions`
+--
+
+INSERT INTO `permissions` (`permission_key`, `label`, `category`) VALUES
+('activity.publish', '發布公益活動', 'news'),
+('ad.publish', '刊登廣告', 'news'),
+('admin.manage_users', '管理帳號審核', 'admin'),
+('delivery.confirm_arrival', '確認配送已抵達並查收', 'delivery'),
+('delivery.manage', '發布／編輯／處理配送任務', 'delivery'),
+('donation.create', '刊登物資捐贈', 'donation'),
+('donation.review', '審查／拆單物資捐贈', 'donation'),
+('inventory.inspect', '完成物資清點', 'inventory'),
+('page.activity_certificate', '活動證書', 'page'),
+('page.carbon_report', '永續報告', 'page'),
+('page.certificate', '證書', 'page'),
+('page.dashboard', '主頁', 'page'),
+('page.deliveries', '配送任務', 'page'),
+('page.donation_materials', '物資捐贈', 'page'),
+('page.donation_materials_review', '物資捐贈審查', 'page'),
+('page.inventory', '物資盤點', 'page'),
+('page.item_categories', '物資分類', 'page'),
+('page.material_transport', '物資運送', 'page'),
+('page.news', '最新消息公告', 'page'),
+('page.notifications', '通知中心', 'page'),
+('page.order_tracking', '訂單追蹤', 'page'),
+('page.reports', '數據分析／榮譽榜', 'page'),
+('page.rewards', '興毅幣兌換', 'page'),
+('page.rider_application', '申請外送志工', 'page'),
+('page.rider_review', '外送志工審核', 'page'),
+('page.settings', '設置', 'page'),
+('page.users', '帳號審核', 'page'),
+('page.volunteer_management', '一般會員管理', 'page'),
+('rider.accept_task', '承接 Rider 配送任務', 'delivery');
+
+-- --------------------------------------------------------
+
+--
 -- 資料表結構 `point_transactions`
 --
 
-DROP TABLE IF EXISTS `point_transactions`;
 CREATE TABLE `point_transactions` (
   `transaction_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -540,7 +649,6 @@ INSERT INTO `point_transactions` (`transaction_id`, `user_id`, `delivery_id`, `p
 -- 資料表結構 `public_relations`
 --
 
-DROP TABLE IF EXISTS `public_relations`;
 CREATE TABLE `public_relations` (
   `pr_id` int(11) NOT NULL,
   `event_name` varchar(150) NOT NULL,
@@ -561,7 +669,6 @@ CREATE TABLE `public_relations` (
 -- 資料表結構 `purchases`
 --
 
-DROP TABLE IF EXISTS `purchases`;
 CREATE TABLE `purchases` (
   `purchase_id` int(11) NOT NULL,
   `purchase_code` varchar(50) NOT NULL,
@@ -592,7 +699,6 @@ INSERT INTO `purchases` (`purchase_id`, `purchase_code`, `supplier_id`, `supplie
 -- 資料表結構 `purchase_items`
 --
 
-DROP TABLE IF EXISTS `purchase_items`;
 CREATE TABLE `purchase_items` (
   `purchase_item_id` int(11) NOT NULL,
   `purchase_id` int(11) NOT NULL,
@@ -608,7 +714,6 @@ CREATE TABLE `purchase_items` (
 -- 資料表結構 `reward_catalog`
 --
 
-DROP TABLE IF EXISTS `reward_catalog`;
 CREATE TABLE `reward_catalog` (
   `reward_id` int(11) NOT NULL,
   `title` varchar(150) NOT NULL,
@@ -633,7 +738,6 @@ INSERT INTO `reward_catalog` (`reward_id`, `title`, `description`, `cost_points`
 -- 資料表結構 `reward_claims`
 --
 
-DROP TABLE IF EXISTS `reward_claims`;
 CREATE TABLE `reward_claims` (
   `claim_id` bigint(20) UNSIGNED NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -657,7 +761,6 @@ CREATE TABLE `reward_claims` (
 -- 資料表結構 `reward_redemptions`
 --
 
-DROP TABLE IF EXISTS `reward_redemptions`;
 CREATE TABLE `reward_redemptions` (
   `redemption_id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
@@ -670,10 +773,96 @@ CREATE TABLE `reward_redemptions` (
 -- --------------------------------------------------------
 
 --
+-- 資料表結構 `rider_applications`
+--
+
+CREATE TABLE `rider_applications` (
+  `application_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `vehicle_type` enum('motorcycle','car','both') NOT NULL,
+  `license_photo_path` varchar(255) NOT NULL,
+  `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  `review_notes` text DEFAULT NULL,
+  `reviewed_by` int(11) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `role_permission_defaults`
+--
+
+CREATE TABLE `role_permission_defaults` (
+  `role` enum('foodbank_staff','member') NOT NULL,
+  `member_type` enum('general','enterprise','clerk','') NOT NULL DEFAULT '',
+  `permission_key` varchar(50) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `role_permission_defaults`
+--
+
+INSERT INTO `role_permission_defaults` (`role`, `member_type`, `permission_key`) VALUES
+('foodbank_staff', 'clerk', 'delivery.confirm_arrival'),
+('foodbank_staff', 'clerk', 'inventory.inspect'),
+('foodbank_staff', 'clerk', 'page.dashboard'),
+('foodbank_staff', 'clerk', 'page.deliveries'),
+('foodbank_staff', 'clerk', 'page.inventory'),
+('foodbank_staff', 'clerk', 'page.notifications'),
+('foodbank_staff', 'clerk', 'page.order_tracking'),
+('foodbank_staff', '', 'activity.publish'),
+('foodbank_staff', '', 'ad.publish'),
+('foodbank_staff', '', 'admin.manage_users'),
+('foodbank_staff', '', 'delivery.confirm_arrival'),
+('foodbank_staff', '', 'delivery.manage'),
+('foodbank_staff', '', 'donation.review'),
+('foodbank_staff', '', 'inventory.inspect'),
+('foodbank_staff', '', 'page.activity_certificate'),
+('foodbank_staff', '', 'page.carbon_report'),
+('foodbank_staff', '', 'page.certificate'),
+('foodbank_staff', '', 'page.dashboard'),
+('foodbank_staff', '', 'page.deliveries'),
+('foodbank_staff', '', 'page.donation_materials_review'),
+('foodbank_staff', '', 'page.inventory'),
+('foodbank_staff', '', 'page.item_categories'),
+('foodbank_staff', '', 'page.news'),
+('foodbank_staff', '', 'page.notifications'),
+('foodbank_staff', '', 'page.order_tracking'),
+('foodbank_staff', '', 'page.reports'),
+('foodbank_staff', '', 'page.rewards'),
+('foodbank_staff', '', 'page.rider_review'),
+('foodbank_staff', '', 'page.settings'),
+('foodbank_staff', '', 'page.users'),
+('foodbank_staff', '', 'page.volunteer_management'),
+('member', 'general', 'page.activity_certificate'),
+('member', 'general', 'page.certificate'),
+('member', 'general', 'page.dashboard'),
+('member', 'general', 'page.news'),
+('member', 'general', 'page.notifications'),
+('member', 'general', 'page.reports'),
+('member', 'general', 'page.rewards'),
+('member', 'general', 'page.rider_application'),
+('member', 'enterprise', 'activity.publish'),
+('member', 'enterprise', 'ad.publish'),
+('member', 'enterprise', 'donation.create'),
+('member', 'enterprise', 'page.activity_certificate'),
+('member', 'enterprise', 'page.carbon_report'),
+('member', 'enterprise', 'page.certificate'),
+('member', 'enterprise', 'page.dashboard'),
+('member', 'enterprise', 'page.donation_materials'),
+('member', 'enterprise', 'page.news'),
+('member', 'enterprise', 'page.notifications'),
+('member', 'enterprise', 'page.order_tracking'),
+('member', 'enterprise', 'page.rewards');
+
+-- --------------------------------------------------------
+
+--
 -- 資料表結構 `sales`
 --
 
-DROP TABLE IF EXISTS `sales`;
 CREATE TABLE `sales` (
   `sale_id` int(11) NOT NULL,
   `sale_code` varchar(50) NOT NULL,
@@ -694,7 +883,6 @@ CREATE TABLE `sales` (
 -- 資料表結構 `sale_items`
 --
 
-DROP TABLE IF EXISTS `sale_items`;
 CREATE TABLE `sale_items` (
   `sale_item_id` int(11) NOT NULL,
   `sale_id` int(11) NOT NULL,
@@ -710,7 +898,6 @@ CREATE TABLE `sale_items` (
 -- 資料表結構 `suppliers`
 --
 
-DROP TABLE IF EXISTS `suppliers`;
 CREATE TABLE `suppliers` (
   `supplier_id` int(11) NOT NULL,
   `supplier_code` varchar(50) NOT NULL,
@@ -740,7 +927,6 @@ INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `conta
 -- 資料表結構 `users`
 --
 
-DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `user_id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
@@ -770,29 +956,41 @@ CREATE TABLE `users` (
 -- 傾印資料表的資料 `users`
 --
 
-INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`, `member_type`, `department`, `status`, `created_at`, `updated_at`, `created_by`, `phone_verified`, `is_enterprise_verified`, `enterprise_name`, `enterprise_verified_at`) VALUES
-(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '忠信食物銀行', NULL, 'foodbank_staff', 'general', NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
-(2, 'manager', '$2y$10$qr4hpiq8jbeuEg.QPiroieIfkLzAunBKU1ETYKdcy6TUt6UsvCQC2', 'manager@foodbank.local', '忠信食物銀行', NULL, 'foodbank_staff', 'general', NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
-(3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', 'general', NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'member', 'general', NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL),
-(7, 'official', '3fae19dadf1a05245ffa9cd28f3e4530dc42d16511f743da4e0f5c70fdc12', 'official@foodbank.local', '官方審核人員', NULL, 'foodbank_staff', 'general', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(8, 'donor', '0df8b21212b360c2862c2cce12a4f3d883f13acdc4b59f43cf5b2fcfd2c30954', 'donor@foodbank.local', '捐贈店家', NULL, 'member', 'enterprise', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, '捐贈店家', NULL),
-(11, 'store_demo', '$2y$10$l2fieWAIhqoo36lLMbHbSeLb5sllWY8tO8hep5G98zkFLXO6yNMZS', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'member', 'enterprise', '零售部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, '幸福超市', NULL),
-(12, 'courier_demo', '$2y$10$Cyxw98tLQPQtKnExEcNQj.7fF77aNUF3k43LHjqd8OfeeYRDqTZey', 'courier_demo@foodbank.local', '忠信GO RIDER A', '0923456789', 'member', 'general', '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
-(13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'member', 'enterprise', NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, '愛心商家001', NULL);
-/*
-INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`, `department`, `status`, `created_at`, `updated_at`, `created_by`, `phone_verified`, `is_enterprise_verified`, `enterprise_name`, `enterprise_verified_at`) VALUES
-(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '忠信食物銀行', NULL, 'admin', NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
-(2, 'manager', '$2y$10$iL8M6sR5fDEijHGLU/dWqeHTuSusk4IjCJ5VAsz.OytAgc/2Dc7QG', 'manager@foodbank.local', '忠信食物銀行', NULL, 'admin', NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
-(3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(4, 'volunteer', '$2y$10$ZWwCxo.mGqgE5GvPiR5nH.WhufmwuBbGPtJ0TEmEcqveablDm8uCK', 'volunteer@foodbank.local', '平台忠信GO RIDER', NULL, 'volunteer', NULL, 'active', '2026-08-18 16:46:44', '2026-09-18 07:05:20', NULL, 0, 0, NULL, NULL),
-(6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'volunteer', NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL),
-(7, 'official', '3fae19dadf1a05245ffa9cd28f3e4530dc42d16511f743883da4e0f5c70fdc12', 'official@foodbank.local', '官方審核人員', NULL, 'foodbank_staff', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(8, 'donor', '0df8b21212b360c2862c2cce12a4f3d883f13acdc4b59f43cf5b2fcfd2c30954', 'donor@foodbank.local', '捐贈店家', NULL, 'donor', NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
-(11, 'store_demo', '$2y$10$RUndnqZIN/Nw5FJx/X059eW0ZsjRovylNN8kt7k2HioHPuiQEGKMu', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'donor', '零售部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
-(12, 'courier_demo', '$2y$10$v16TT2Uetokuln3OeVD7PuY0ZCqMM/nwKnFUFtJg1SzFmJhjknZjC', 'courier_demo@foodbank.local', '配送忠信GO RIDERA', '0923456789', 'volunteer', '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
-(13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'donor', NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, NULL, NULL);
-*/
+INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`, `member_type`, `staff_type`, `tax_id`, `referral_source`, `blacklisted_at`, `blacklist_reason`, `department`, `status`, `created_at`, `updated_at`, `created_by`, `phone_verified`, `is_enterprise_verified`, `enterprise_name`, `enterprise_verified_at`) VALUES
+(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '忠信食物銀行', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL),
+(2, 'manager', '$2y$10$qr4hpiq8jbeuEg.QPiroieIfkLzAunBKU1ETYKdcy6TUt6UsvCQC2', 'manager@foodbank.local', '忠信食物銀行', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL),
+(3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
+(6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'member', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL),
+(7, 'official', '3fae19dadf1a05245ffa9cd28f3e4530dc42d16511f743da4e0f5c70fdc12', 'official@foodbank.local', '官方審核人員', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL),
+(8, 'donor', '0df8b21212b360c2862c2cce12a4f3d883f13acdc4b59f43cf5b2fcfd2c30954', 'donor@foodbank.local', '捐贈店家', NULL, 'member', 'enterprise', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, '捐贈店家', NULL),
+(11, 'store_demo', '$2y$10$l2fieWAIhqoo36lLMbHbSeLb5sllWY8tO8hep5G98zkFLXO6yNMZS', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'member', 'enterprise', NULL, NULL, NULL, NULL, NULL, '零售部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, '幸福超市', NULL),
+(12, 'courier_demo', '$2y$10$Cyxw98tLQPQtKnExEcNQj.7fF77aNUF3k43LHjqd8OfeeYRDqTZey', 'courier_demo@foodbank.local', '忠信GO RIDER A', '0923456789', 'member', 'general', NULL, NULL, NULL, NULL, NULL, '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL),
+(13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'member', 'enterprise', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, '愛心商家001', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `user_permission_overrides`
+--
+
+CREATE TABLE `user_permission_overrides` (
+  `user_id` int(11) NOT NULL,
+  `permission_key` varchar(50) NOT NULL,
+  `granted` tinyint(1) NOT NULL DEFAULT 1,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `user_permission_overrides`
+--
+
+INSERT INTO `user_permission_overrides` (`user_id`, `permission_key`, `granted`, `updated_at`) VALUES
+(6, 'page.deliveries', 1, '2026-10-22 15:58:54'),
+(6, 'page.material_transport', 1, '2026-10-22 15:58:54'),
+(6, 'rider.accept_task', 1, '2026-10-22 15:58:54'),
+(12, 'page.deliveries', 1, '2026-10-22 15:58:54'),
+(12, 'page.material_transport', 1, '2026-10-22 15:58:54'),
+(12, 'rider.accept_task', 1, '2026-10-22 15:58:54');
 
 -- --------------------------------------------------------
 
@@ -800,7 +998,6 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `p
 -- 資料表結構 `volunteer_consents`
 --
 
-DROP TABLE IF EXISTS `volunteer_consents`;
 CREATE TABLE `volunteer_consents` (
   `user_id` int(11) NOT NULL,
   `agreed_disclaimer` tinyint(1) NOT NULL DEFAULT 0,
@@ -823,7 +1020,6 @@ INSERT INTO `volunteer_consents` (`user_id`, `agreed_disclaimer`, `agreed_mutual
 -- 資料表結構 `warehouses`
 --
 
-DROP TABLE IF EXISTS `warehouses`;
 CREATE TABLE `warehouses` (
   `warehouse_id` int(11) NOT NULL,
   `warehouse_code` varchar(50) NOT NULL,
@@ -859,6 +1055,14 @@ ALTER TABLE `activity_assignments`
   ADD KEY `activity_status_cancelled_at` (`activity_id`,`user_id`,`status`,`cancelled_at`);
 
 --
+-- 資料表索引 `advertisements`
+--
+ALTER TABLE `advertisements`
+  ADD PRIMARY KEY (`ad_id`),
+  ADD KEY `idx_advertisements_status` (`status`,`created_at`),
+  ADD KEY `idx_advertisements_advertiser` (`advertiser_id`);
+
+--
 -- 資料表索引 `audit_logs`
 --
 ALTER TABLE `audit_logs`
@@ -886,7 +1090,8 @@ ALTER TABLE `deliveries`
   ADD PRIMARY KEY (`delivery_id`),
   ADD KEY `status` (`status`),
   ADD KEY `volunteer_id` (`volunteer_id`),
-  ADD KEY `donation_id` (`donation_id`);
+  ADD KEY `donation_id` (`donation_id`),
+  ADD KEY `idx_deliveries_allocation_id` (`allocation_id`);
 
 --
 -- 資料表索引 `departments`
@@ -908,15 +1113,32 @@ ALTER TABLE `donations`
   ADD KEY `received_by` (`received_by`),
   ADD KEY `idx_donations_status` (`status`),
   ADD KEY `idx_donations_evaluation_status` (`evaluation_status`),
-  ADD KEY `idx_donations_published_at` (`published_at`);
+  ADD KEY `idx_donations_published_at` (`published_at`),
+  ADD KEY `donations_ibfk_2` (`beneficiary_id`);
 
 --
 -- 資料表索引 `donation_allocations`
 --
 ALTER TABLE `donation_allocations`
   ADD PRIMARY KEY (`allocation_id`),
+  ADD UNIQUE KEY `uq_sub_order_number` (`sub_order_number`),
   ADD KEY `donation_id` (`donation_id`),
   ADD KEY `status` (`status`);
+
+--
+-- 資料表索引 `donation_allocation_items`
+--
+ALTER TABLE `donation_allocation_items`
+  ADD PRIMARY KEY (`allocation_item_id`),
+  ADD KEY `idx_dai_allocation_id` (`allocation_id`),
+  ADD KEY `idx_dai_donation_item_id` (`donation_item_id`);
+
+--
+-- 資料表索引 `donation_items`
+--
+ALTER TABLE `donation_items`
+  ADD PRIMARY KEY (`item_id`),
+  ADD KEY `idx_donation_items_donation_id` (`donation_id`);
 
 --
 -- 資料表索引 `donor_reward_items`
@@ -943,6 +1165,16 @@ ALTER TABLE `enterprise_verification_requests`
   ADD PRIMARY KEY (`request_id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `status` (`status`);
+
+--
+-- 資料表索引 `inventory_receipts`
+--
+ALTER TABLE `inventory_receipts`
+  ADD PRIMARY KEY (`receipt_id`),
+  ADD UNIQUE KEY `uq_inventory_receipt_source` (`source_donation_id`,`source_item_id`),
+  ADD KEY `idx_inventory_receipts_item` (`item_name`,`category`,`unit`),
+  ADD KEY `idx_inventory_receipts_received_date` (`received_date`),
+  ADD KEY `idx_inventory_receipts_expiry_date` (`expiry_date`);
 
 --
 -- 資料表索引 `item_categories`
@@ -974,6 +1206,12 @@ ALTER TABLE `otp_codes`
 ALTER TABLE `password_resets`
   ADD PRIMARY KEY (`reset_id`),
   ADD KEY `user_id` (`user_id`);
+
+--
+-- 資料表索引 `permissions`
+--
+ALTER TABLE `permissions`
+  ADD PRIMARY KEY (`permission_key`);
 
 --
 -- 資料表索引 `point_transactions`
@@ -1037,6 +1275,21 @@ ALTER TABLE `reward_redemptions`
   ADD KEY `reward_id` (`reward_id`);
 
 --
+-- 資料表索引 `rider_applications`
+--
+ALTER TABLE `rider_applications`
+  ADD PRIMARY KEY (`application_id`),
+  ADD KEY `idx_rider_applications_user` (`user_id`,`status`),
+  ADD KEY `idx_rider_applications_status` (`status`,`created_at`);
+
+--
+-- 資料表索引 `role_permission_defaults`
+--
+ALTER TABLE `role_permission_defaults`
+  ADD PRIMARY KEY (`role`,`member_type`,`permission_key`),
+  ADD KEY `idx_rpd_permission_key` (`permission_key`);
+
+--
 -- 資料表索引 `sales`
 --
 ALTER TABLE `sales`
@@ -1076,6 +1329,13 @@ ALTER TABLE `users`
   ADD KEY `idx_users_role` (`role`);
 
 --
+-- 資料表索引 `user_permission_overrides`
+--
+ALTER TABLE `user_permission_overrides`
+  ADD PRIMARY KEY (`user_id`,`permission_key`),
+  ADD KEY `idx_upo_permission_key` (`permission_key`);
+
+--
 -- 資料表索引 `volunteer_consents`
 --
 ALTER TABLE `volunteer_consents`
@@ -1105,6 +1365,12 @@ ALTER TABLE `activities`
 --
 ALTER TABLE `activity_assignments`
   MODIFY `assignment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `advertisements`
+--
+ALTER TABLE `advertisements`
+  MODIFY `ad_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `audit_logs`
@@ -1143,6 +1409,18 @@ ALTER TABLE `donation_allocations`
   MODIFY `allocation_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donation_allocation_items`
+--
+ALTER TABLE `donation_allocation_items`
+  MODIFY `allocation_item_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donation_items`
+--
+ALTER TABLE `donation_items`
+  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+
+--
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donor_reward_items`
 --
 ALTER TABLE `donor_reward_items`
@@ -1159,6 +1437,12 @@ ALTER TABLE `donor_reward_redemptions`
 --
 ALTER TABLE `enterprise_verification_requests`
   MODIFY `request_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `inventory_receipts`
+--
+ALTER TABLE `inventory_receipts`
+  MODIFY `receipt_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `item_categories`
@@ -1227,6 +1511,12 @@ ALTER TABLE `reward_redemptions`
   MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
+-- 使用資料表自動遞增(AUTO_INCREMENT) `rider_applications`
+--
+ALTER TABLE `rider_applications`
+  MODIFY `application_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- 使用資料表自動遞增(AUTO_INCREMENT) `sales`
 --
 ALTER TABLE `sales`
@@ -1282,13 +1572,27 @@ ALTER TABLE `departments`
 -- 資料表的限制式 `donations`
 --
 ALTER TABLE `donations`
-  ADD CONSTRAINT `donations_ibfk_1` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`);
+  ADD CONSTRAINT `donations_ibfk_1` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`),
+  ADD CONSTRAINT `donations_ibfk_2` FOREIGN KEY (`beneficiary_id`) REFERENCES `beneficiaries` (`beneficiary_id`) ON DELETE SET NULL;
 
 --
 -- 資料表的限制式 `donation_allocations`
 --
 ALTER TABLE `donation_allocations`
   ADD CONSTRAINT `donation_allocations_ibfk_1` FOREIGN KEY (`donation_id`) REFERENCES `donations` (`donation_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donation_allocation_items`
+--
+ALTER TABLE `donation_allocation_items`
+  ADD CONSTRAINT `donation_allocation_items_ibfk_1` FOREIGN KEY (`allocation_id`) REFERENCES `donation_allocations` (`allocation_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `donation_allocation_items_ibfk_2` FOREIGN KEY (`donation_item_id`) REFERENCES `donation_items` (`item_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donation_items`
+--
+ALTER TABLE `donation_items`
+  ADD CONSTRAINT `donation_items_ibfk_1` FOREIGN KEY (`donation_id`) REFERENCES `donations` (`donation_id`) ON DELETE CASCADE;
 
 --
 -- 資料表的限制式 `donor_reward_items`
@@ -1330,6 +1634,12 @@ ALTER TABLE `purchase_items`
   ADD CONSTRAINT `purchase_items_ibfk_1` FOREIGN KEY (`purchase_id`) REFERENCES `purchases` (`purchase_id`);
 
 --
+-- 資料表的限制式 `role_permission_defaults`
+--
+ALTER TABLE `role_permission_defaults`
+  ADD CONSTRAINT `role_permission_defaults_ibfk_1` FOREIGN KEY (`permission_key`) REFERENCES `permissions` (`permission_key`) ON DELETE CASCADE;
+
+--
 -- 資料表的限制式 `sales`
 --
 ALTER TABLE `sales`
@@ -1342,275 +1652,6 @@ ALTER TABLE `sale_items`
   ADD CONSTRAINT `sale_items_ibfk_1` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`);
 
 --
--- 資料表的限制式 `warehouses`
---
-ALTER TABLE `warehouses`
-  ADD CONSTRAINT `warehouses_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
-
---
--- 資料表結構 `donation_items`
---
-
-DROP TABLE IF EXISTS `donation_items`;
-CREATE TABLE `donation_items` (
-  `item_id` int(11) NOT NULL AUTO_INCREMENT,
-  `donation_id` int(11) NOT NULL,
-  `item_name` varchar(100) NOT NULL,
-  `brand` varchar(100) DEFAULT NULL,
-  `specification` varchar(150) DEFAULT NULL,
-  `quantity` decimal(10,2) NOT NULL,
-  `unit` varchar(20) NOT NULL DEFAULT '件',
-  `length_cm` decimal(6,2) DEFAULT NULL,
-  `width_cm` decimal(6,2) DEFAULT NULL,
-  `height_cm` decimal(6,2) DEFAULT NULL,
-  `item_weight_kg` decimal(8,2) DEFAULT NULL,
-  `expiry_date` date DEFAULT NULL,
-  `notes` text DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`item_id`),
-  KEY `idx_donation_items_donation_id` (`donation_id`),
-  CONSTRAINT `donation_items_ibfk_1` FOREIGN KEY (`donation_id`) REFERENCES `donations` (`donation_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- 依既有捐贈資料回填單筆物資明細（舊資料相容用）
---
-INSERT INTO `donation_items` (`donation_id`, `item_name`, `specification`, `quantity`, `unit`, `expiry_date`)
-SELECT `donation_id`, COALESCE(NULLIF(`item_name`, ''), '未命名物資'), `size_description`, COALESCE(`quantity`, 0), COALESCE(`unit`, '件'), `expiry_date`
-FROM `donations`;
-
---
--- 資料表的限制式 `donations`
---
-ALTER TABLE `donations`
-  ADD CONSTRAINT `donations_ibfk_2` FOREIGN KEY (`beneficiary_id`) REFERENCES `beneficiaries` (`beneficiary_id`) ON DELETE SET NULL;
-
--- 修正舊資料殘留的「忠信GO RIDER」字樣，統一顯示為「忠信GO RIDER」
-UPDATE `notifications` SET `message` = REPLACE(`message`, '忠信GO RIDER', '忠信GO RIDER') WHERE `message` LIKE '%忠信GO RIDER%';
-UPDATE `activities` SET `title` = REPLACE(`title`, '忠信GO RIDER', '忠信GO RIDER') WHERE `title` LIKE '%忠信GO RIDER%';
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `inventory_receipts`（食物銀行入庫紀錄）
---
-
-DROP TABLE IF EXISTS `inventory_receipts`;
-CREATE TABLE `inventory_receipts` (
-  `receipt_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  `item_name` varchar(150) NOT NULL,
-  `category` varchar(50) NOT NULL,
-  `movement_type` enum('in','out') NOT NULL DEFAULT 'in',
-  `quantity` decimal(12,2) NOT NULL,
-  `unit` varchar(30) NOT NULL DEFAULT '件',
-  `donor_name` varchar(150) DEFAULT NULL,
-  `received_date` date NOT NULL,
-  `expiry_date` date DEFAULT NULL,
-  `storage_location` varchar(150) DEFAULT NULL,
-  `notes` text DEFAULT NULL,
-  `received_by` int(11) NOT NULL,
-  `source_donation_id` int(11) DEFAULT NULL,
-  `source_item_id` int(11) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`receipt_id`),
-  KEY `idx_inventory_receipts_item` (`item_name`,`category`,`unit`),
-  KEY `idx_inventory_receipts_received_date` (`received_date`),
-  KEY `idx_inventory_receipts_expiry_date` (`expiry_date`),
-  UNIQUE KEY `uq_inventory_receipt_source` (`source_donation_id`,`source_item_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- 資料表結構 `permissions`（權限目錄）
---
-
-DROP TABLE IF EXISTS `permissions`;
-CREATE TABLE `permissions` (
-  `permission_key` varchar(50) NOT NULL,
-  `label` varchar(100) NOT NULL,
-  `category` varchar(50) NOT NULL,
-  PRIMARY KEY (`permission_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-INSERT INTO `permissions` (`permission_key`, `label`, `category`) VALUES
-  ('page.dashboard', '主頁', 'page'),
-  ('page.order_tracking', '訂單追蹤', 'page'),
-  ('page.deliveries', '配送任務', 'page'),
-  ('page.material_transport', '物資運送', 'page'),
-  ('page.news', '最新消息公告', 'page'),
-  ('page.inventory', '物資盤點', 'page'),
-  ('page.item_categories', '物資分類', 'page'),
-  ('page.rewards', '興毅幣兌換', 'page'),
-  ('page.carbon_report', '永續報告', 'page'),
-  ('page.reports', '數據分析／榮譽榜', 'page'),
-  ('page.notifications', '通知中心', 'page'),
-  ('page.donation_materials', '物資捐贈', 'page'),
-  ('page.donation_materials_review', '物資捐贈審查', 'page'),
-  ('page.settings', '設置', 'page'),
-  ('page.users', '帳號審核', 'page'),
-  ('page.volunteer_management', '一般會員管理', 'page'),
-  ('page.certificate', '證書', 'page'),
-  ('page.activity_certificate', '活動證書', 'page'),
-  ('page.rider_application', '申請外送志工', 'page'),
-  ('page.rider_review', '外送志工審核', 'page'),
-  ('rider.accept_task', '承接 Rider 配送任務', 'delivery'),
-  ('delivery.manage', '發布／編輯／處理配送任務', 'delivery'),
-  ('delivery.confirm_arrival', '確認配送已抵達並查收', 'delivery'),
-  ('inventory.inspect', '完成物資清點', 'inventory'),
-  ('ad.publish', '刊登廣告', 'news'),
-  ('activity.publish', '發布公益活動', 'news'),
-  ('donation.create', '刊登物資捐贈', 'donation'),
-  ('donation.review', '審查／拆單物資捐贈', 'donation'),
-  ('admin.manage_users', '管理帳號審核', 'admin');
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `role_permission_defaults`（角色預設權限矩陣）
---
-
-DROP TABLE IF EXISTS `role_permission_defaults`;
-CREATE TABLE `role_permission_defaults` (
-  `role` enum('foodbank_staff','member') NOT NULL,
-  `member_type` enum('general','enterprise','clerk','') NOT NULL DEFAULT '',
-  `permission_key` varchar(50) NOT NULL,
-  KEY `idx_rpd_permission_key` (`permission_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-INSERT INTO `role_permission_defaults` (`role`, `member_type`, `permission_key`) VALUES
-  ('foodbank_staff', '', 'page.dashboard'),
-  ('foodbank_staff', '', 'page.order_tracking'),
-  ('foodbank_staff', '', 'page.donation_materials_review'),
-  ('foodbank_staff', '', 'page.deliveries'),
-  ('foodbank_staff', '', 'page.news'),
-  ('foodbank_staff', '', 'page.inventory'),
-  ('foodbank_staff', '', 'delivery.manage'),
-  ('foodbank_staff', '', 'delivery.confirm_arrival'),
-  ('foodbank_staff', '', 'inventory.inspect'),
-  ('foodbank_staff', '', 'ad.publish'),
-  ('foodbank_staff', '', 'activity.publish'),
-  ('foodbank_staff', '', 'page.item_categories'),
-  ('foodbank_staff', '', 'page.rewards'),
-  ('foodbank_staff', '', 'page.settings'),
-  ('foodbank_staff', '', 'page.users'),
-  ('foodbank_staff', '', 'page.volunteer_management'),
-  ('foodbank_staff', '', 'page.rider_review'),
-  ('foodbank_staff', '', 'page.carbon_report'),
-  ('foodbank_staff', '', 'page.reports'),
-  ('foodbank_staff', '', 'page.notifications'),
-  ('foodbank_staff', '', 'page.certificate'),
-  ('foodbank_staff', '', 'page.activity_certificate'),
-  ('foodbank_staff', '', 'donation.review'),
-  ('foodbank_staff', '', 'admin.manage_users'),
-  ('member', 'enterprise', 'page.dashboard'),
-  ('member', 'enterprise', 'page.order_tracking'),
-  ('member', 'enterprise', 'page.news'),
-  ('member', 'enterprise', 'ad.publish'),
-  ('member', 'enterprise', 'activity.publish'),
-  ('member', 'enterprise', 'page.rewards'),
-  ('member', 'enterprise', 'page.notifications'),
-  ('member', 'enterprise', 'page.donation_materials'),
-  ('member', 'enterprise', 'page.carbon_report'),
-  ('member', 'enterprise', 'page.certificate'),
-  ('member', 'enterprise', 'page.activity_certificate'),
-  ('member', 'enterprise', 'donation.create'),
-  ('member', 'general', 'page.dashboard'),
-  ('member', 'general', 'page.rider_application'),
-  ('member', 'general', 'page.news'),
-  ('member', 'general', 'page.rewards'),
-  ('member', 'general', 'page.reports'),
-  ('member', 'general', 'page.notifications'),
-  ('member', 'general', 'page.certificate'),
-  ('member', 'general', 'page.activity_certificate'),
-  ('foodbank_staff', 'clerk', 'page.dashboard'),
-  ('foodbank_staff', 'clerk', 'page.order_tracking'),
-  ('foodbank_staff', 'clerk', 'page.deliveries'),
-  ('foodbank_staff', 'clerk', 'page.inventory'),
-  ('foodbank_staff', 'clerk', 'page.notifications'),
-  ('foodbank_staff', 'clerk', 'delivery.confirm_arrival'),
-  ('foodbank_staff', 'clerk', 'inventory.inspect');
-
-ALTER TABLE `role_permission_defaults`
-  ADD PRIMARY KEY (`role`, `member_type`, `permission_key`);
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `user_permission_overrides`（使用者個人權限覆寫，如一般會員加選 Rider）
---
-
-DROP TABLE IF EXISTS `user_permission_overrides`;
-CREATE TABLE `user_permission_overrides` (
-  `user_id` int(11) NOT NULL,
-  `permission_key` varchar(50) NOT NULL,
-  `granted` tinyint(1) NOT NULL DEFAULT 1,
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`user_id`, `permission_key`),
-  KEY `idx_upo_permission_key` (`permission_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- 既有帳號回填：所有目前已存在的一般會員視為已通過外送志工審核（維持現行行為，零回歸）
-INSERT INTO `user_permission_overrides` (`user_id`, `permission_key`, `granted`)
-SELECT u.`user_id`, k.`permission_key`, 1
-FROM `users` u
-CROSS JOIN (
-  SELECT 'rider.accept_task' AS `permission_key`
-  UNION ALL SELECT 'page.deliveries'
-  UNION ALL SELECT 'page.material_transport'
-) k
-WHERE u.`role` = 'member' AND u.`member_type` = 'general';
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `rider_applications`（一般會員申請成為外送志工，經食物銀行審核）
---
-
-DROP TABLE IF EXISTS `rider_applications`;
-CREATE TABLE `rider_applications` (
-  `application_id` int(11) NOT NULL AUTO_INCREMENT,
-  `user_id` int(11) NOT NULL,
-  `vehicle_type` enum('motorcycle','car','both') NOT NULL,
-  `license_photo_path` varchar(255) NOT NULL,
-  `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
-  `review_notes` text DEFAULT NULL,
-  `reviewed_by` int(11) DEFAULT NULL,
-  `reviewed_at` datetime DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`application_id`),
-  KEY `idx_rider_applications_user` (`user_id`, `status`),
-  KEY `idx_rider_applications_status` (`status`, `created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `advertisements`（最新消息公告的廣告專區，企業與食物銀行可刊登）
---
-
-DROP TABLE IF EXISTS `advertisements`;
-CREATE TABLE `advertisements` (
-  `ad_id` int(11) NOT NULL AUTO_INCREMENT,
-  `advertiser_id` int(11) NOT NULL,
-  `title` varchar(150) NOT NULL,
-  `content` text NOT NULL,
-  `link_url` varchar(255) DEFAULT NULL,
-  `image_path` varchar(255) DEFAULT NULL,
-  `status` enum('active','removed') NOT NULL DEFAULT 'active',
-  `start_date` date DEFAULT NULL,
-  `end_date` date DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`ad_id`),
-  KEY `idx_advertisements_status` (`status`, `created_at`),
-  KEY `idx_advertisements_advertiser` (`advertiser_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- 資料表的限制式 `role_permission_defaults`
---
-ALTER TABLE `role_permission_defaults`
-  ADD CONSTRAINT `role_permission_defaults_ibfk_1` FOREIGN KEY (`permission_key`) REFERENCES `permissions` (`permission_key`) ON DELETE CASCADE;
-
---
 -- 資料表的限制式 `user_permission_overrides`
 --
 ALTER TABLE `user_permission_overrides`
@@ -1618,24 +1659,10 @@ ALTER TABLE `user_permission_overrides`
   ADD CONSTRAINT `user_permission_overrides_ibfk_2` FOREIGN KEY (`permission_key`) REFERENCES `permissions` (`permission_key`) ON DELETE CASCADE;
 
 --
--- 資料表的限制式 `donation_allocation_items`
+-- 資料表的限制式 `warehouses`
 --
-ALTER TABLE `donation_allocation_items`
-  ADD PRIMARY KEY (`allocation_item_id`),
-  ADD KEY `idx_dai_allocation_id` (`allocation_id`),
-  ADD KEY `idx_dai_donation_item_id` (`donation_item_id`),
-  MODIFY `allocation_item_id` int(11) NOT NULL AUTO_INCREMENT;
-
-ALTER TABLE `donation_allocation_items`
-  ADD CONSTRAINT `donation_allocation_items_ibfk_1` FOREIGN KEY (`allocation_id`) REFERENCES `donation_allocations` (`allocation_id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `donation_allocation_items_ibfk_2` FOREIGN KEY (`donation_item_id`) REFERENCES `donation_items` (`item_id`) ON DELETE CASCADE;
-
---
--- 資料表的限制式 `deliveries`
---
-ALTER TABLE `deliveries`
-  ADD KEY `idx_deliveries_allocation_id` (`allocation_id`);
-
+ALTER TABLE `warehouses`
+  ADD CONSTRAINT `warehouses_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
