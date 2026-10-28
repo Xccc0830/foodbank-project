@@ -166,7 +166,7 @@ $subOrderStatusLabels = [
                                             <div class="customer-progress-track"><span class="customer-progress-fill"></span></div>
                                             <div class="customer-progress-steps">
                                                 <span class="customer-progress-step">準備中</span>
-                                                <span class="customer-progress-step">Go Rider 接單</span>
+                                                <span class="customer-progress-step">GO Rider 接單</span>
                                                 <span class="customer-progress-step">運送中</span>
                                                 <span class="customer-progress-step">已送達</span>
                                             </div>
@@ -216,8 +216,8 @@ $subOrderStatusLabels = [
                                     <summary>查看配送細節</summary>
                                     <div class="order-tracking-details-content">
                                         <div>
-                                            <strong>外送志工：</strong>
-                                            <?php echo !empty($order['volunteer_contacts']) ? htmlspecialchars($order['volunteer_contacts']) : '尚無志工接單'; ?>
+                                            <strong>GO Rider：</strong>
+                                            <?php echo !empty($order['volunteer_contacts']) ? htmlspecialchars($order['volunteer_contacts']) : '尚無 GO Rider 接單'; ?>
                                         </div>
                                         <div><strong>完成進度：</strong><?php echo (int) $order['completed_delivery_count']; ?> / <?php echo (int) $order['delivery_count']; ?> 完成</div>
                                         <div>

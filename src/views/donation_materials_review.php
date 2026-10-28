@@ -119,12 +119,12 @@ $donationTypeLabels = [
 ];
 $deliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
@@ -511,7 +511,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <div class="foodbank-delivery-options">
                             <strong>配送方式</strong>
                             <label><input type="radio" name="foodbank_delivery_option" value="food_bank_pickup" required> 忠信派車</label>
-                            <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery"> 志工派車</label>
+                            <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery"> GO Rider 派車</label>
                         </div>
                         <div class="modal-actions">
                             <button type="button" id="showRejectionReasonButton" class="btn btn-danger">婉拒</button>

@@ -237,8 +237,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'donor_confirm_pickup') {
     $confirmed = $deliveryModel->donorConfirmPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId);
     $formMessage = $confirmed
-        ? ['type' => 'success', 'text' => '已確認 Go Rider 領取物資，運送狀態已更新。']
-        : ['type' => 'error', 'text' => '確認失敗，請確認 Go Rider 已接受任務。'];
+        ? ['type' => 'success', 'text' => '已確認 GO Rider 領取物資，運送狀態已更新。']
+        : ['type' => 'error', 'text' => '確認失敗，請確認 GO Rider 已接受任務。'];
 }
 
 $merchantDonations = $donationModel->getAllDonations(null, $currentUserId);
@@ -258,12 +258,12 @@ $donationTypeLabels = [
 ];
 $deliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
@@ -366,7 +366,7 @@ $formatDateTime = static function ($value) {
                     <input type="hidden" name="estimated_duration_minutes" data-duration-input>
                 </div>
                 <p class="distance-estimate-status" data-distance-status hidden></p>
-                <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 若由 Go Rider 配送，配送會員接單後才會自動顯示姓名、電話與車輛資訊。</div>
+                <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 若由 GO Rider 配送，配送會員接單後才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
                 <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step>下一步：填寫物資</button></div>
             </section>
@@ -501,7 +501,7 @@ $formatDateTime = static function ($value) {
                     $transportStatus = $task['status'] ?? 'open';
                     $transportStatusLabel = $transportStatus === 'open'
                         ? '尚在等待運送人員'
-                        : ($transportStatus === 'claimed' ? 'Go Rider 正在路上' : '物資已領取，運送中');
+                        : ($transportStatus === 'claimed' ? 'GO Rider 正在路上' : '物資已領取，運送中');
                     ?>
                     <tr>
                         <td><?php echo htmlspecialchars($task['donor_name'] ?? ''); ?></td>
@@ -530,7 +530,7 @@ $formatDateTime = static function ($value) {
                                 <form method="post" class="inline-form">
                                     <input type="hidden" name="action" value="donor_confirm_pickup">
                                     <input type="hidden" name="delivery_id" value="<?php echo (int) $task['delivery_id']; ?>">
-                                    <button type="submit" class="btn btn-primary btn-sm">Go Rider 已將物資領取</button>
+                                    <button type="submit" class="btn btn-primary btn-sm">GO Rider 已將物資領取</button>
                                 </form>
                             <?php else: ?>
                                 <span class="text-muted">等待狀態更新</span>
