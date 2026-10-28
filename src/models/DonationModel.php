@@ -344,7 +344,7 @@ class DonationModel extends BaseModel {
             require_once __DIR__ . '/NotificationModel.php';
             $notificationModel = new NotificationModel($this->db);
             $notifiedCount = $notificationModel->notifyMembers(
-                '新的 Go Rider 配送任務',
+                '新的 GO Rider 配送任務',
                 sprintf(
                     '物資「%s」已發布 %d 筆配送任務，請立即前往配送任務查看並接單。',
                     (string) ($publishData['item_name'] ?? $existingDonation['item_name'] ?? '新物資'),
@@ -354,7 +354,7 @@ class DonationModel extends BaseModel {
                 'general'
             );
             if ($notifiedCount === 0) {
-                error_log("配送任務發布後沒有通知到忠信 GO RIDER：donation_id={$donation_id}");
+                error_log("配送任務發布後沒有通知到 GO Rider：donation_id={$donation_id}");
             }
         }
         return true;

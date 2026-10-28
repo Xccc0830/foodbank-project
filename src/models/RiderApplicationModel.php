@@ -1,6 +1,6 @@
 <?php
 /**
- * 外送志工申請模型
+ * GO Rider 申請模型
  * 一般會員註冊後預設不具外送權限，需上傳駕照申請並經食物銀行審核；
  * 審核通過後以個人權限覆寫（user_permission_overrides）授予外送相關能力。
  */
@@ -62,13 +62,13 @@ class RiderApplicationModel extends BaseModel {
         $userId = (int) $userId;
         $user = $this->getMember($userId);
         if (!$user || $user['status'] !== 'active') {
-            return ['success' => false, 'message' => '只有已開通的一般會員可以申請成為外送志工。'];
+            return ['success' => false, 'message' => '只有已開通的一般會員可以申請成為 GO Rider。'];
         }
         if (!in_array($vehicleType, self::VEHICLE_TYPES, true) || trim((string) $licensePhotoPath) === '') {
             return ['success' => false, 'message' => '請選擇可駕駛的車種並上傳駕照照片。'];
         }
         if ($this->isRider($userId)) {
-            return ['success' => false, 'message' => '您已具備外送志工資格。'];
+            return ['success' => false, 'message' => '您已具備 GO Rider 資格。'];
         }
         $latest = $this->getLatestForUser($userId);
         if ($latest && $latest['status'] === 'pending') {
@@ -95,8 +95,8 @@ class RiderApplicationModel extends BaseModel {
 
         (new NotificationModel($this->db))->notifyRole(
             'foodbank_staff',
-            '新的外送志工申請',
-            ($user['full_name'] ?? '一般會員') . ' 已送出外送志工申請，請至「外送志工審核」處理。',
+            '新的 GO Rider 申請',
+            ($user['full_name'] ?? '一般會員') . ' 已送出 GO Rider 申請，請至「GO Rider 審核」處理。',
             'info'
         );
 
@@ -136,8 +136,8 @@ class RiderApplicationModel extends BaseModel {
 
         (new NotificationModel($this->db))->notify(
             $userId,
-            '外送志工申請通過',
-            '您的外送志工申請已通過，現在可以前往「配送任務」接單。',
+            'GO Rider 申請通過',
+            '您的 GO Rider 申請已通過，現在可以前往「配送任務」接單。',
             'success'
         );
         return true;
@@ -164,8 +164,8 @@ class RiderApplicationModel extends BaseModel {
 
         (new NotificationModel($this->db))->notify(
             (int) $application['user_id'],
-            '外送志工申請未通過',
-            '您的外送志工申請未通過：' . $notes . '。您可以補齊資料後重新申請。',
+            'GO Rider 申請未通過',
+            '您的 GO Rider 申請未通過：' . $notes . '。您可以補齊資料後重新申請。',
             'warning'
         );
         return true;

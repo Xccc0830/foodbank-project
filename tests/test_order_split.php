@@ -114,7 +114,7 @@ $activeRidersResult = $conn->query("SELECT COUNT(*) AS total FROM users WHERE ro
 $activeRiderCount = $activeRidersResult ? (int) $activeRidersResult->fetch_assoc()['total'] : 0;
 $notifiedRidersResult = $conn->query(
     "SELECT COUNT(DISTINCT user_id) AS total FROM notifications
-     WHERE notification_id > {$notificationCursor} AND title = '新的 Go Rider 配送任務'"
+     WHERE notification_id > {$notificationCursor} AND title = '新的 GO Rider 配送任務'"
 );
 $notifiedRiderCount = $notifiedRidersResult ? (int) $notifiedRidersResult->fetch_assoc()['total'] : 0;
 if ($published && $activeRiderCount > 0 && $notifiedRiderCount === $activeRiderCount) {

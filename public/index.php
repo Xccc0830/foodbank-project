@@ -43,7 +43,7 @@ $connection->query(
         WHEN 'official' THEN '食物銀行官方人員'
         WHEN 'manager' THEN '忠信食物銀行'
         WHEN 'staff' THEN '食物銀行官方人員'
-        WHEN 'volunteer' THEN '忠信GO RIDER'
+        WHEN 'volunteer' THEN 'GO Rider'
         WHEN 'donor' THEN '捐贈剩食店家'
         ELSE full_name
     END
@@ -430,7 +430,7 @@ $latestNotificationId = $notificationModel->getLatestIdForUser((int) $currentUse
 $role = $currentUser['role'];
 $memberType = $currentUser['member_type'] ?? null;
 $roleLabels = [
-    'foodbank_staff' => ($currentUser['staff_type'] ?? null) === 'clerk' ? '食物銀行行政人員' : '忠信食物銀行',
+    'foodbank_staff' => '食物銀行管理員',
     'member' => $memberType === 'enterprise' ? '企業會員' : ($memberType === 'general' ? '一般會員' : '會員'),
 ];
 
@@ -442,24 +442,24 @@ $page = basename($page);
 
 // 菜單項配置
 $menu_items = [
-    'dashboard' => ['label' => '主頁', 'icon' => 'fa-solid fa-chart-line'],
-    'order_tracking' => ['label' => '訂單追蹤', 'icon' => 'fa-solid fa-list-check'],
-    'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route'],
-    'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast'],
-    'news' => ['label' => '最新消息公告', 'icon' => 'fa-solid fa-newspaper'],
-    'inventory' => ['label' => '物資盤點', 'icon' => 'fa-solid fa-boxes-stacked'],
-    'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group'],
-    'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift'],
-    'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf'],
-    'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie'],
-    'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell'],
-    'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open'],
-    'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check'],
-    'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear'],
-    'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check'],
-    'volunteer_management' => ['label' => '一般會員管理', 'icon' => 'fa-solid fa-people-group'],
-    'rider_application' => ['label' => '申請外送志工', 'icon' => 'fa-solid fa-id-card'],
-    'rider_review' => ['label' => '外送志工審核', 'icon' => 'fa-solid fa-user-shield'],
+    'dashboard' => ['label' => '主頁', 'icon' => 'fa-solid fa-chart-line', 'group' => ''],
+    'news' => ['label' => '最新消息公告', 'icon' => 'fa-solid fa-newspaper', 'group' => ''],
+    'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell', 'group' => ''],
+    'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open', 'group' => '物資與配送'],
+    'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check', 'group' => '物資與配送'],
+    'material_transport' => ['label' => '物資運送', 'icon' => 'fa-solid fa-truck-fast', 'group' => '物資與配送'],
+    'deliveries' => ['label' => '配送任務', 'icon' => 'fa-solid fa-route', 'group' => '物資與配送'],
+    'order_tracking' => ['label' => '訂單追蹤', 'icon' => 'fa-solid fa-list-check', 'group' => '物資與配送'],
+    'inventory' => ['label' => '物資盤點', 'icon' => 'fa-solid fa-boxes-stacked', 'group' => '物資與配送'],
+    'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group', 'group' => '物資與配送'],
+    'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check', 'group' => '會員管理'],
+    'volunteer_management' => ['label' => '一般會員管理', 'icon' => 'fa-solid fa-people-group', 'group' => '會員管理'],
+    'rider_review' => ['label' => 'GO Rider 審核', 'icon' => 'fa-solid fa-user-shield', 'group' => '會員管理'],
+    'rider_application' => ['label' => '申請 GO Rider', 'icon' => 'fa-solid fa-id-card', 'group' => '會員管理'],
+    'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift', 'group' => '成效與回饋'],
+    'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf', 'group' => '成效與回饋'],
+    'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie', 'group' => '成效與回饋'],
+    'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear', 'group' => ''],
 ];
 
 // 頁面存取控制：以 Permission (page.<slug>) 為準，不再使用寫死的角色判斷。
@@ -500,10 +500,16 @@ ob_start();
             </div>
 
             <nav class="sidebar-nav">
-                <?php foreach ($menu_items as $key => $item):
+                <?php $currentNavGroup = '';
+                foreach ($menu_items as $key => $item):
                     if (!in_array($key, $allowedPages, true)) {
                         continue;
                     }
+                    // 同一組的項目相鄰排列，組名只在換組時顯示一次。
+                    if ($item['group'] !== '' && $item['group'] !== $currentNavGroup): ?>
+                        <div class="nav-group-title"><?php echo htmlspecialchars($item['group']); ?></div>
+                    <?php endif;
+                    $currentNavGroup = $item['group'];
                     $is_active = ($page === $key) ? 'active' : '';
                     $icon = $item['icon'];
                     $label = ($key === 'reports' && $role === 'member') ? '榮譽榜' : $item['label'];
@@ -517,6 +523,22 @@ ob_start();
                     </a>
                 <?php endforeach; ?>
             </nav>
+            <script>
+                // 換頁會重新載入整個畫面；在此記住並立刻還原側邊欄的捲動位置，導覽列才不會跳回最上面。
+                (function () {
+                    var sidebar = document.querySelector('.sidebar');
+                    if (!sidebar) { return; }
+                    try {
+                        var saved = sessionStorage.getItem('sidebarScrollTop');
+                        if (saved !== null) { sidebar.scrollTop = parseInt(saved, 10) || 0; }
+                    } catch (e) {}
+                    function save() {
+                        try { sessionStorage.setItem('sidebarScrollTop', String(sidebar.scrollTop)); } catch (e) {}
+                    }
+                    sidebar.addEventListener('click', save);
+                    window.addEventListener('pagehide', save);
+                })();
+            </script>
 
             <div class="sidebar-footer">
                 <div class="user-profile">

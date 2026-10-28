@@ -11,7 +11,7 @@ function uploadDonationPhoto(array $file) {
 }
 
 /**
- * 驗證並儲存志工取貨照片，回傳相對於 public/ 的路徑，失敗回傳 false
+ * 驗證並儲存 GO Rider 取貨照片，回傳相對於 public/ 的路徑，失敗回傳 false
  */
 function uploadPickupPhoto(array $file) {
     return saveUploadedImage($file, 'uploads/pickups', 'pickup', BASE_PATH . '/public');
@@ -25,7 +25,7 @@ function uploadAdImage(array $file) {
 }
 
 /**
- * 驗證並儲存外送志工駕照照片。駕照屬個資，存放於網站根目錄之外的 storage/，
+ * 驗證並儲存 GO Rider 駕照照片。駕照屬個資，存放於網站根目錄之外的 storage/，
  * 只能透過審核人員專用的下載動作讀取。回傳相對於 storage/ 的路徑，失敗回傳 false
  */
 function uploadRiderLicensePhoto(array $file) {

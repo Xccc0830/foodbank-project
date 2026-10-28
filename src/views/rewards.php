@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'redeem_reward') {
         if (!$isVolunteer) {
-            $message = ['type' => 'error', 'text' => '只有忠信GO RIDER可以使用興毅幣兌換。'];
+            $message = ['type' => 'error', 'text' => '只有 GO Rider 可以使用興毅幣兌換。'];
         } else {
             $claim = $rewardModel->redeem(
                 (int) $currentUser['user_id'],
@@ -318,12 +318,12 @@ if ($isDonor) {
 
 <?php if ($currentRole === 'foodbank_staff'): ?>
 <div class="card mt-32">
-    <div class="card-header"><h2>食物銀行待核銷兌換</h2><p>忠信GO RIDER完成兌換後會立即出現在這裡，請確認兌換編號或 QR Code 後核銷。</p></div>
+    <div class="card-header"><h2>食物銀行待核銷兌換</h2><p>GO Rider 完成兌換後會立即出現在這裡，請確認兌換編號或 QR Code 後核銷。</p></div>
     <div class="card-body">
         <?php if ($foodbankPendingClaims): ?>
             <div class="redemptions-table-body">
                 <table class="data-table redemptions-table redemptions-pending-table">
-                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>忠信GO RIDER</th><th>興毅幣</th><th>兌換時間</th></tr></thead>
+                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>GO Rider</th><th>興毅幣</th><th>兌換時間</th></tr></thead>
                     <tbody>
                     <?php foreach ($foodbankPendingClaims as $claim): ?>
                         <tr>
@@ -349,7 +349,7 @@ if ($isDonor) {
         <?php if ($foodbankRedemptions): ?>
             <div class="redemptions-table-body">
                 <table class="data-table redemptions-table redemptions-history-table">
-                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>忠信GO RIDER</th><th>興毅幣</th><th>狀態</th><th>時間</th></tr></thead>
+                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>GO Rider</th><th>興毅幣</th><th>狀態</th><th>時間</th></tr></thead>
                     <tbody>
                     <?php foreach ($foodbankRedemptions as $redemption): ?>
                         <tr>
@@ -511,10 +511,10 @@ if ($isDonor) {
 
 <?php if ($isDonor): ?>
 <div class="card mt-32">
-    <div class="card-header"><h2>獎勵兌換紀錄</h2><p>查看忠信GO RIDER兌換你提供的獎勵方案</p></div>
+    <div class="card-header"><h2>獎勵兌換紀錄</h2><p>查看 GO Rider 兌換你提供的獎勵方案</p></div>
     <div class="card-body">
         <?php if ($donorRedemptions): ?>
-            <table class="data-table donor-redemptions-table"><thead><tr><th>忠信GO RIDER</th><th>獎勵方案</th><th>兌換興毅幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <table class="data-table donor-redemptions-table"><thead><tr><th>GO Rider</th><th>獎勵方案</th><th>兌換興毅幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($donorRedemptions as $redemption): ?>
                 <tr>
                     <td><?php echo htmlspecialchars($redemption['volunteer_name']); ?></td>
@@ -544,7 +544,7 @@ if ($isDonor) {
 </div>
 
 <div class="card mt-32">
-    <div class="card-header"><h2>我的獎勵方案</h2><p>設定忠信GO RIDER可在貴店家兌換的獎勵與優惠</p></div>
+    <div class="card-header"><h2>我的獎勵方案</h2><p>設定 GO Rider 可在貴店家兌換的獎勵與優惠</p></div>
     <div class="card-body">
         <?php if ($donorRewards): ?>
             <div class="rewards-table-wrapper">
@@ -602,7 +602,7 @@ if ($isDonor) {
 </div>
 
 <div class="card mt-32">
-    <div class="card-header"><h2>新增獎勵方案</h2><p>讓忠信GO RIDER可以兌換你提供的優惠或商品</p></div>
+    <div class="card-header"><h2>新增獎勵方案</h2><p>讓 GO Rider 可以兌換你提供的優惠或商品</p></div>
     <div class="card-body">
         <form method="post">
             <?php echo csrfField(); ?>

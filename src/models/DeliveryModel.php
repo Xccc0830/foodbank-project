@@ -70,7 +70,7 @@ class DeliveryModel extends BaseModel {
     }
 
     /**
-     * 志工取貨後依物資預估運送時間設定預估送達範圍（起點為預估時間，終點多留緩衝）。
+     * GO Rider 取貨後依物資預估運送時間設定預估送達範圍（起點為預估時間，終點多留緩衝）。
      */
     private function setArrivalWindow($deliveryId) {
         $deliveryId = (int) $deliveryId;
@@ -94,7 +94,7 @@ class DeliveryModel extends BaseModel {
     }
 
     /**
-     * 找出已取貨但超過預估送達時間的配送任務，通知食物銀行人員並附上志工聯絡方式。
+     * 找出已取貨但超過預估送達時間的配送任務，通知食物銀行人員並附上 GO Rider 聯絡方式。
      * 每筆任務只通知一次；回傳本次新通知的任務數。
      */
     public function notifyOverdueDeliveries() {
@@ -119,11 +119,11 @@ class DeliveryModel extends BaseModel {
 
             $window = date('H:i', strtotime($delivery['estimated_arrival_start'])) . '–' . date('H:i', strtotime($delivery['estimated_arrival_end']));
             $order = !empty($delivery['order_number']) ? "（訂單 {$delivery['order_number']}）" : '';
-            $contact = ($delivery['volunteer_name'] ?? '外送志工') . '，電話：' . ($delivery['volunteer_phone'] ?: '未提供');
+            $contact = ($delivery['volunteer_name'] ?? 'GO Rider') . '，電話：' . ($delivery['volunteer_phone'] ?: '未提供');
             $this->notifyUsersByRoles(
                 ['foodbank_staff'],
                 '配送逾時提醒',
-                "配送任務 #{$deliveryId}{$order} 已超過預估送達時間 {$window}，請聯繫外送志工：{$contact}。",
+                "配送任務 #{$deliveryId}{$order} 已超過預估送達時間 {$window}，請聯繫 GO Rider：{$contact}。",
                 'warning'
             );
             $notified++;
@@ -207,7 +207,7 @@ class DeliveryModel extends BaseModel {
             $notificationMessage = "新的配送任務 #{$deliveryId} 已發布，請至配送任務查看並接單。";
             $notifiedCount = $this->notifyGeneralMembers('新的配送任務', $notificationMessage, 'info');
             if ($notifiedCount === 0) {
-                error_log("配送任務發布後沒有可通知的忠信GO RIDER：delivery_id={$deliveryId}");
+                error_log("配送任務發布後沒有可通知的 GO Rider：delivery_id={$deliveryId}");
             }
         }
 
@@ -527,13 +527,13 @@ class DeliveryModel extends BaseModel {
             $notifiedCount = $this->notifyUsersByRoles(
                 ['foodbank_staff'],
                 '配送任務已接單',
-                "配送任務 #{$deliveryId} 已由忠信GO RIDER接單。",
+                "配送任務 #{$deliveryId} 已由 GO Rider 接單。",
                 'info'
             );
             if ($notifiedCount === 0) {
-                error_log("忠信GO RIDER接單通知沒有官方收件人：delivery_id={$deliveryId}");
+                error_log("GO Rider 接單通知沒有官方收件人：delivery_id={$deliveryId}");
             }
-            $this->notifyDonor($deliveryId, 'Go Rider 已接單', "配送任務 #{$deliveryId} 已由 Go Rider 接單，正在前往取貨。", 'info');
+            $this->notifyDonor($deliveryId, 'GO Rider 已接單', "配送任務 #{$deliveryId} 已由 GO Rider 接單，正在前往取貨。", 'info');
         }
         return $updated && $this->db->affected_rows === 1;
     }
@@ -559,7 +559,7 @@ class DeliveryModel extends BaseModel {
         $wasUpdated = $updated && $this->db->affected_rows === 1;
         if ($wasUpdated) {
             $this->setArrivalWindow($deliveryId);
-            $this->notifyDonor($deliveryId, 'Go Rider 已取貨', "配送任務 #{$deliveryId} 物資已取貨，Go Rider 正在前往送達地點。", 'info');
+            $this->notifyDonor($deliveryId, 'GO Rider 已取貨', "配送任務 #{$deliveryId} 物資已取貨，GO Rider 正在前往送達地點。", 'info');
         }
         return $wasUpdated;
     }
@@ -718,7 +718,7 @@ class DeliveryModel extends BaseModel {
                 $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
             }
             $this->db->commit();
-            $this->notifyDonor($deliveryId, 'Go Rider 已送達', "配送任務 #{$deliveryId} 已送達，感謝您的愛心。", 'success');
+            $this->notifyDonor($deliveryId, 'GO Rider 已送達', "配送任務 #{$deliveryId} 已送達，感謝您的愛心。", 'success');
             if ($volunteerId > 0) {
                 $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚興毅幣。", 'success');
             }

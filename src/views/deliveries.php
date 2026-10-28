@@ -314,7 +314,7 @@ if ($isVolunteer) {
             <?php else: ?>
                 <div class="driver-trip-note">
                     <i class="fas fa-circle-info"></i>
-                    送達食物銀行後，請將物資交給行政人員；由行政人員確認「已抵達」並清點物資後，任務才算完成。
+                    送達食物銀行後，請將物資交給食物銀行管理員；由食物銀行管理員確認「已抵達」並清點物資後，任務才算完成。
                     <?php if (!empty($activeDriverTrip['estimated_arrival_start']) && !empty($activeDriverTrip['estimated_arrival_end'])): ?>
                         預估送達時間：<?php echo htmlspecialchars(date('H:i', strtotime($activeDriverTrip['estimated_arrival_start'])) . '–' . date('H:i', strtotime($activeDriverTrip['estimated_arrival_end']))); ?>
                     <?php endif; ?>
@@ -351,7 +351,7 @@ if ($isVolunteer) {
             <form method="post">
                 <input type="hidden" name="action" value="create_delivery">
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" max="2147483647" placeholder="可留白"></div>
-                <div class="form-group"><label>配送方式*</label><select name="delivery_method" required><option value="food_bank">忠信派車</option><option value="volunteer" selected>志工派車</option></select></div>
+                <div class="form-group"><label>配送方式*</label><select name="delivery_method" required><option value="food_bank">忠信派車</option><option value="volunteer" selected>GO Rider 派車</option></select></div>
                 <div class="grid-2">
                     <div class="form-group"><label>交通工具</label><select name="vehicle_type"><option value="motorcycle">機車</option><option value="car">汽車</option></select></div>
                     <div class="form-group"><label>總配送距離（公里）*</label><input type="number" name="total_distance_km" min="0" step="0.1" required></div>
@@ -393,7 +393,7 @@ if ($isVolunteer) {
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" value="<?php echo (int) ($editingDelivery['donation_id'] ?? 0); ?>"></div>
                 <div class="form-group"><label>運送方式*</label><select name="delivery_method" required>
                     <option value="food_bank" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'food_bank' ? 'selected' : ''; ?>>忠信派車</option>
-                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>志工派車</option>
+                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>GO Rider 派車</option>
                 </select></div>
                 <div class="form-group"><label>交通工具</label><select name="vehicle_type">
                     <option value="motorcycle" <?php echo $editingDelivery['vehicle_type'] === 'motorcycle' ? 'selected' : ''; ?>>機車</option>
@@ -476,7 +476,7 @@ if ($isVolunteer) {
                             <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
                         </div>
                     </td>
-                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => '志工派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
+                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => 'GO Rider 派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
@@ -505,7 +505,7 @@ if ($isVolunteer) {
                             <br><a href="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($delivery['pickup_photo_path'], '/'), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
                         <?php endif; ?>
                         <?php if ($isOfficial && !empty($delivery['volunteer_id'])): ?>
-                            <br><small>志工：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
+                            <br><small>GO Rider：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
                             <?php if (!empty($delivery['volunteer_phone'])): ?>
                                 <a href="tel:<?php echo htmlspecialchars($delivery['volunteer_phone'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($delivery['volunteer_phone']); ?></a>
                             <?php else: ?>（未提供電話）<?php endif; ?></small>
@@ -597,7 +597,7 @@ if ($isVolunteer) {
                             <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
                         </div>
                     </td>
-                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => '志工派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
+                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => 'GO Rider 派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
