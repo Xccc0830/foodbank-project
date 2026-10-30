@@ -25,6 +25,7 @@ $statusClasses = [
 $subOrderStatusLabels = [
     'open' => '待接單',
     'claimed' => '已接單',
+    'arrived_pickup' => '已到店',
     'picked_up' => '配送中',
     'delivered' => '已送達',
     'exception' => '異常待處理',

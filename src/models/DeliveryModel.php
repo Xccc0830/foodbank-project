@@ -14,6 +14,27 @@ class DeliveryModel extends BaseModel {
         $this->ensureExceptionResponseColumns();
         $this->ensurePickupPhotoColumn();
         $this->ensureArrivalWindowColumns();
+        $this->ensureArrivedPickupSupport();
+    }
+
+    private function ensureArrivedPickupSupport() {
+        $status = $this->db->query("SHOW COLUMNS FROM deliveries LIKE 'status'");
+        $row = $status ? $status->fetch_assoc() : null;
+        if ($row && strpos($row['Type'], 'arrived_pickup') === false) {
+            $this->db->query(
+                "ALTER TABLE deliveries MODIFY status ENUM('open','claimed','arrived_pickup','picked_up','delivered','exception','cancelled') NOT NULL DEFAULT 'open'"
+            );
+        }
+        $columns = [
+            'arrived_pickup_at' => "ALTER TABLE deliveries ADD arrived_pickup_at DATETIME DEFAULT NULL",
+            'received_confirmed_by' => "ALTER TABLE deliveries ADD received_confirmed_by INT DEFAULT NULL",
+        ];
+        foreach ($columns as $column => $alterSql) {
+            $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
+            if ($result && $result->num_rows === 0) {
+                $this->db->query($alterSql);
+            }
+        }
     }
 
     private function ensureArrivalWindowColumns() {
@@ -61,9 +82,11 @@ class DeliveryModel extends BaseModel {
     }
 
     public function getAllDeliveries() {
-        $sql = "SELECT d.*, n.order_number, n.donor_name, u.full_name AS volunteer_name, u.phone AS volunteer_phone
+        $sql = "SELECT d.*, n.order_number, n.donor_name, n.notes AS donation_notes, donor.phone AS donor_phone,
+                       u.full_name AS volunteer_name, u.phone AS volunteer_phone
                 FROM deliveries d
                 LEFT JOIN donations n ON n.donation_id = d.donation_id
+                LEFT JOIN users donor ON donor.user_id = n.donor_id
                 LEFT JOIN users u ON u.user_id = d.volunteer_id
                 ORDER BY d.created_at DESC";
         return $this->enrichTasksWithItemSummary($this->query($sql));
@@ -148,7 +171,7 @@ class DeliveryModel extends BaseModel {
                         WHERE other_delivery.volunteer_id = d.volunteer_id
                           AND other_delivery.delivery_id <> d.delivery_id
                           AND other_delivery.delivery_method = 'volunteer'
-                          AND other_delivery.status IN ('claimed', 'picked_up')
+                          AND other_delivery.status IN ('claimed', 'arrived_pickup', 'picked_up')
                     ) AS other_active_delivery_count
              FROM deliveries d
              LEFT JOIN donations n ON n.donation_id = d.donation_id
@@ -161,6 +184,33 @@ class DeliveryModel extends BaseModel {
         }
         $tracking = $result->fetch_assoc();
         return $tracking ?: null;
+    }
+
+    /**
+     * 食物銀行確認收貨後，通知原提供商家「物資已成功送達」（同一張配送單只通知一次）。
+     */
+    private function notifyDonorDelivered($deliveryId) {
+        $deliveryId = (int) $deliveryId;
+        $result = $this->db->query(
+            "SELECT n.donor_id, n.item_name FROM deliveries d
+             INNER JOIN donations n ON n.donation_id = d.donation_id
+             WHERE d.delivery_id = {$deliveryId} LIMIT 1"
+        );
+        $row = $result ? $result->fetch_assoc() : null;
+        if (!$row || (int) $row['donor_id'] <= 0) {
+            return false;
+        }
+        require_once __DIR__ . '/NotificationModel.php';
+        $itemName = trim((string) ($row['item_name'] ?? ''));
+        $label = $itemName !== '' ? "「{$itemName}」" : '';
+        return (new NotificationModel($this->db))->notifyOnce(
+            (int) $row['donor_id'],
+            '物資已成功送達',
+            "您捐贈的物資{$label}（配送任務 #{$deliveryId}）已由食物銀行確認收貨，感謝您的愛心。",
+            'success',
+            "delivered:{$deliveryId}",
+            $deliveryId
+        );
     }
 
     private function notifyDonor($deliveryId, $title, $message, $type = 'info') {
@@ -247,26 +297,14 @@ class DeliveryModel extends BaseModel {
                 WHERE n.donor_id = {$donorId}
                   AND n.status = 'published'
                   AND d.delivery_method = 'volunteer'
-                  AND d.status IN ('open', 'claimed', 'picked_up')
+                  AND d.status IN ('open', 'claimed', 'arrived_pickup', 'picked_up')
                 ORDER BY n.published_at DESC, d.delivery_id ASC";
         return $this->enrichTasksWithItemSummary($this->query($sql));
     }
 
-    public function donorConfirmPickup($deliveryId, $donorId) {
-        $deliveryId = (int) $deliveryId;
-        $donorId = (int) $donorId;
-        return $this->db->query("UPDATE deliveries d
-            INNER JOIN donations n ON n.donation_id = d.donation_id
-            SET d.status = 'picked_up', d.pickup_confirmed_at = NOW(), d.updated_at = NOW()
-            WHERE d.delivery_id = {$deliveryId}
-              AND n.donor_id = {$donorId}
-              AND d.delivery_method = 'volunteer'
-              AND d.status = 'claimed'") && $this->db->affected_rows === 1;
-    }
-
     public function completeDonationDeliveries($donationId) {
         $donationId = (int) $donationId;
-        $result = $this->db->query("SELECT delivery_id, volunteer_id, points FROM deliveries WHERE donation_id = {$donationId} AND status IN ('claimed', 'picked_up')");
+        $result = $this->db->query("SELECT delivery_id, volunteer_id, points FROM deliveries WHERE donation_id = {$donationId} AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
         if (!$result || $result->num_rows === 0) {
             return false;
         }
@@ -275,7 +313,7 @@ class DeliveryModel extends BaseModel {
         try {
             while ($delivery = $result->fetch_assoc()) {
                 $deliveryId = (int) $delivery['delivery_id'];
-                $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up')");
+                $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
                 $volunteerId = (int) ($delivery['volunteer_id'] ?? 0);
                 if ($volunteerId > 0) {
                     $points = (int) ($delivery['points'] ?? 0);
@@ -300,7 +338,7 @@ class DeliveryModel extends BaseModel {
                                 INNER JOIN donations n ON n.donation_id = d.donation_id
                                 WHERE n.status = 'published'
                                     AND d.delivery_method = 'volunteer'
-                                    AND d.status IN ('open', 'claimed')
+                                    AND d.status IN ('open', 'claimed', 'arrived_pickup')
                                 ORDER BY n.published_at DESC, d.delivery_id ASC";
                 return $this->enrichTasksWithItemSummary($this->query($sql));
         }
@@ -438,7 +476,7 @@ class DeliveryModel extends BaseModel {
         $distance = (float) ($data['total_distance_km'] ?? 0);
         $weight = (float) ($data['weight_kg'] ?? 0);
         $urgency = in_array(($data['urgency'] ?? 'normal'), ['normal', 'priority', 'urgent'], true) ? $data['urgency'] : 'normal';
-        $status = in_array(($data['status'] ?? 'open'), ['open', 'claimed', 'picked_up', 'exception', 'cancelled'], true)
+        $status = in_array(($data['status'] ?? 'open'), ['open', 'claimed', 'arrived_pickup', 'picked_up', 'exception', 'cancelled'], true)
             ? $data['status']
             : 'open';
         $deliveryMethod = $this->normalizeDeliveryMethod($data['delivery_method'] ?? 'volunteer');
@@ -545,6 +583,20 @@ class DeliveryModel extends BaseModel {
         return $updated && $this->db->affected_rows === 1;
     }
 
+    /**
+     * 騎手按「已到店取貨」：已接單 → 已到店。之後必須上傳取貨照片才能完成取件。
+     */
+    public function markArrivedAtPickup($deliveryId, $volunteerId) {
+        $deliveryId = (int) $deliveryId;
+        $volunteerId = (int) $volunteerId;
+        $this->db->query("UPDATE deliveries SET status = 'arrived_pickup', arrived_pickup_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND delivery_method = 'volunteer' AND status = 'claimed'");
+        if ($this->db->affected_rows !== 1) {
+            return false;
+        }
+        $this->notifyDonor($deliveryId, 'GO Rider 已到店', "配送任務 #{$deliveryId} 的 GO Rider 已抵達店家，準備取貨。", 'info');
+        return true;
+    }
+
     public function confirmPickup($deliveryId, $volunteerId, $pickupPhotoPath) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;
@@ -555,7 +607,7 @@ class DeliveryModel extends BaseModel {
         }
 
         $photoValue = $this->db->real_escape_string($pickupPhotoPath);
-        $updated = $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), pickup_photo_path = '{$photoValue}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'claimed'");
+        $updated = $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), pickup_photo_path = '{$photoValue}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'arrived_pickup'");
         $wasUpdated = $updated && $this->db->affected_rows === 1;
         if ($wasUpdated) {
             $this->setArrivalWindow($deliveryId);
@@ -573,7 +625,7 @@ class DeliveryModel extends BaseModel {
             return false;
         }
 
-        $updated = $this->db->query("UPDATE deliveries SET status = 'exception', exception_notes = '{$notes}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status IN ('claimed', 'picked_up')");
+        $updated = $this->db->query("UPDATE deliveries SET status = 'exception', exception_notes = '{$notes}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
         $wasUpdated = $updated && $this->db->affected_rows > 0;
         if ($wasUpdated) {
             $notificationMessage = "配送任務 #{$deliveryId}：{$notes}";
@@ -691,13 +743,13 @@ class DeliveryModel extends BaseModel {
         return $this->db->query($sql);
     }
 
-    public function completeDelivery($deliveryId) {
-        return $this->finalizeDeliveryCompletion($deliveryId);
+    public function completeDelivery($deliveryId, $confirmedBy = null) {
+        return $this->finalizeDeliveryCompletion($deliveryId, $confirmedBy);
     }
 
-    private function finalizeDeliveryCompletion($deliveryId) {
+    private function finalizeDeliveryCompletion($deliveryId, $confirmedBy = null) {
         $deliveryId = (int) $deliveryId;
-        $ownerCondition = " AND status IN ('claimed', 'picked_up', 'in_transit')";
+        $ownerCondition = " AND status IN ('claimed', 'arrived_pickup', 'picked_up', 'in_transit')";
 
         $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
@@ -708,7 +760,8 @@ class DeliveryModel extends BaseModel {
 
         $this->db->begin_transaction();
         try {
-            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId}{$ownerCondition}");
+            $confirmedSql = $confirmedBy ? (int) $confirmedBy : 'NULL';
+            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), received_confirmed_by = {$confirmedSql} WHERE delivery_id = {$deliveryId}{$ownerCondition}");
             if ($this->db->affected_rows !== 1) {
                 throw new RuntimeException('配送任務狀態已變更，無法完成行程。');
             }
@@ -718,7 +771,7 @@ class DeliveryModel extends BaseModel {
                 $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
             }
             $this->db->commit();
-            $this->notifyDonor($deliveryId, 'GO Rider 已送達', "配送任務 #{$deliveryId} 已送達，感謝您的愛心。", 'success');
+            $this->notifyDonorDelivered($deliveryId);
             if ($volunteerId > 0) {
                 $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚興毅幣。", 'success');
             }

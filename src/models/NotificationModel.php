@@ -11,10 +11,41 @@ class NotificationModel extends BaseModel {
     public function __construct($connection = null) {
         if ($connection !== null) {
             $this->db = $connection;
-            return;
+        } else {
+            parent::__construct();
         }
+        $this->ensureDeliveryColumns();
+    }
 
-        parent::__construct();
+    private function ensureDeliveryColumns() {
+        $columns = [
+            'channel' => "ALTER TABLE notifications ADD channel ENUM('web','push','line','sms') NOT NULL DEFAULT 'web'",
+            'related_delivery_id' => "ALTER TABLE notifications ADD related_delivery_id INT DEFAULT NULL",
+            'dedupe_key' => "ALTER TABLE notifications ADD dedupe_key VARCHAR(100) DEFAULT NULL",
+        ];
+        foreach ($columns as $column => $alterSql) {
+            $result = $this->db->query("SHOW COLUMNS FROM notifications LIKE '{$column}'");
+            if ($result && $result->num_rows === 0) {
+                $this->db->query($alterSql);
+            }
+        }
+        $index = $this->db->query("SHOW INDEX FROM notifications WHERE Key_name = 'uniq_notification_dedupe'");
+        if ($index && $index->num_rows === 0) {
+            $this->db->query("ALTER TABLE notifications ADD UNIQUE KEY uniq_notification_dedupe (user_id, dedupe_key)");
+        }
+    }
+
+    /**
+     * 與 notify() 相同，但帶有去重鍵與關聯配送單；同一個 user 同一個 key 只會通知一次。
+     */
+    public function notifyOnce($userId, $title, $message, $type, $dedupeKey, $deliveryId = null) {
+        $userId = (int) $userId;
+        $stmt = $this->db->prepare(
+            "INSERT IGNORE INTO notifications (user_id, title, message, type, related_delivery_id, dedupe_key) VALUES (?, ?, ?, ?, ?, ?)"
+        );
+        $stmt->bind_param('isssis', $userId, $title, $message, $type, $deliveryId, $dedupeKey);
+        $stmt->execute();
+        return $stmt->affected_rows === 1;
     }
 
     public function notify($userId, $title, $message, $type = 'info') {

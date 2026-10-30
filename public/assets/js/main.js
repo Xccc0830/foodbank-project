@@ -7,6 +7,9 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         initializeEventListeners();
+        initializeSessionGuard();
+        initializeSpecCheck();
+        initializeNoReloadForms();
         initializeSidebarToggle();
         initializeDeliveryStatusTracking();
         initializeNavigateButton();
@@ -202,6 +205,7 @@
             const distanceInput = form.querySelector('[data-distance-input]');
             const durationInput = form.querySelector('[data-duration-input]');
             const statusText = form.querySelector('[data-distance-status]');
+            const retryButton = form.querySelector('[data-distance-retry]');
             if (!originInput || !destinationInput || !wrapper) {
                 return;
             }
@@ -216,6 +220,9 @@
             }
 
             function setStatus(message, isError) {
+                if (retryButton) {
+                    retryButton.hidden = !isError;
+                }
                 if (!statusText) {
                     return;
                 }
@@ -303,6 +310,10 @@
                 }
             }
 
+            if (retryButton) {
+                retryButton.addEventListener('click', fetchDistance);
+            }
+
             [originInput, destinationInput].forEach(function (input) {
                 input.addEventListener('input', function () {
                     requestToken++;
@@ -364,7 +375,41 @@
             const updatePickupButton = function () {
                 pickupSubmit.disabled = pickupPhoto.files.length === 0;
             };
-            pickupPhoto.addEventListener('change', updatePickupButton);
+            // 手機拍的照片常超過數 MB：先在手機上縮小再上傳，避免傳不上去。
+            const compressPhoto = function (file) {
+                return new Promise(function (resolve) {
+                    if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1500000 || !window.DataTransfer) {
+                        resolve(file);
+                        return;
+                    }
+                    const image = new Image();
+                    const url = URL.createObjectURL(file);
+                    image.onload = function () {
+                        const scale = Math.min(1, 1600 / Math.max(image.width, image.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(image.width * scale);
+                        canvas.height = Math.round(image.height * scale);
+                        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                        URL.revokeObjectURL(url);
+                        canvas.toBlob(function (blob) {
+                            resolve(blob ? new File([blob], 'pickup.jpg', { type: 'image/jpeg' }) : file);
+                        }, 'image/jpeg', 0.82);
+                    };
+                    image.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+                    image.src = url;
+                });
+            };
+            pickupPhoto.addEventListener('change', function () {
+                pickupSubmit.disabled = true;
+                compressPhoto(pickupPhoto.files[0]).then(function (file) {
+                    if (file && pickupPhoto.files[0] !== file) {
+                        const transfer = new DataTransfer();
+                        transfer.items.add(file);
+                        pickupPhoto.files = transfer.files;
+                    }
+                    updatePickupButton();
+                });
+            });
             updatePickupButton();
         }
     }
@@ -387,6 +432,156 @@
                 sidebar.classList.remove('active');
             }
         });
+    }
+
+    // 物資捐贈審查頁：按按鈕時不要整頁重新整理，只更新頁面內容並停在原本的位置。
+    function initializeNoReloadForms() {
+        if (new URLSearchParams(window.location.search).get('page') !== 'donation_materials_review') {
+            return;
+        }
+
+        document.addEventListener('submit', function (event) {
+            const form = event.target;
+            if (event.defaultPrevented || !form.matches || !form.matches('.page-content form') ||
+                (form.method || '').toLowerCase() !== 'post' || form.querySelector('input[type="file"]')) {
+                return;
+            }
+            const container = document.querySelector('.page-content');
+            if (!container || !window.fetch || !window.FormData) {
+                return;
+            }
+
+            event.preventDefault();
+            const scrollY = window.scrollY;
+            const submitter = event.submitter;
+            // 先收集表單內容（含按下的按鈕的值，例如 decision），再停用按鈕，否則按鈕的值會漏掉
+            const body = submitter ? new FormData(form, submitter) : new FormData(form);
+            if (submitter) {
+                submitter.disabled = true;
+            }
+
+            fetch(window.location.href, { method: 'POST', body: body, credentials: 'same-origin' })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('bad response');
+                    }
+                    return response.text();
+                })
+                .then(function (html) {
+                    const fresh = new DOMParser().parseFromString(html, 'text/html').querySelector('.page-content');
+                    if (!fresh) {
+                        throw new Error('no content');
+                    }
+                    container.innerHTML = fresh.innerHTML;
+                    // innerHTML 不會執行 <script>，逐一重建讓彈出視窗的按鈕恢復功能
+                    container.querySelectorAll('script').forEach(function (oldScript) {
+                        const script = document.createElement('script');
+                        script.textContent = oldScript.textContent;
+                        oldScript.replaceWith(script);
+                    });
+                    window.scrollTo(0, scrollY);
+                })
+                .catch(function () {
+                    if (submitter) {
+                        submitter.disabled = false;
+                    }
+                    form.submit();
+                });
+        });
+    }
+
+    // 物資規格防呆：欄位改完後向後端檢查，在該筆物資下方顯示黃色提醒（只提醒，不擋送出）。
+    function initializeSpecCheck() {
+        const watched = ['item_name[]', 'item_quantity[]', 'item_unit[]', 'item_weight_kg[]', 'item_expiry_date[]', 'item_storage[]'];
+        const timers = new WeakMap();
+
+        function valueOf(row, name) {
+            const field = row.querySelector('[name="' + name + '"]');
+            return field ? field.value : '';
+        }
+
+        function run(row) {
+            const params = new URLSearchParams({
+                action: 'spec_check',
+                item_name: valueOf(row, 'item_name[]'),
+                storage_condition: valueOf(row, 'item_storage[]'),
+                quantity: valueOf(row, 'item_quantity[]'),
+                unit: valueOf(row, 'item_unit[]'),
+                weight_kg: valueOf(row, 'item_weight_kg[]'),
+                expiry_date: valueOf(row, 'item_expiry_date[]')
+            });
+            fetch('?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (result) {
+                    let box = row.querySelector('.spec-check-box');
+                    if (!box) {
+                        box = document.createElement('div');
+                        box.className = 'spec-check-box';
+                        row.appendChild(box);
+                    }
+                    box.textContent = '';
+                    const lines = [];
+                    if (result.category) {
+                        lines.push({ level: 'info', message: '系統判斷分類：' + result.category });
+                    }
+                    (result.warnings || []).forEach(function (w) { lines.push(w); });
+                    lines.forEach(function (line) {
+                        const p = document.createElement('p');
+                        p.className = 'spec-check-' + line.level;
+                        p.textContent = line.message;
+                        box.appendChild(p);
+                    });
+                })
+                .catch(function () { /* 檢查失敗不影響送出 */ });
+        }
+
+        document.addEventListener('change', function (event) {
+            const target = event.target;
+            const row = target.closest ? target.closest('.material-item-row') : null;
+            if (!row || watched.indexOf(target.name) === -1) {
+                return;
+            }
+            clearTimeout(timers.get(row));
+            timers.set(row, setTimeout(function () { run(row); }, 300));
+        });
+    }
+
+    // 同一個瀏覽器的其他分頁換了帳號時，這個分頁要立刻停用，避免用錯身分操作。
+    function initializeSessionGuard() {
+        const meta = document.querySelector('meta[name="session-user"]');
+        if (!meta || !window.fetch) {
+            return;
+        }
+        const expectedUser = meta.content;
+        let blocked = false;
+
+        function block() {
+            if (blocked) {
+                return;
+            }
+            blocked = true;
+            const overlay = document.createElement('div');
+            overlay.setAttribute('role', 'alertdialog');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML = '<div style="background:#fff;padding:24px;border-radius:12px;max-width:360px;text-align:center;">' +
+                '<p><strong>此瀏覽器已切換為其他帳號</strong></p><p>為避免用錯身分操作，請重新整理頁面。</p>' +
+                '<button type="button" class="btn btn-primary" id="sessionReloadButton">重新整理</button></div>';
+            document.body.appendChild(overlay);
+            document.getElementById('sessionReloadButton').addEventListener('click', function () { window.location.reload(); });
+        }
+
+        function check() {
+            if (blocked || document.visibilityState === 'hidden') {
+                return;
+            }
+            fetch('?action=whoami', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (data) { if (String(data.user_id) !== expectedUser) { block(); } })
+                .catch(function () { block(); });
+        }
+
+        document.addEventListener('visibilitychange', check);
+        window.addEventListener('focus', check);
     }
 
     function initializeEventListeners() {

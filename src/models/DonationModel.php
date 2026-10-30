@@ -14,6 +14,161 @@ class DonationModel extends BaseModel {
         parent::__construct();
         $this->ensureOrderNumberColumn();
         $this->ensureEstimatedDistanceColumns();
+        $this->ensureRevisionSupport();
+    }
+
+    /** 物資單可由商家重送時，允許修改的欄位 */
+    const RESUBMIT_FIELDS = [
+        'item_name', 'quantity', 'unit', 'weight_kg', 'size_description',
+        'expiry_date', 'pickup_deadline', 'photo_path', 'donor_address', 'notes',
+    ];
+
+    /** 欄位的中文名稱（審核頁勾選、商家頁顯示用） */
+    const RESUBMIT_FIELD_LABELS = [
+        'item_name' => '物資名稱',
+        'quantity' => '數量',
+        'unit' => '單位',
+        'weight_kg' => '重量(kg)',
+        'size_description' => '尺寸說明',
+        'expiry_date' => '保存期限',
+        'pickup_deadline' => '取貨期限',
+        'photo_path' => '物資照片',
+        'donor_address' => '取貨地址',
+        'notes' => '備註',
+    ];
+
+    /** 商家的預設取貨地址（沒有則回傳空字串） */
+    public function getDefaultPickupAddress($userId) {
+        $userId = (int) $userId;
+        $result = $this->db->query("SELECT default_pickup_address FROM users WHERE user_id = {$userId} LIMIT 1");
+        $row = $result ? $result->fetch_assoc() : null;
+        return trim((string) ($row['default_pickup_address'] ?? ''));
+    }
+
+    public function setDefaultPickupAddress($userId, $address) {
+        $address = trim((string) $address);
+        if ($address === '' || mb_strlen($address) > 255) {
+            return false;
+        }
+        $stmt = $this->db->prepare("UPDATE users SET default_pickup_address = ? WHERE user_id = ?");
+        $userId = (int) $userId;
+        $stmt->bind_param('si', $address, $userId);
+        return $stmt->execute();
+    }
+
+    private function ensureRevisionSupport() {
+        if ($this->hasDonationItemsTable()) {
+            $itemColumns = [
+                'category_id' => "ALTER TABLE donation_items ADD category_id INT DEFAULT NULL",
+                'storage_condition' => "ALTER TABLE donation_items ADD storage_condition ENUM('room','chilled','frozen') NOT NULL DEFAULT 'room'",
+                'package_state' => "ALTER TABLE donation_items ADD package_state ENUM('sealed','opened') NOT NULL DEFAULT 'sealed'",
+            ];
+            foreach ($itemColumns as $column => $alterSql) {
+                $result = $this->db->query("SHOW COLUMNS FROM donation_items LIKE '{$column}'");
+                if ($result && $result->num_rows === 0) {
+                    $this->db->query($alterSql);
+                }
+            }
+        }
+        $userColumn = $this->db->query("SHOW COLUMNS FROM users LIKE 'default_pickup_address'");
+        if ($userColumn && $userColumn->num_rows === 0) {
+            $this->db->query("ALTER TABLE users ADD default_pickup_address VARCHAR(255) DEFAULT NULL");
+        }
+
+        $columns = [
+            'revision_no' => "ALTER TABLE donations ADD revision_no INT NOT NULL DEFAULT 1",
+            'rejected_fields' => "ALTER TABLE donations ADD rejected_fields TEXT NULL",
+        ];
+        foreach ($columns as $column => $alterSql) {
+            $result = $this->db->query("SHOW COLUMNS FROM donations LIKE '{$column}'");
+            if ($result && $result->num_rows === 0) {
+                $this->db->query($alterSql);
+            }
+        }
+
+        $this->db->query(
+            "CREATE TABLE IF NOT EXISTS donation_revisions (
+                revision_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                donation_id INT NOT NULL,
+                revision_no INT NOT NULL,
+                event ENUM('submitted','approved','rejected','resubmitted') NOT NULL,
+                snapshot LONGTEXT DEFAULT NULL,
+                reason TEXT DEFAULT NULL,
+                rejected_fields TEXT DEFAULT NULL,
+                actor_id INT DEFAULT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_donation_revisions_donation (donation_id, revision_no),
+                CONSTRAINT donation_revisions_ibfk_1 FOREIGN KEY (donation_id) REFERENCES donations (donation_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+        );
+    }
+
+    /**
+     * 寫一筆送審歷史（含當下物資單內容快照），不覆蓋舊紀錄。
+     */
+    private function recordRevision($donationId, $event, $reason = null, array $rejectedFields = [], $actorId = null) {
+        $donationId = (int) $donationId;
+        $result = $this->db->query("SELECT * FROM donations WHERE donation_id = {$donationId} LIMIT 1");
+        $donation = $result ? $result->fetch_assoc() : null;
+        if (!$donation) {
+            return false;
+        }
+
+        $snapshot = [];
+        foreach (self::RESUBMIT_FIELDS as $field) {
+            $snapshot[$field] = $donation[$field] ?? null;
+        }
+        $stmt = $this->db->prepare(
+            "INSERT INTO donation_revisions (donation_id, revision_no, event, snapshot, reason, rejected_fields, actor_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
+        );
+        $revisionNo = (int) $donation['revision_no'];
+        $snapshotJson = json_encode($snapshot, JSON_UNESCAPED_UNICODE);
+        $fieldsJson = $rejectedFields ? json_encode(array_values($rejectedFields), JSON_UNESCAPED_UNICODE) : null;
+        $stmt->bind_param('iissssi', $donationId, $revisionNo, $event, $snapshotJson, $reason, $fieldsJson, $actorId);
+        return $stmt->execute();
+    }
+
+    /**
+     * 取得某張物資單的送審歷史（新到舊）。
+     */
+    public function getRevisions($donationId) {
+        $donationId = (int) $donationId;
+        $result = $this->db->query(
+            "SELECT * FROM donation_revisions WHERE donation_id = {$donationId} ORDER BY revision_id DESC"
+        );
+        $rows = [];
+        while ($result && ($row = $result->fetch_assoc())) {
+            $rows[] = $row;
+        }
+        return $rows;
+    }
+
+    /**
+     * 把三個舊狀態欄位（status / evaluation_status / current_status）合併成一個統一狀態。
+     * 回傳：submitted、rejected、approved、published、received（已到食物銀行）、archived。
+     */
+    public static function lifecycleState(array $donation) {
+        $status = $donation['status'] ?? 'pending';
+        $evaluation = $donation['evaluation_status'] ?? 'pending';
+        $current = $donation['current_status'] ?? 'waiting_pickup';
+
+        if ($status === 'archived') {
+            return 'archived';
+        }
+        if ($status === 'rejected' || $evaluation === 'rejected') {
+            return 'rejected';
+        }
+        if ($current === 'inspection_complete') {
+            return 'received';
+        }
+        if ($status === 'published' || $evaluation === 'published') {
+            return 'published';
+        }
+        if (in_array($evaluation, ['approved_volunteer', 'approved_self_delivery'], true) || $status === 'approved') {
+            return 'approved';
+        }
+        return 'submitted';
     }
 
     private function ensureOrderNumberColumn() {
@@ -100,6 +255,9 @@ class DonationModel extends BaseModel {
             'photo_path' => $donor_data['photo_path'] ?? null,
         ];
         $donationId = $this->insert($donor_data);
+        if ($donationId) {
+            $this->recordRevision($donationId, 'submitted', null, [], $donor_data['donor_id'] ?? null);
+        }
         if ($donationId && $this->hasDonationItemsTable()) {
             $columns = array_keys($itemData);
             $values = array_map(function ($value) {
@@ -112,6 +270,20 @@ class DonationModel extends BaseModel {
         return $donationId;
     }
 
+    /** 一張物資單底下的所有物資明細（含分類名稱），依填寫順序排列。 */
+    public function getDonationItems($donationId) {
+        $donationId = (int) $donationId;
+        if (!$this->hasDonationItemsTable()) {
+            return [];
+        }
+        return $this->query(
+            "SELECT i.*, c.category_name
+             FROM donation_items i
+             LEFT JOIN item_categories c ON c.category_id = i.category_id
+             WHERE i.donation_id = {$donationId} ORDER BY i.item_id ASC"
+        );
+    }
+
     private function hasDonationItemsTable() {
         $result = $this->db->query("SHOW TABLES LIKE 'donation_items'");
         return $result && $result->num_rows > 0;
@@ -120,7 +292,7 @@ class DonationModel extends BaseModel {
     /**
      * 審查商家物資捐贈，完成後移至已評估區塊
      */
-    public function reviewMaterialDonation($donation_id, $decision, $rejection_reason = '', $foodbankDeliveryOption = '') {
+    public function reviewMaterialDonation($donation_id, $decision, $rejection_reason = '', $foodbankDeliveryOption = '', array $rejectedFields = [], $reviewerId = null) {
         $donation_id = (int) $donation_id;
         if (!in_array($decision, ['accepted', 'rejected'], true)) {
             return false;
@@ -155,6 +327,7 @@ class DonationModel extends BaseModel {
                     evaluation_status = '{$evaluationStatus}',
                     evaluation_notes = NULL,
                     rejection_reason = " . ($decision === 'accepted' ? 'NULL' : "'{$rejectionReason}'") . ",
+                    rejected_fields = " . ($decision === 'accepted' || !$rejectedFields ? 'NULL' : "'" . $this->db->real_escape_string(json_encode(array_values($rejectedFields), JSON_UNESCAPED_UNICODE)) . "'") . ",
                     delivery_option = '{$foodbankDeliveryOption}',
                     delivery_method = '{$deliveryMethod}',
                     approved_at = " . ($decision === 'accepted' ? 'NOW()' : 'NULL') . ",
@@ -165,7 +338,80 @@ class DonationModel extends BaseModel {
         if (!$this->db->query($sql)) {
             return false;
         }
+        if ($this->db->affected_rows < 1) {
+            return false;
+        }
 
+        $this->recordRevision(
+            $donation_id,
+            $decision === 'accepted' ? 'approved' : 'rejected',
+            $decision === 'accepted' ? null : $rejection_reason,
+            $decision === 'accepted' ? [] : $rejectedFields,
+            $reviewerId
+        );
+        return true;
+    }
+
+    /**
+     * 商家在被婉拒的原單上修改後重新送審。
+     * 只有該商家本人、且狀態為已婉拒才可操作；若審核方標記了問題欄位，只能改那些欄位。
+     * 失敗時回傳錯誤訊息字串，成功回傳 true。
+     */
+    public function resubmitDonation($donationId, $donorId, array $changes) {
+        $donationId = (int) $donationId;
+        $donorId = (int) $donorId;
+        $donation = $this->getDonationById($donationId);
+
+        if (!$donation || (int) $donation['donor_id'] !== $donorId) {
+            return '找不到這張物資單。';
+        }
+        if (self::lifecycleState($donation) !== 'rejected') {
+            return '只有被婉拒的物資單可以重新送審。';
+        }
+
+        $allowed = self::RESUBMIT_FIELDS;
+        $flagged = json_decode((string) ($donation['rejected_fields'] ?? ''), true);
+        if (is_array($flagged) && $flagged) {
+            $allowed = array_values(array_intersect($allowed, $flagged));
+        }
+        $changes = array_intersect_key($changes, array_flip($allowed));
+        if (!$changes) {
+            return '請修改被標記的欄位後再送審。';
+        }
+
+        $sets = [];
+        foreach ($changes as $field => $value) {
+            $sets[] = "{$field} = " . ($value === null || $value === '' ? 'NULL' : "'" . $this->db->real_escape_string((string) $value) . "'");
+        }
+        $sets[] = "status = 'pending'";
+        $sets[] = "evaluation_status = 'pending'";
+        $sets[] = "revision_no = revision_no + 1";
+        $sets[] = "updated_at = NOW()";
+
+        // 條件再檢查一次狀態，避免同時被重複送出
+        $this->db->query(
+            "UPDATE {$this->table} SET " . implode(', ', $sets) . "
+             WHERE donation_id = {$donationId} AND donor_id = {$donorId}
+               AND (status = 'rejected' OR evaluation_status = 'rejected')"
+        );
+        if ($this->db->affected_rows < 1) {
+            return '送審失敗，請重新整理後再試。';
+        }
+
+        // 第一筆物資明細與主單同步，審核頁才會看到修改後的內容
+        $itemChanges = array_intersect_key($changes, array_flip(['item_name', 'quantity', 'unit', 'expiry_date']));
+        if ($itemChanges && $this->hasDonationItemsTable()) {
+            $itemSets = [];
+            foreach ($itemChanges as $field => $value) {
+                $itemSets[] = "{$field} = " . ($value === null || $value === '' ? 'NULL' : "'" . $this->db->real_escape_string((string) $value) . "'");
+            }
+            $this->db->query(
+                "UPDATE donation_items SET " . implode(', ', $itemSets) . "
+                 WHERE item_id = (SELECT first_id FROM (SELECT MIN(item_id) AS first_id FROM donation_items WHERE donation_id = {$donationId}) t)"
+            );
+        }
+
+        $this->recordRevision($donationId, 'resubmitted', null, [], $donorId);
         return true;
     }
 
@@ -255,6 +501,42 @@ class DonationModel extends BaseModel {
             $updates[] = $inspectionNotes === '' ? 'inspection_notes = NULL' : "inspection_notes = '" . $this->db->real_escape_string($inspectionNotes) . "'";
         }
 
+        // 一次填多項物資時，審核人員可逐項修改；主單的名稱／重量改由各項物資彙總。
+        $itemEdits = [];
+        if (isset($publishData['items']) && is_array($publishData['items'])) {
+            $existingItems = $this->getDonationItems($donation_id);
+            $existingIds = array_map('intval', array_column($existingItems, 'item_id'));
+            foreach ($publishData['items'] as $itemId => $edit) {
+                if (!in_array((int) $itemId, $existingIds, true) || !is_array($edit)) {
+                    continue;
+                }
+                $name = trim((string) ($edit['item_name'] ?? ''));
+                $quantity = (float) ($edit['quantity'] ?? 0);
+                if ($name === '' || $quantity <= 0) {
+                    return false;
+                }
+                $itemEdits[(int) $itemId] = [
+                    'name' => $name,
+                    'quantity' => $quantity,
+                    'weight' => is_numeric($edit['item_weight_kg'] ?? null) ? max(0, (float) $edit['item_weight_kg']) : null,
+                ];
+            }
+            if ($itemEdits) {
+                $names = array_column($itemEdits, 'name');
+                $summaryName = count($names) > 1 ? $names[0] . ' 等 ' . count($names) . ' 項' : $names[0];
+                $totalWeight = array_sum(array_map(static function ($e) { return $e['weight'] ?? 0; }, $itemEdits));
+                $publishData['item_name'] = $summaryName;
+                $publishData['weight_kg'] = $totalWeight;
+                $publishData['quantity'] = reset($itemEdits)['quantity'];
+                $updates = array_values(array_filter($updates, static function ($sql) {
+                    return strpos($sql, 'item_name =') !== 0 && strpos($sql, 'quantity =') !== 0 && strpos($sql, 'weight_kg =') !== 0;
+                }));
+                $updates[] = "item_name = '" . $this->db->real_escape_string($summaryName) . "'";
+                $updates[] = 'quantity = ' . (float) $publishData['quantity'];
+                $updates[] = 'weight_kg = ' . (float) $totalWeight;
+            }
+        }
+
         $existingResult = $this->db->query("SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'assessed' LIMIT 1");
         $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
         if (!$existingDonation) {
@@ -270,6 +552,18 @@ class DonationModel extends BaseModel {
         if (!$this->db->query("UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE donation_id = {$donation_id} AND status = 'assessed'")) {
             $this->db->rollback();
             return false;
+        }
+
+        foreach ($itemEdits as $itemId => $edit) {
+            $weightSql = $edit['weight'] === null ? 'NULL' : (float) $edit['weight'];
+            if (!$this->db->query(
+                "UPDATE donation_items SET item_name = '" . $this->db->real_escape_string($edit['name']) . "',
+                        quantity = " . (float) $edit['quantity'] . ", item_weight_kg = {$weightSql}
+                 WHERE item_id = " . (int) $itemId . " AND donation_id = {$donation_id}"
+            )) {
+                $this->db->rollback();
+                return false;
+            }
         }
 
         $deliveryMethod = $deliveryOption === 'food_bank_pickup' ? 'food_bank' : 'volunteer';

@@ -1,6 +1,6 @@
 <?php
 /**
- * 最新消息公告：整合「廣告專區」與「活動發佈資訊區」（公益活動與物資蒐集）。
+ * 最新消息公告：廣告專區（公益活動已獨立為「公益活動」頁面）。
  */
 
 require_once BASE_PATH . '/src/models/AdvertisementModel.php';
@@ -35,13 +35,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_POST['link_url'] ?? '',
                     $imagePath ?: null,
                     $_POST['start_date'] ?? '',
-                    $_POST['end_date'] ?? ''
+                    $_POST['end_date'] ?? '',
+                    $currentRole === 'foodbank_staff'
                 );
                 $adMessage = $created
-                    ? ['type' => 'success', 'text' => '廣告已刊登。']
+                    ? ['type' => 'success', 'text' => $currentRole === 'foodbank_staff' ? '廣告已刊登。' : '廣告已送出，食物銀行審核通過後才會刊登。']
                     : ['type' => 'error', 'text' => '請填寫標題與內容；連結需以 http:// 或 https:// 開頭，結束日期不可早於開始日期。'];
             }
         }
+    } elseif ($postAction === 'approve_ad' && $currentRole === 'foodbank_staff') {
+        $adMessage = $adModel->approve((int) ($_POST['ad_id'] ?? 0), $currentUserId, $_POST['fee_amount'] ?? null)
+            ? ['type' => 'success', 'text' => '廣告已核准並上架。']
+            : ['type' => 'error', 'text' => '核准失敗，該申請可能已被處理。'];
+    } elseif ($postAction === 'reject_ad' && $currentRole === 'foodbank_staff') {
+        $adMessage = $adModel->reject((int) ($_POST['ad_id'] ?? 0), $currentUserId, $_POST['reject_reason'] ?? '')
+            ? ['type' => 'success', 'text' => '已退回廣告申請。']
+            : ['type' => 'error', 'text' => '退回時必須填寫原因，該申請也可能已被處理。'];
     } elseif ($postAction === 'remove_ad') {
         $adMessage = $adModel->remove((int) ($_POST['ad_id'] ?? 0), $currentUserId, $currentRole)
             ? ['type' => 'success', 'text' => '廣告已下架。']
@@ -50,22 +59,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $ads = $adModel->getActiveAds(30);
-
-// 活動區會處理活動的新增／報名等 POST，先渲染再輸出，讓上方跑馬燈反映最新資料。
-$activitiesEmbedded = true;
-ob_start();
-include BASE_PATH . '/src/views/activities.php';
-$activitiesHtml = ob_get_clean();
+$pendingAds = $currentRole === 'foodbank_staff' ? $adModel->listPending() : [];
+$ownUnpublishedAds = $currentRole === 'foodbank_staff' ? [] : $adModel->listOwnUnpublished($currentUserId);
 ?>
 
 <div class="view-header">
     <div>
         <h1 class="view-title">最新消息公告</h1>
-        <p class="view-subtitle">企業廣告、公益活動與物資募集資訊</p>
+        <p class="view-subtitle">企業廣告與公益合作資訊</p>
     </div>
     <div class="toolbar-actions">
         <a class="btn btn-secondary btn-sm" href="#ads">廣告專區</a>
-        <a class="btn btn-secondary btn-sm" href="#activities">活動發佈資訊</a>
+        <a class="btn btn-secondary btn-sm" href="?page=activities">公益活動</a>
     </div>
 </div>
 
@@ -101,6 +106,47 @@ $activitiesHtml = ob_get_clean();
         </div>
     <?php endif; ?>
 
+    <?php if ($pendingAds): ?>
+        <div class="card mb-20">
+            <div class="card-header"><h2>待審核廣告</h2><p><?php echo count($pendingAds); ?> 筆申請</p></div>
+            <div class="card-body">
+                <?php foreach ($pendingAds as $pendingAd): ?>
+                    <div class="ad-review-item">
+                        <strong><?php echo htmlspecialchars($pendingAd['title']); ?></strong>
+                        <small> · <?php echo htmlspecialchars($pendingAd['advertiser_name'] ?? ''); ?> · 檔期 <?php echo htmlspecialchars(($pendingAd['start_date'] ?: '即日') . ' ~ ' . ($pendingAd['end_date'] ?: '不限')); ?></small>
+                        <p><?php echo nl2br(htmlspecialchars($pendingAd['content'])); ?></p>
+                        <form method="post" class="delivery-action-form">
+                            <?php echo csrfField(); ?>
+                            <input type="hidden" name="ad_id" value="<?php echo (int) $pendingAd['ad_id']; ?>">
+                            <input type="number" name="fee_amount" min="0" step="1" placeholder="刊登費用（選填）">
+                            <input name="reject_reason" placeholder="退回原因（退回時必填）">
+                            <button class="btn btn-primary btn-sm" type="submit" name="action" value="approve_ad">核准上架</button>
+                            <button class="btn btn-danger btn-sm" type="submit" name="action" value="reject_ad">退回</button>
+                        </form>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($ownUnpublishedAds): ?>
+        <div class="card mb-20">
+            <div class="card-header"><h2>我的廣告申請</h2></div>
+            <div class="card-body">
+                <?php foreach ($ownUnpublishedAds as $ownAd): ?>
+                    <p>
+                        <strong><?php echo htmlspecialchars($ownAd['title']); ?></strong>
+                        <?php if ($ownAd['status'] === 'pending'): ?>
+                            <span class="status status-pending">審核中</span>
+                        <?php else: ?>
+                            <span class="status status-suspended">未通過</span> <?php echo htmlspecialchars($ownAd['reject_reason'] ?? ''); ?>
+                        <?php endif; ?>
+                    </p>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <?php if ($ads): ?>
         <div class="news-ad-grid">
             <?php foreach ($ads as $ad): ?>
@@ -132,7 +178,3 @@ $activitiesHtml = ob_get_clean();
     <?php endif; ?>
 </section>
 
-<section id="activities" class="news-section">
-    <h2 class="news-section-title"><i class="fas fa-calendar-check"></i> 活動發佈資訊</h2>
-    <?php echo $activitiesHtml; ?>
-</section>

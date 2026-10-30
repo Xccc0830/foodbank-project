@@ -86,13 +86,18 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $result ? $result->fetch_assoc() : null;
     $passwordValid = $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
 
-    if ($passwordValid && $user['status'] === 'active') {
+    // 同一個瀏覽器共用同一份登入狀態：已登入其他帳號時，不允許直接被另一個分頁覆蓋。
+    $alreadyLoggedInUser = $_SESSION['user']['username'] ?? null;
+    if ($passwordValid && $user['status'] === 'active' && $alreadyLoggedInUser !== null && $alreadyLoggedInUser !== $user['username']) {
+        $loginError = '此瀏覽器已登入其他帳號（' . $alreadyLoggedInUser . '），請先登出，或改用無痕視窗 / 另一個瀏覽器登入。';
+    } elseif ($passwordValid && $user['status'] === 'active') {
         if (strlen($user['password']) === 64) {
             $secureHash = $connection->real_escape_string(password_hash($password, PASSWORD_DEFAULT));
             $connection->query("UPDATE users SET password = '{$secureHash}' WHERE user_id = " . (int) $user['user_id']);
         }
         unset($user['password']);
         session_regenerate_id(true);
+        unset($_SESSION['csrf_token']); // 換新的表單憑證，登入前開啟的舊分頁就不能再送出表單
         $_SESSION['user'] = $user;
         header('Location: ?page=dashboard');
         exit;
@@ -348,6 +353,29 @@ if ($action === 'rider_license') {
     exit;
 }
 
+if ($action === 'spec_check' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    require_once BASE_PATH . '/src/helpers/SpecCheckHelper.php';
+    echo json_encode(SpecCheckHelper::check([
+        'item_name' => $_GET['item_name'] ?? '',
+        'specification' => $_GET['specification'] ?? '',
+        'quantity' => $_GET['quantity'] ?? null,
+        'unit' => $_GET['unit'] ?? '',
+        'weight_kg' => $_GET['weight_kg'] ?? null,
+        'expiry_date' => $_GET['expiry_date'] ?? '',
+        'storage_condition' => $_GET['storage_condition'] ?? '',
+    ]), JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($action === 'whoami') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    echo json_encode(['user_id' => (int) ($currentUser['user_id'] ?? 0)]);
+    exit;
+}
+
 if ($action === 'delivery_tracking') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');
@@ -448,6 +476,7 @@ $page = basename($page);
 $menu_items = [
     'dashboard' => ['label' => '主頁', 'icon' => 'fa-solid fa-chart-line', 'group' => ''],
     'news' => ['label' => '最新消息公告', 'icon' => 'fa-solid fa-newspaper', 'group' => ''],
+    'activities' => ['label' => '公益活動', 'icon' => 'fa-solid fa-calendar-check', 'group' => ''],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell', 'group' => ''],
     'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open', 'group' => '物資與配送'],
     'donation_materials_review' => ['label' => '物資捐贈審查', 'icon' => 'fa-solid fa-clipboard-check', 'group' => '物資與配送'],
@@ -457,9 +486,9 @@ $menu_items = [
     'inventory' => ['label' => '物資盤點', 'icon' => 'fa-solid fa-boxes-stacked', 'group' => '物資與配送'],
     'item_categories' => ['label' => '物資分類', 'icon' => 'fa-solid fa-layer-group', 'group' => '物資與配送'],
     'users' => ['label' => '帳號審核', 'icon' => 'fa-solid fa-user-check', 'group' => '會員管理'],
-    'volunteer_management' => ['label' => '一般會員管理', 'icon' => 'fa-solid fa-people-group', 'group' => '會員管理'],
     'rider_review' => ['label' => 'GO Rider 審核', 'icon' => 'fa-solid fa-user-shield', 'group' => '會員管理'],
     'rider_application' => ['label' => '申請 GO Rider', 'icon' => 'fa-solid fa-id-card', 'group' => '會員管理'],
+    'id_verification' => ['label' => '身分驗證', 'icon' => 'fa-solid fa-fingerprint', 'group' => '會員管理'],
     'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift', 'group' => '成效與回饋'],
     'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf', 'group' => '成效與回饋'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie', 'group' => '成效與回饋'],
@@ -482,6 +511,7 @@ ob_start();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="session-user" content="<?php echo (int) ($currentUser['user_id'] ?? 0); ?>">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="google-maps-api-key" content="<?php echo htmlspecialchars(GOOGLE_MAPS_API_KEY, ENT_QUOTES, 'UTF-8'); ?>">
     <title><?php echo APP_NAME; ?></title>
@@ -592,9 +622,7 @@ ob_start();
                     <?php
                     // 根據頁面加載不同的視圖
                     $view_file = BASE_PATH . '/src/views/' . $page . '.php';
-                    if ($page === 'volunteer_management') {
-                        $view_file = BASE_PATH . '/src/views/users.php';
-                    } elseif ($page === 'material_transport') {
+                    if ($page === 'material_transport') {
                         $view_file = BASE_PATH . '/src/views/deliveries.php';
                     }
 

@@ -11,7 +11,6 @@ if (($currentUser['role'] ?? '') !== 'foodbank_staff' || !$authService->can('adm
 $connection = $db->getConnection();
 $accountMessage = null;
 $accountError = null;
-$isVolunteerManagement = ($page ?? '') === 'volunteer_management';
 $protectedUsernames = ['admin', 'manager'];
 $currentUserId = (int) ($currentUser['user_id'] ?? 0);
 
@@ -74,13 +73,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+require_once BASE_PATH . '/src/models/IdVerificationModel.php';
+new IdVerificationModel(); // 確保身分驗證欄位存在
+$userFilter = $_GET['type'] ?? 'all';
+$typeConditions = [
+    'general' => "u.role = 'member' AND u.member_type = 'general'",
+    'enterprise' => "u.role = 'member' AND u.member_type = 'enterprise'",
+    'staff' => "u.role = 'foodbank_staff'",
+];
 $users = [];
 $result = $connection->query(
-    "SELECT u.user_id, u.username, u.full_name, u.email, u.role, u.member_type, u.staff_type, u.tax_id, u.referral_source, u.blacklisted_at, u.blacklist_reason, u.status, u.phone, u.phone_verified, u.created_at, vc.completed_at AS consent_completed_at
+    "SELECT u.user_id, u.username, u.full_name, u.email, u.role, u.member_type, u.staff_type, u.tax_id, u.referral_source, u.blacklisted_at, u.blacklist_reason, u.status, u.phone, u.phone_verified, u.created_at, u.id_verify_status, u.id_verify_note, vc.completed_at AS consent_completed_at
      FROM users u
      LEFT JOIN volunteer_consents vc ON vc.user_id = u.user_id
-    " . ($isVolunteerManagement ? "WHERE u.role = 'member' AND u.member_type = 'general'" : '') . "
-    ORDER BY FIELD(u.status, 'inactive', 'active', 'suspended'), u.created_at DESC"
+    " . (isset($typeConditions[$userFilter]) ? 'WHERE ' . $typeConditions[$userFilter] : '') . "
+    ORDER BY FIELD(u.status, 'inactive', 'active', 'suspended'), FIELD(u.role, 'member', 'foodbank_staff'), u.member_type, u.created_at DESC"
 );
 if ($result) {
     while ($user = $result->fetch_assoc()) {
@@ -91,17 +98,22 @@ $roleLabels = ['foodbank_staff' => '食物銀行管理員', 'member' => '會員'
 $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended' => '已停用'];
 ?>
 
-<div class="view-header"><div><h1 class="view-title"><?php echo $isVolunteerManagement ? '一般會員管理' : '帳號審核'; ?></h1><p class="view-subtitle"><?php echo $isVolunteerManagement ? '查看一般會員申請、教育訓練與帳號狀態' : '審核一般會員與企業會員申請'; ?></p></div></div>
+<div class="view-header"><div><h1 class="view-title">帳號審核</h1><p class="view-subtitle">審核一般會員與企業會員申請</p></div></div>
 <?php if ($accountMessage): ?><div class="alert alert-success"><i class="fas fa-circle-check"></i><?php echo htmlspecialchars($accountMessage); ?></div><?php endif; ?>
 <?php if (!empty($accountError)): ?><div class="alert alert-error"><i class="fas fa-circle-exclamation"></i><?php echo htmlspecialchars($accountError); ?></div><?php endif; ?>
+<div class="toolbar-actions mb-20">
+    <?php foreach (['all' => '全部', 'general' => '一般會員', 'enterprise' => '企業會員', 'staff' => '食物銀行管理員'] as $filterKey => $filterLabel): ?>
+        <a class="btn <?php echo $userFilter === $filterKey || ($filterKey === 'all' && !isset($typeConditions[$userFilter])) ? 'btn-primary' : 'btn-secondary'; ?> btn-sm" href="?page=users&amp;type=<?php echo $filterKey; ?>"><?php echo $filterLabel; ?></a>
+    <?php endforeach; ?>
+</div>
 <div class="card">
     <div class="card-header">
-        <h2><?php echo $isVolunteerManagement ? '一般會員名單' : '平台帳號'; ?></h2>
-        <p><?php echo $isVolunteerManagement ? '管理一般會員申請與開通狀態' : '新註冊帳號預設為待審核'; ?></p>
+        <h2>平台帳號</h2>
+        <p>新註冊帳號預設為待審核</p>
     </div>
     <div class="card-body users-table-body">
         <table class="data-table users-table">
-            <thead><tr><th>姓名</th><th>帳號</th><th>會員類型</th><th>電話</th><th>電子郵件</th><th>教育訓練（GO Rider）</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr><th>姓名</th><th>帳號</th><th>會員類型</th><th>電話</th><th>電子郵件</th><th>身分驗證</th><th>教育訓練（GO Rider）</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
                 <?php foreach ($users as $user): ?>
                     <?php
@@ -124,6 +136,13 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
                         </td>
                         <td><?php echo htmlspecialchars($user['phone'] ?? '-'); ?> <?php echo $user['phone_verified'] ? '<i class="fas fa-circle-check" title="已驗證"></i>' : ''; ?></td>
                         <td><?php echo htmlspecialchars($user['email']); ?></td>
+                        <td>
+                            <?php if ($requiresConsent): ?>
+                                <?php $idLabels = ['none' => ['尚未驗證', 'pending'], 'pending' => ['審核中', 'pending'], 'approved' => ['已通過', 'active'], 'rejected' => ['未通過', 'suspended']]; $idInfo = $idLabels[$user['id_verify_status'] ?? 'none']; ?>
+                                <span class="status status-<?php echo $idInfo[1]; ?>"><?php echo $idInfo[0]; ?></span>
+                                <?php if (($user['id_verify_status'] ?? '') === 'pending'): ?><br><a href="?page=id_verification">前往審核</a><?php endif; ?>
+                            <?php else: ?>-<?php endif; ?>
+                        </td>
                         <td><?php if ($requiresConsent): ?><?php echo $user['consent_completed_at'] ? '<span class="status status-active">已完成</span>' : '<span class="status status-pending">未申請</span>'; ?><?php else: ?>-<?php endif; ?></td>
                         <td>
                             <span class="status status-<?php echo htmlspecialchars($user['status']); ?>"><?php echo htmlspecialchars($statusLabels[$user['status']] ?? $user['status']); ?></span>
@@ -171,7 +190,6 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
     </div>
 </div>
 
-<?php if (!$isVolunteerManagement): ?>
 <div class="card mt-32">
     <div class="card-header"><h2>新增食物銀行管理員帳號</h2><p>食物銀行管理員擁有全部系統功能，包含確認 GO Rider 抵達與清點物資</p></div>
     <div class="card-body">
@@ -190,4 +208,3 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
         </form>
     </div>
 </div>
-<?php endif; ?>

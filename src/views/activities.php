@@ -277,7 +277,7 @@ $activityStatusLabels = [
             <div class="form-group"><label>活動說明</label><textarea name="description"><?php echo htmlspecialchars($editingActivity['description'] ?? ''); ?></textarea></div>
             <div class="btn-group">
                 <button type="submit" class="btn btn-primary">儲存變更</button>
-                <a class="btn btn-secondary" href="?page=news#activities">取消</a>
+                <a class="btn btn-secondary" href="?page=activities">取消</a>
             </div>
         </form>
     </div>

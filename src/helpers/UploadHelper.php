@@ -41,7 +41,7 @@ function saveUploadedImage(array $file, $relativeDirectory, $prefix, $rootDirect
         return false;
     }
 
-    $maxBytes = 5 * 1024 * 1024;
+    $maxBytes = 10 * 1024 * 1024;
     if ($file['size'] > $maxBytes) {
         return false;
     }

@@ -15,7 +15,13 @@ $donorName = trim((string) ($currentUser['enterprise_name'] ?? $currentUser['ful
 $deliveryAddress = array_key_exists('delivery_address', $_POST)
     ? trim((string) $_POST['delivery_address'])
     : '臺北市文山區明義里興隆路四段42巷3號1樓';
+$itemCategoryOptions = [];
+$categoryResult = $connection->query("SELECT category_id, category_name FROM item_categories WHERE status = 'active' ORDER BY display_order, category_id");
+while ($categoryResult && ($categoryRow = $categoryResult->fetch_assoc())) {
+    $itemCategoryOptions[] = $categoryRow;
+}
 $formMessage = null;
+$defaultPickupAddress = $donationModel->getDefaultPickupAddress($currentUserId);
 $viewingDonation = null;
 $viewingItems = [];
 
@@ -25,14 +31,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $deliveryDate = trim((string) ($_POST['delivery_date'] ?? '')) ?: null;
     $deliveryTime = trim((string) ($_POST['delivery_time'] ?? '')) ?: null;
     $donorAddress = trim((string) ($_POST['donor_address'] ?? ''));
+    if ($donorAddress === '') {
+        $donorAddress = $defaultPickupAddress;
+    }
     $deliveryAddress = trim((string) ($_POST['delivery_address'] ?? ''));
     $estimatedDistanceKm = is_numeric($_POST['estimated_distance_km'] ?? null) ? round((float) $_POST['estimated_distance_km'], 2) : null;
     $estimatedDurationMinutes = is_numeric($_POST['estimated_duration_minutes'] ?? null) ? (int) round((float) $_POST['estimated_duration_minutes']) : null;
     $notes = trim((string) ($_POST['notes'] ?? ''));
 
     $itemNames = is_array($_POST['item_name'] ?? null) ? $_POST['item_name'] : [];
-    $itemBrands = is_array($_POST['brand'] ?? null) ? $_POST['brand'] : [];
-    $itemSpecifications = is_array($_POST['specification'] ?? null) ? $_POST['specification'] : [];
+    $itemCategories = is_array($_POST['item_category'] ?? null) ? $_POST['item_category'] : [];
+    $itemStorages = is_array($_POST['item_storage'] ?? null) ? $_POST['item_storage'] : [];
+    $itemPackages = is_array($_POST['item_package'] ?? null) ? $_POST['item_package'] : [];
     $itemQuantities = is_array($_POST['item_quantity'] ?? null) ? $_POST['item_quantity'] : [];
     $itemUnits = is_array($_POST['item_unit'] ?? null) ? $_POST['item_unit'] : [];
     $itemLengths = is_array($_POST['item_length_cm'] ?? null) ? $_POST['item_length_cm'] : [];
@@ -50,8 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         }
         $items[] = [
             'item_name' => $itemName,
-            'brand' => trim((string) ($itemBrands[$index] ?? '')) ?: null,
-            'specification' => trim((string) ($itemSpecifications[$index] ?? '')) ?: null,
+            'category_id' => (int) ($itemCategories[$index] ?? 0) ?: null,
+            'storage_condition' => in_array($itemStorages[$index] ?? '', ['room', 'chilled', 'frozen'], true) ? $itemStorages[$index] : 'room',
+            'package_state' => in_array($itemPackages[$index] ?? '', ['sealed', 'opened'], true) ? $itemPackages[$index] : 'sealed',
             'quantity' => $quantity,
             'unit' => trim((string) ($itemUnits[$index] ?? '件')) ?: '件',
             'length_cm' => is_numeric($itemLengths[$index] ?? null) ? round((float) $itemLengths[$index], 2) : null,
@@ -65,6 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
 
     $firstItem = $items[0] ?? null;
     $itemName = $firstItem['item_name'] ?? '';
+    if (count($items) > 1) {
+        $itemName .= ' 等 ' . count($items) . ' 項';
+    }
     $quantity = (float) ($firstItem['quantity'] ?? 0);
     $unit = $firstItem['unit'] ?? '件';
     $donationType = 'food';
@@ -169,16 +183,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         $connection->begin_transaction();
         $insertedId = $donationModel->addDonation($donationData);
         if ($insertedId) {
-            $itemStatement = $connection->prepare('INSERT INTO donation_items (donation_id, item_name, brand, specification, quantity, unit, length_cm, width_cm, height_cm, item_weight_kg, expiry_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $itemStatement = $connection->prepare('INSERT INTO donation_items (donation_id, item_name, category_id, storage_condition, package_state, quantity, unit, length_cm, width_cm, height_cm, item_weight_kg, expiry_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $itemsSaved = $itemStatement !== false;
             if ($itemsSaved) {
                 foreach ($items as $item) {
                     $itemStatement->bind_param(
-                        'isssdsddddss',
+                        'isissdsddddss',
                         $insertedId,
                         $item['item_name'],
-                        $item['brand'],
-                        $item['specification'],
+                        $item['category_id'],
+                        $item['storage_condition'],
+                        $item['package_state'],
                         $item['quantity'],
                         $item['unit'],
                         $item['length_cm'],
@@ -202,6 +217,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
                 $connection->commit();
             }
         }
+        if ($insertedId && $donorAddress !== '' && ($defaultPickupAddress === '' || !empty($_POST['save_default_address']))) {
+            $donationModel->setDefaultPickupAddress($currentUserId, $donorAddress);
+            $defaultPickupAddress = $donorAddress;
+        }
         if ($insertedId) {
             $officialUsers = $connection->query("SELECT user_id FROM users WHERE role = 'foodbank_staff' AND status = 'active'");
             if ($officialUsers) {
@@ -221,6 +240,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resubmit_donation') {
+    $resubmitId = (int) ($_POST['donation_id'] ?? 0);
+    $resubmitResult = $donationModel->resubmitDonation($resubmitId, $currentUserId, $_POST['fields'] ?? []);
+    if ($resubmitResult === true) {
+        $formMessage = ['type' => 'success', 'text' => '已重新送審，食物銀行會再次評估。'];
+        $resubmitted = $donationModel->getDonationById($resubmitId);
+        $officialUsers = $connection->query("SELECT user_id FROM users WHERE role = 'foodbank_staff' AND status = 'active'");
+        while ($officialUsers && ($officialUser = $officialUsers->fetch_assoc())) {
+            $notificationModel->notify(
+                (int) $officialUser['user_id'],
+                '物資已重新送審',
+                sprintf('商家 %s 已修改並重新送審物資「%s」。', $donorName, $resubmitted['item_name'] ?? ''),
+                'info'
+            );
+        }
+    } else {
+        $formMessage = ['type' => 'error', 'text' => $resubmitResult];
+        $_POST['action'] = 'view_material_details';
+        $_POST['donation_id'] = $resubmitId;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_material_details') {
     $viewingDonation = $donationModel->getDonationById((int) ($_POST['donation_id'] ?? 0));
     if ($viewingDonation) {
@@ -234,13 +275,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'donor_confirm_pickup') {
-    $confirmed = $deliveryModel->donorConfirmPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId);
-    $formMessage = $confirmed
-        ? ['type' => 'success', 'text' => '已確認 GO Rider 領取物資，運送狀態已更新。']
-        : ['type' => 'error', 'text' => '確認失敗，請確認 GO Rider 已接受任務。'];
-}
 
+require_once BASE_PATH . '/src/models/ThanksModel.php';
+$thanksModel = new ThanksModel();
+$receivedThanks = $thanksModel->forDonor($currentUserId, 5);
+$donorBadge = $thanksModel->badgeFor($currentUserId);
 $merchantDonations = $donationModel->getAllDonations(null, $currentUserId);
 $pendingDonations = array_values(array_filter($merchantDonations, static function ($row) {
     return strtolower((string) ($row['status'] ?? '')) === 'pending';
@@ -311,6 +350,20 @@ $formatDateTime = static function ($value) {
     <div class="alert alert-<?php echo $formMessage['type']; ?>"><?php echo htmlspecialchars($formMessage['text']); ?></div>
 <?php endif; ?>
 
+<?php if ($receivedThanks): ?>
+    <div class="card mb-20">
+        <div class="card-header">
+            <h2><i class="fas fa-heart"></i> 收到的感謝</h2>
+            <p>已收到 <?php echo (int) $donorBadge['count']; ?> 則感謝<?php echo $donorBadge['badge'] ? '・目前勳章：' . htmlspecialchars($donorBadge['badge']) : ''; ?></p>
+        </div>
+        <div class="card-body">
+            <?php foreach ($receivedThanks as $thanks): ?>
+                <p>「<?php echo htmlspecialchars($thanks['message']); ?>」<small> — <?php echo htmlspecialchars(substr($thanks['created_at'], 0, 10)); ?></small></p>
+            <?php endforeach; ?>
+        </div>
+    </div>
+<?php endif; ?>
+
 <div class="card mb-20">
     <div class="card-header">
         <div class="toolbar-row">
@@ -348,7 +401,8 @@ $formatDateTime = static function ($value) {
                 <div class="form-section-heading"><span>商家資料</span><h3>企業取貨資訊</h3><p>這是配送人員前往取物資的地點，不是物資送達地址。</p></div>
                 <div class="grid-2">
                     <div class="form-group"><label for="donorName">捐贈企業／組織</label><input id="donorName" type="text" value="<?php echo htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
-                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
+                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" value="<?php echo htmlspecialchars($defaultPickupAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
+                    <div class="form-group form-check-row"><label><input type="checkbox" name="save_default_address" value="1"<?php echo $defaultPickupAddress === '' ? ' checked' : ''; ?>> 儲存為預設取貨地址（下次自動帶入）</label></div>
                 </div>
                 <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點。</p></div>
                 <div class="grid-2">
@@ -366,6 +420,7 @@ $formatDateTime = static function ($value) {
                     <input type="hidden" name="estimated_duration_minutes" data-duration-input>
                 </div>
                 <p class="distance-estimate-status" data-distance-status hidden></p>
+                <button type="button" class="btn btn-secondary btn-sm" data-distance-retry hidden><i class="fas fa-rotate"></i> 重新計算距離與時間</button>
                 <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 若由 GO Rider 配送，配送會員接單後才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
                 <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step>下一步：填寫物資</button></div>
@@ -375,11 +430,11 @@ $formatDateTime = static function ($value) {
                 <div class="form-section-heading"><span>Step 2</span><h3>物資規格</h3><p>同一筆配送可以加入多種物資。</p></div>
                 <div id="materialItemRows">
                     <div class="material-item-row">
-                        <div class="grid-2"><div class="form-group"><label>物資名稱 <span class="required-mark">*</span></label><input type="text" name="item_name[]" placeholder="例如：白米" required></div><div class="form-group"><label>品牌</label><input type="text" name="brand[]" placeholder="例如：台灣好米"></div></div>
-                        <div class="grid-3"><div class="form-group"><label>規格</label><input type="text" name="specification[]" placeholder="例如：5kg"></div><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="0.01" step="0.01" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>箱</option><option>瓶</option><option>盒</option><option>份</option><option>件</option></select></div></div>
+                        <div class="grid-2"><div class="form-group"><label>物資名稱 <span class="required-mark">*</span></label><input type="text" name="item_name[]" placeholder="例如：白米 5kg 裝" required></div><div class="form-group"><label>物資類別</label><select name="item_category[]"><option value="">請選擇</option><?php foreach ($itemCategoryOptions as $categoryOption): ?><option value="<?php echo (int) $categoryOption['category_id']; ?>"><?php echo htmlspecialchars($categoryOption['category_name']); ?></option><?php endforeach; ?></select></div></div>
+                        <div class="grid-3"><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="0.01" step="0.01" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>箱</option><option>瓶</option><option>盒</option><option>份</option><option>件</option></select></div><div class="form-group"><label>總重量 (kg)</label><input type="number" name="item_weight_kg[]" min="0" step="0.01" placeholder="例如：5"></div></div>
+                        <div class="grid-3"><div class="form-group"><label>保存方式</label><select name="item_storage[]"><option value="room">常溫</option><option value="chilled">冷藏</option><option value="frozen">冷凍</option></select></div><div class="form-group"><label>包裝狀態</label><select name="item_package[]"><option value="sealed">原包裝未拆封</option><option value="opened">已拆封／已分裝</option></select></div><div class="form-group"><label>保存期限</label><input type="date" name="item_expiry_date[]"></div></div>
                         <div class="grid-3"><div class="form-group"><label>長 (cm)</label><input type="number" name="item_length_cm[]" min="0" step="0.1" placeholder="例如：30"></div><div class="form-group"><label>寬 (cm)</label><input type="number" name="item_width_cm[]" min="0" step="0.1" placeholder="例如：20"></div><div class="form-group"><label>高 (cm)</label><input type="number" name="item_height_cm[]" min="0" step="0.1" placeholder="例如：15"></div></div>
-                        <div class="grid-2"><div class="form-group"><label>重量 (kg)</label><input type="number" name="item_weight_kg[]" min="0" step="0.01" placeholder="例如：5"></div><div class="form-group"><label>保存期限</label><input type="date" name="item_expiry_date[]"></div></div>
-                        <div class="form-group"><label>備註</label><input type="text" name="item_notes[]" placeholder="其他資訊"></div>
+                        <div class="material-item-footer"><button type="button" class="btn btn-danger btn-sm" data-remove-item><i class="fas fa-trash"></i> 刪除此物資</button></div>
                     </div>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="addMaterialItemButton"><i class="fas fa-plus"></i> 新增物資</button>
@@ -501,7 +556,7 @@ $formatDateTime = static function ($value) {
                     $transportStatus = $task['status'] ?? 'open';
                     $transportStatusLabel = $transportStatus === 'open'
                         ? '尚在等待運送人員'
-                        : ($transportStatus === 'claimed' ? 'GO Rider 正在路上' : '物資已領取，運送中');
+                        : (in_array($transportStatus, ['claimed', 'arrived_pickup'], true) ? ($transportStatus === 'arrived_pickup' ? 'GO Rider 已到店' : 'GO Rider 正在路上') : '物資已領取，運送中');
                     ?>
                     <tr>
                         <td><?php echo htmlspecialchars($task['donor_name'] ?? ''); ?></td>
@@ -510,7 +565,7 @@ $formatDateTime = static function ($value) {
                         <td><?php echo htmlspecialchars($task['quantity'] ?? ''); ?> <?php echo htmlspecialchars($task['unit'] ?? ''); ?></td>
                         <td>
                             <span class="status <?php echo $transportStatus === 'open' ? 'status-pending' : 'status-info'; ?>"><?php echo htmlspecialchars($transportStatusLabel); ?></span>
-                            <?php if (in_array($transportStatus, ['claimed', 'picked_up'], true)): ?>
+                            <?php if (in_array($transportStatus, ['claimed', 'arrived_pickup', 'picked_up'], true)): ?>
                                 <div class="assigned-delivery-details">
                                     <strong>配送會員</strong><?php echo htmlspecialchars($task['volunteer_name'] ?? '尚未同步'); ?>
                                     <strong>聯絡電話</strong><?php echo htmlspecialchars($task['volunteer_phone'] ?? '未提供'); ?>
@@ -526,15 +581,7 @@ $formatDateTime = static function ($value) {
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php if ($transportStatus === 'claimed'): ?>
-                                <form method="post" class="inline-form">
-                                    <input type="hidden" name="action" value="donor_confirm_pickup">
-                                    <input type="hidden" name="delivery_id" value="<?php echo (int) $task['delivery_id']; ?>">
-                                    <button type="submit" class="btn btn-primary btn-sm">GO Rider 已將物資領取</button>
-                                </form>
-                            <?php else: ?>
-                                <span class="text-muted">等待狀態更新</span>
-                            <?php endif; ?>
+                            <span class="text-muted">由 GO Rider 拍照確認取貨後會自動更新</span>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -564,6 +611,29 @@ $formatDateTime = static function ($value) {
                         <strong>婉拒的原因：</strong>
                         <span><?php echo nl2br(htmlspecialchars($viewingDonation['rejection_reason'] ?? '未填寫')); ?></span>
                     </div>
+                    <?php
+                    $flaggedFields = json_decode((string) ($viewingDonation['rejected_fields'] ?? ''), true);
+                    $flaggedFields = is_array($flaggedFields) ? $flaggedFields : [];
+                    $resubmitInputs = [
+                        'item_name' => 'text', 'quantity' => 'number', 'unit' => 'text', 'weight_kg' => 'number',
+                        'size_description' => 'text', 'expiry_date' => 'date', 'donor_address' => 'text', 'notes' => 'text',
+                    ];
+                    ?>
+                    <form method="post" class="resubmit-form">
+                        <?php echo csrfField(); ?>
+                        <input type="hidden" name="action" value="resubmit_donation">
+                        <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
+                        <p><strong>請修改<?php echo $flaggedFields ? '被標記的欄位（紅框）' : '有問題的欄位'; ?>後，直接重新送審：</strong></p>
+                        <?php foreach ($resubmitInputs as $fieldKey => $inputType):
+                            $isFlagged = in_array($fieldKey, $flaggedFields, true);
+                            $isEditable = !$flaggedFields || $isFlagged; ?>
+                            <div class="form-group<?php echo $isFlagged ? ' field-flagged' : ''; ?>">
+                                <label><?php echo htmlspecialchars(DonationModel::RESUBMIT_FIELD_LABELS[$fieldKey]); ?><?php echo $isFlagged ? '（需修改）' : ''; ?></label>
+                                <input type="<?php echo $inputType; ?>"<?php echo $inputType === 'number' ? ' step="0.01" min="0"' : ''; ?> name="fields[<?php echo $fieldKey; ?>]" value="<?php echo htmlspecialchars((string) ($viewingDonation[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"<?php echo $isEditable ? '' : ' disabled'; ?>>
+                            </div>
+                        <?php endforeach; ?>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> 修改後重新送審</button>
+                    </form>
                 <?php endif; ?>
                 <?php $isViewingRejected = ($viewingDonation['evaluation_status'] ?? '') === 'rejected'; ?>
                 <?php
@@ -630,13 +700,13 @@ $formatDateTime = static function ($value) {
                 <?php if (!empty($viewingItems)): ?>
                     <div class="material-items-summary">
                         <h3>物資規格</h3>
-                        <div class="data-table-wrapper"><table class="data-table donation-items-table"><thead><tr><th>物資名稱</th><th>品牌</th><th>規格</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th><th>備註</th></tr></thead><tbody>
+                        <div class="data-table-wrapper"><table class="data-table donation-items-table"><thead><tr><th>物資名稱</th><th>保存方式</th><th>包裝</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th></tr></thead><tbody>
                             <?php foreach ($viewingItems as $item):
                                 $dimensionParts = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($value) {
                                     return $value !== null && $value !== '';
                                 });
                                 $dimensionText = count($dimensionParts) === 3 ? implode(' × ', $dimensionParts) : '未填寫';
-                            ?><tr><td><?php echo htmlspecialchars($item['item_name']); ?></td><td><?php echo htmlspecialchars($item['brand'] ?? ''); ?></td><td><?php echo htmlspecialchars($item['specification'] ?? ''); ?></td><td><?php echo htmlspecialchars($item['quantity'] . ' ' . $item['unit']); ?></td><td><?php echo htmlspecialchars($dimensionText); ?></td><td><?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? $item['item_weight_kg'] . ' kg' : '未填寫'); ?></td><td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td><td><?php echo htmlspecialchars($item['notes'] ?? ''); ?></td></tr><?php endforeach; ?>
+                            ?><tr><td><?php echo htmlspecialchars($item['item_name']); ?></td><td><?php echo htmlspecialchars(['room' => '常溫', 'chilled' => '冷藏', 'frozen' => '冷凍'][$item['storage_condition'] ?? 'room'] ?? '常溫'); ?></td><td><?php echo htmlspecialchars(($item['package_state'] ?? 'sealed') === 'opened' ? '已拆封／分裝' : '原包裝未拆封'); ?></td><td><?php echo htmlspecialchars($item['quantity'] . ' ' . $item['unit']); ?></td><td><?php echo htmlspecialchars($dimensionText); ?></td><td><?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? $item['item_weight_kg'] . ' kg' : '未填寫'); ?></td><td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td></tr><?php endforeach; ?>
                         </tbody></table></div>
                     </div>
                 <?php endif; ?>
@@ -709,6 +779,23 @@ $formatDateTime = static function ($value) {
 
         const itemRows = document.getElementById('materialItemRows');
         const addItemButton = document.getElementById('addMaterialItemButton');
+        // 只剩一項物資時不能刪除；多項時每項都有「刪除此物資」
+        const refreshItemRows = function () {
+            const rows = itemRows ? itemRows.querySelectorAll('.material-item-row') : [];
+            rows.forEach(function (row, index) {
+                const removeButton = row.querySelector('[data-remove-item]');
+                if (removeButton) {
+                    removeButton.hidden = rows.length <= 1;
+                }
+                let title = row.querySelector('.material-item-title');
+                if (!title) {
+                    title = document.createElement('strong');
+                    title.className = 'material-item-title';
+                    row.insertBefore(title, row.firstChild);
+                }
+                title.textContent = '物資 ' + (index + 1);
+            });
+        };
         if (itemRows && addItemButton) {
             addItemButton.addEventListener('click', function () {
                 const newRow = itemRows.firstElementChild.cloneNode(true);
@@ -718,8 +805,25 @@ $formatDateTime = static function ($value) {
                 newRow.querySelectorAll('select').forEach(function (select) {
                     select.selectedIndex = 0;
                 });
+                const checkBox = newRow.querySelector('.spec-check-box');
+                if (checkBox) {
+                    checkBox.remove();
+                }
                 itemRows.appendChild(newRow);
+                refreshItemRows();
             });
+            itemRows.addEventListener('click', function (event) {
+                const removeButton = event.target.closest('[data-remove-item]');
+                if (!removeButton) {
+                    return;
+                }
+                const rows = itemRows.querySelectorAll('.material-item-row');
+                if (rows.length > 1) {
+                    removeButton.closest('.material-item-row').remove();
+                    refreshItemRows();
+                }
+            });
+            refreshItemRows();
         }
 
         const detailModal = document.getElementById('donationDetailModal');
@@ -768,6 +872,8 @@ $formatDateTime = static function ($value) {
     .distance-estimate-item i { color: #14b8a6; }
     .distance-estimate-status { margin: 8px 0 0; font-size: 12px; color: #64748b; }
     .distance-estimate-status.is-error { color: #dc2626; }
+    .material-item-title { display: block; margin-bottom: 10px; color: #0f766e; }
+    .material-item-footer { display: flex; justify-content: flex-end; }
     .material-item-row { margin-bottom: 18px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
     .material-items-summary { margin-top: 24px; }
     .material-items-summary h3 { margin-bottom: 12px; }
@@ -838,7 +944,7 @@ $formatDateTime = static function ($value) {
     .donation-form-overlay {
         position: fixed;
         inset: 0;
-        z-index: 999;
+        z-index: 1200;
         display: none;
         align-items: center;
         justify-content: center;
@@ -851,6 +957,7 @@ $formatDateTime = static function ($value) {
     }
 
     .donation-form-modal {
+        margin: auto;
         width: min(760px, 100%);
         max-height: 90vh;
         overflow-y: auto;

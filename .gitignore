@@ -3,3 +3,4 @@ config/local.php
 !.env.example
 storage/rider_licenses/
 cookies.txt
+storage/keys/

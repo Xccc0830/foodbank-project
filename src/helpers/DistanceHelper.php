@@ -18,17 +18,73 @@ function geocodeAddress($address) {
         return false;
     }
 
+    $cached = geocodeCacheGet($address);
+    if ($cached !== null) {
+        return $cached;
+    }
+
     $normalizedAddress = normalizeTaiwanPostalCode($address);
     foreach (buildAddressVariants($address) as $variant) {
-        $coordinate = geocodeExactAddress($variant);
+        $variantCached = $variant === $address ? null : geocodeCacheGet($variant);
+        $coordinate = $variantCached ?? geocodeExactAddress($variant);
+        if ($coordinate === 'rate_limited') {
+            $GLOBALS['geocode_rate_limited'] = true;
+            return false;
+        }
         if ($coordinate !== false) {
             $coordinate['approximate'] = !empty($coordinate['approximate'])
                 || normalizeTaiwanPostalCode($variant) !== $normalizedAddress;
+            geocodeCachePut($address, $coordinate);
             return $coordinate;
         }
     }
 
     return false;
+}
+
+function geocodeCacheConnection() {
+    return isset($GLOBALS['db']) && is_object($GLOBALS['db']) && method_exists($GLOBALS['db'], 'getConnection')
+        ? $GLOBALS['db']->getConnection()
+        : null;
+}
+
+/** 地址查過一次就存起來，避免重複打外部服務被限流。 */
+function geocodeCacheGet($address) {
+    $connection = geocodeCacheConnection();
+    if (!$connection) {
+        return null;
+    }
+    static $tableReady = false;
+    if (!$tableReady) {
+        $connection->query(
+            "CREATE TABLE IF NOT EXISTS geocode_cache (
+                address_hash CHAR(32) NOT NULL PRIMARY KEY,
+                address VARCHAR(255) NOT NULL,
+                lat DECIMAL(10,7) NOT NULL,
+                lon DECIMAL(10,7) NOT NULL,
+                approximate TINYINT(1) NOT NULL DEFAULT 0,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+        );
+        $tableReady = true;
+    }
+    $hash = md5($address);
+    $result = $connection->query("SELECT lat, lon, approximate FROM geocode_cache WHERE address_hash = '{$hash}' LIMIT 1");
+    $row = $result ? $result->fetch_assoc() : null;
+    return $row ? ['lat' => (float) $row['lat'], 'lon' => (float) $row['lon'], 'approximate' => (bool) $row['approximate']] : null;
+}
+
+function geocodeCachePut($address, array $coordinate) {
+    $connection = geocodeCacheConnection();
+    if (!$connection) {
+        return;
+    }
+    $stmt = $connection->prepare("REPLACE INTO geocode_cache (address_hash, address, lat, lon, approximate) VALUES (?, ?, ?, ?, ?)");
+    $hash = md5($address);
+    $short = mb_substr($address, 0, 255);
+    $approximate = !empty($coordinate['approximate']) ? 1 : 0;
+    $stmt->bind_param('ssddi', $hash, $short, $coordinate['lat'], $coordinate['lon'], $approximate);
+    $stmt->execute();
 }
 
 /**
@@ -84,22 +140,61 @@ function geocodeExactAddress($address) {
         ? $address . ', 台灣'
         : $address;
 
-    $url = 'https://nominatim.openstreetmap.org/search?' . http_build_query([
+    // 有設定 Google Maps 金鑰時優先使用（對台灣門牌最準，也沒有 Nominatim 的頻率限制）
+    if (defined('GOOGLE_MAPS_API_KEY') && GOOGLE_MAPS_API_KEY !== '') {
+        $google = httpGetJsonWithStatus('https://maps.googleapis.com/maps/api/geocode/json?' . http_build_query([
+            'address' => $query,
+            'region' => 'tw',
+            'language' => 'zh-TW',
+            'key' => GOOGLE_MAPS_API_KEY,
+        ]));
+        $location = $google['body']['results'][0]['geometry']['location'] ?? null;
+        if ($location) {
+            return ['lat' => (float) $location['lat'], 'lon' => (float) $location['lng']];
+        }
+    }
+
+    // Nominatim 規定每秒最多 1 次請求；跨請求共用一個時間戳來節流。
+    throttleNominatim();
+    $response = httpGetJsonWithStatus('https://nominatim.openstreetmap.org/search?' . http_build_query([
         'q' => $query,
         'format' => 'json',
         'limit' => 1,
         'countrycodes' => 'tw',
-    ]);
+    ]));
+    if ($response['status'] === 429 || $response['status'] === 403) {
+        return 'rate_limited';
+    }
 
-    $response = httpGetJson($url);
-    if (!is_array($response) || empty($response[0]['lat']) || empty($response[0]['lon'])) {
+    $body = $response['body'];
+    if (!is_array($body) || empty($body[0]['lat']) || empty($body[0]['lon'])) {
         return false;
     }
 
     return [
-        'lat' => (float) $response[0]['lat'],
-        'lon' => (float) $response[0]['lon'],
+        'lat' => (float) $body[0]['lat'],
+        'lon' => (float) $body[0]['lon'],
     ];
+}
+
+function throttleNominatim() {
+    $file = sys_get_temp_dir() . '/foodbank_nominatim_last';
+    $handle = @fopen($file, 'c+');
+    if (!$handle) {
+        usleep(1100000);
+        return;
+    }
+    flock($handle, LOCK_EX);
+    $last = (float) stream_get_contents($handle);
+    $wait = 1.1 - (microtime(true) - $last);
+    if ($wait > 0) {
+        usleep((int) ($wait * 1000000));
+    }
+    ftruncate($handle, 0);
+    rewind($handle);
+    fwrite($handle, (string) microtime(true));
+    flock($handle, LOCK_UN);
+    fclose($handle);
 }
 
 /**
@@ -138,19 +233,28 @@ function routeDistance(array $origin, array $destination) {
  * 失敗時回傳 ['error' => string]
  */
 function calculateAddressDistance($originAddress, $destinationAddress) {
+    $GLOBALS['geocode_rate_limited'] = false;
+    $busyMessage = '地圖查詢服務目前較忙碌，請過一分鐘後再試（填過的地址會被記住，之後會比較快）。';
+
     $origin = geocodeAddress($originAddress);
     if ($origin === false) {
-        return ['error' => '無法辨識取貨地址，請輸入更完整的地址（含縣市、路名、門牌號碼）。'];
+        return ['error' => !empty($GLOBALS['geocode_rate_limited']) ? $busyMessage : '無法辨識取貨地址，請輸入更完整的地址（含縣市、路名、門牌號碼）。'];
     }
 
     $destination = geocodeAddress($destinationAddress);
     if ($destination === false) {
-        return ['error' => '無法辨識送達地址，請輸入更完整的地址（含縣市、路名、門牌號碼）。'];
+        return ['error' => !empty($GLOBALS['geocode_rate_limited']) ? $busyMessage : '無法辨識送達地址，請輸入更完整的地址（含縣市、路名、門牌號碼）。'];
     }
 
     $route = routeDistance($origin, $destination);
     if ($route === false) {
-        return ['error' => '無法計算兩地址之間的路程，請確認地址是否可到達。'];
+        // 路徑服務暫時不可用：改用直線距離 ×1.3 概估，並標示為概略值
+        $straight = straightLineKm($origin, $destination);
+        $route = [
+            'distance_km' => round($straight * 1.3, 2),
+            'duration_minutes' => round($straight * 1.3 / 30 * 60, 1),
+        ];
+        $origin['approximate'] = true;
     }
 
     return array_merge($route, [
@@ -164,8 +268,24 @@ function calculateAddressDistance($originAddress, $destinationAddress) {
  * 呼叫外部 URL 並將回應解析為 JSON 陣列，失敗回傳 false
  */
 function httpGetJson($url) {
+    $response = httpGetJsonWithStatus($url);
+    return $response['body'];
+}
+
+function straightLineKm(array $a, array $b) {
+    $earth = 6371.0;
+    $dLat = deg2rad($b['lat'] - $a['lat']);
+    $dLon = deg2rad($b['lon'] - $a['lon']);
+    $h = sin($dLat / 2) ** 2 + cos(deg2rad($a['lat'])) * cos(deg2rad($b['lat'])) * sin($dLon / 2) ** 2;
+    return 2 * $earth * asin(min(1, sqrt($h)));
+}
+
+/**
+ * 與 httpGetJson 相同，但同時回傳 HTTP 狀態碼：['status' => int, 'body' => array|false]
+ */
+function httpGetJsonWithStatus($url) {
     if (!function_exists('curl_init')) {
-        return false;
+        return ['status' => 0, 'body' => false];
     }
 
     $ch = curl_init($url);
@@ -183,11 +303,11 @@ function httpGetJson($url) {
     curl_close($ch);
 
     if ($body === false || $httpCode < 200 || $httpCode >= 300) {
-        return false;
+        return ['status' => (int) $httpCode, 'body' => false];
     }
 
     $decoded = json_decode($body, true);
-    return json_last_error() === JSON_ERROR_NONE ? $decoded : false;
+    return ['status' => (int) $httpCode, 'body' => json_last_error() === JSON_ERROR_NONE ? $decoded : false];
 }
 
 /**

@@ -22,10 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (in_array($decision, ['accepted', 'rejected'], true) && $donationId > 0) {
             if ($decision === 'accepted' && !in_array($foodbankDeliveryOption, ['food_bank_pickup', 'volunteer_delivery'], true)) {
                 $reviewMessage = ['type' => 'error', 'text' => '請先選擇配送方式後再完成評估或發布。'];
+            } elseif ($decision === 'accepted' && empty($_POST['publish_now'])) {
+                $reviewMessage = ['type' => 'error', 'text' => '接受物資後需要直接發布，請填寫發布資訊後按「發布」。'];
             } elseif ($decision === 'rejected' && $rejectionReason === '') {
                 $reviewMessage = ['type' => 'error', 'text' => '請填寫婉拒原因後再送出。'];
             } else {
-                $updated = $donationModel->reviewMaterialDonation($donationId, $decision, $rejectionReason, $foodbankDeliveryOption);
+                $flaggedFields = array_values(array_intersect(
+                    array_keys(DonationModel::RESUBMIT_FIELD_LABELS),
+                    is_array($_POST['rejected_fields'] ?? null) ? $_POST['rejected_fields'] : []
+                ));
+                $updated = $donationModel->reviewMaterialDonation($donationId, $decision, $rejectionReason, $foodbankDeliveryOption, $flaggedFields, ((int) ($currentUser['user_id'] ?? 0)) ?: null);
                 if ($updated && $decision === 'accepted' && !empty($_POST['publish_now'])) {
                     $updated = $donationModel->publishDonation($donationId, $_POST);
                 }
@@ -198,7 +204,77 @@ $getProcessTime = static function ($donation) {
     return ['label' => '更新時間', 'value' => $donation['updated_at'] ?? null];
 };
 
-$renderDetails = static function ($donation) use ($donationTypeLabels, $deliveryOptionLabels, $formatVehicleTypes, $formatDateTime, $getProcessTime) {
+$storageLabels = ['room' => '常溫', 'chilled' => '冷藏', 'frozen' => '冷凍'];
+
+/** 物資明細表（唯讀）：一次填多項物資時，審核人員能逐項查看。 */
+$renderItemsTable = static function ($donation) use ($donationModel, $storageLabels) {
+    $items = $donationModel->getDonationItems((int) ($donation['donation_id'] ?? 0));
+    if (!$items) {
+        return;
+    }
+    ?>
+    <div class="material-items-summary">
+        <h3>物資明細（共 <?php echo count($items); ?> 項）</h3>
+        <div class="data-table-wrapper"><table class="data-table donation-items-table">
+            <thead><tr><th>#</th><th>物資名稱</th><th>類別</th><th>數量</th><th>重量 (kg)</th><th>保存方式</th><th>包裝</th><th>保存期限</th><th>長寬高 (cm)</th></tr></thead>
+            <tbody>
+            <?php foreach ($items as $index => $item):
+                $dims = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($v) { return $v !== null && $v !== ''; });
+            ?>
+                <tr>
+                    <td><?php echo $index + 1; ?></td>
+                    <td><?php echo htmlspecialchars($item['item_name']); ?></td>
+                    <td><?php echo htmlspecialchars($item['category_name'] ?? '未分類'); ?></td>
+                    <td><?php echo htmlspecialchars(rtrim(rtrim((string) $item['quantity'], '0'), '.') . ' ' . $item['unit']); ?></td>
+                    <td><?php echo $item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? htmlspecialchars($item['item_weight_kg']) : '未填寫'; ?></td>
+                    <td><?php echo htmlspecialchars($storageLabels[$item['storage_condition'] ?? 'room'] ?? '常溫'); ?></td>
+                    <td><?php echo ($item['package_state'] ?? 'sealed') === 'opened' ? '已拆封／分裝' : '原包裝未拆封'; ?></td>
+                    <td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td>
+                    <td><?php echo count($dims) === 3 ? htmlspecialchars(implode(' × ', $dims)) : '未填寫'; ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table></div>
+    </div>
+    <?php
+};
+
+/** 發布表單裡的物資欄位：有明細就逐項可改，沒有（舊資料）就維持單一物資欄位。 */
+$renderPublishItemFields = static function ($donation) use ($donationModel) {
+    $items = $donationModel->getDonationItems((int) ($donation['donation_id'] ?? 0));
+    if ($items) {
+        ?>
+        <div class="publish-items">
+            <strong>物資明細（可逐項修改，共 <?php echo count($items); ?> 項）</strong>
+            <div class="data-table-wrapper"><table class="data-table">
+                <thead><tr><th>#</th><th>物資名稱</th><th>數量</th><th>單位</th><th>重量 (kg)</th></tr></thead>
+                <tbody>
+                <?php foreach ($items as $index => $item): $itemId = (int) $item['item_id']; ?>
+                    <tr>
+                        <td><?php echo $index + 1; ?></td>
+                        <td><input type="text" name="items[<?php echo $itemId; ?>][item_name]" value="<?php echo htmlspecialchars($item['item_name'], ENT_QUOTES); ?>" required></td>
+                        <td><input type="number" step="0.01" min="0.01" name="items[<?php echo $itemId; ?>][quantity]" value="<?php echo htmlspecialchars((string) $item['quantity'], ENT_QUOTES); ?>" required></td>
+                        <td><?php echo htmlspecialchars($item['unit']); ?></td>
+                        <td><input type="number" step="0.01" min="0" name="items[<?php echo $itemId; ?>][item_weight_kg]" value="<?php echo htmlspecialchars((string) ($item['item_weight_kg'] ?? ''), ENT_QUOTES); ?>"></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table></div>
+        </div>
+        <?php
+        return;
+    }
+    ?>
+    <div class="grid-2">
+        <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($donation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
+        <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($donation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
+        <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($donation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
+        <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($donation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
+    </div>
+    <?php
+};
+
+$renderDetails = static function ($donation) use ($donationTypeLabels, $deliveryOptionLabels, $formatVehicleTypes, $formatDateTime, $getProcessTime, $renderItemsTable) {
     $photoPaths = !empty($donation['photo_path'])
         ? array_filter(array_map('trim', preg_split('/\s*,\s*/', (string) $donation['photo_path'])))
         : [];
@@ -240,6 +316,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
             <?php endif; ?>
         </div>
     </div>
+    <?php $renderItemsTable($donation); ?>
     <?php if (!empty($photoPaths)): ?>
         <div class="donation-photos">
             <strong>安全驗證照片：</strong>
@@ -313,90 +390,6 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                 <i class="fas fa-clipboard-list"></i>
                 <p>目前沒有待評估物資</p>
             </div>
-        <?php endif; ?>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h2>已評估</h2>
-        <p>已完成接受或婉拒判定的物資會出現在這裡。</p>
-    </div>
-    <div class="card-body">
-        <?php if (!empty($assessedDonations)): ?>
-            <table class="data-table review-assessed-table">
-                <thead>
-                    <tr>
-                        <th>狀態</th>
-                        <th>店家名稱</th>
-                        <th>物資類型</th>
-                        <th>名稱</th>
-                        <th>配送選擇</th>
-                        <th>評估時間</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($assessedDonations as $donation): ?>
-                        <tr>
-                            <?php
-                            $evaluationStatus = strtolower((string) ($donation['evaluation_status'] ?? ''));
-                            $isRejected = $evaluationStatus === 'rejected';
-                            $decisionLabel = $isRejected ? '婉拒' : '接受';
-                            $decisionTime = $isRejected ? ($donation['rejected_at'] ?? null) : ($donation['approved_at'] ?? null);
-                            ?>
-                            <td><span class="status <?php echo $isRejected ? 'status-rejected' : 'status-approved'; ?>"><?php echo htmlspecialchars($decisionLabel); ?></span></td>
-                            <td><?php echo htmlspecialchars($donation['donor_name'] ?? ''); ?></td>
-                            <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type'] ?? ''] ?? '其他'); ?></td>
-                            <td><?php echo htmlspecialchars($donation['item_name'] ?? '未填寫'); ?></td>
-                            <td><?php echo htmlspecialchars($deliveryOptionLabels[$donation['delivery_option'] ?? ''] ?? '未指定'); ?></td>
-                            <td><?php echo htmlspecialchars($formatDateTime($decisionTime)); ?></td>
-                            <td>
-                                <form method="post">
-                                    <?php echo csrfField(); ?>
-                                    <input type="hidden" name="action" value="view_review_donation">
-                                    <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
-                                    <button type="submit" class="btn btn-primary btn-sm">查看</button>
-                                </form>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <div class="empty-state">
-                <i class="fas fa-check-circle"></i>
-                <p>目前沒有已評估物資</p>
-            </div>
-        <?php endif; ?>
-    </div>
-</div>
-
-<div class="card mt-32">
-    <div class="card-header">
-        <h2>待發布</h2>
-        <p>已接受但尚未發布到平台的物資。</p>
-    </div>
-    <div class="card-body">
-        <?php if (!empty($pendingPublishDonations)): ?>
-            <table class="data-table review-publish-table">
-                <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>配送選擇</th><th>已評估完成時間</th><th>操作</th></tr></thead>
-                <tbody>
-                <?php foreach ($pendingPublishDonations as $donation): ?>
-                    <tr>
-                        <td><span class="status status-approved">尚未發布</span></td>
-                        <td><?php echo htmlspecialchars($donation['donor_name'] ?? ''); ?></td>
-                        <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type'] ?? ''] ?? '其他'); ?></td>
-                        <td><?php echo htmlspecialchars($donation['item_name'] ?? '未填寫'); ?></td>
-                        <td><?php echo htmlspecialchars($deliveryOptionLabels[$donation['delivery_option'] ?? ''] ?? '未指定'); ?></td>
-                        <td><?php echo htmlspecialchars($formatDateTime($donation['approved_at'] ?? null)); ?></td>
-                        <td><form method="post"><?php echo csrfField(); ?><input type="hidden" name="action" value="view_publish_donation"><input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>"><button type="submit" class="btn btn-primary btn-sm">發布</button></form></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <div class="empty-state"><i class="fas fa-clock"></i><p>目前沒有待發布物資</p></div>
         <?php endif; ?>
     </div>
 </div>
@@ -506,6 +499,12 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <div class="rejection-reason-panel" id="rejectionReasonPanel" hidden>
                             <label for="rejectionReason"><strong>婉拒原因</strong></label>
                             <textarea id="rejectionReason" name="rejection_reason" rows="3" placeholder="請填寫婉拒原因"></textarea>
+                            <div class="rejected-fields-picker">
+                                <strong>哪些欄位需要商家修改？（可複選；不勾選則商家可修改全部）</strong>
+                                <?php foreach (DonationModel::RESUBMIT_FIELD_LABELS as $fieldKey => $fieldLabel): ?>
+                                    <label><input type="checkbox" name="rejected_fields[]" value="<?php echo htmlspecialchars($fieldKey); ?>"> <?php echo htmlspecialchars($fieldLabel); ?></label>
+                                <?php endforeach; ?>
+                            </div>
                             <button type="submit" name="decision" value="rejected" class="btn btn-danger">送出婉拒</button>
                         </div>
                         <div class="foodbank-delivery-options">
@@ -517,22 +516,14 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <button type="button" id="showRejectionReasonButton" class="btn btn-danger">婉拒</button>
                             <button type="button" id="showPublishChoiceButton" class="btn btn-primary">接受</button>
                         </div>
-                        <div class="publish-choice-panel" id="publishChoicePanel" hidden>
-                            <strong>接受後要發布到平台嗎？</strong>
-                            <div class="modal-actions">
-                                <button type="submit" name="decision" value="accepted" class="btn btn-secondary">稍後處理</button>
-                                <button type="button" id="showPublishFieldsButton" class="btn btn-primary">現在發布</button>
-                            </div>
-                        </div>
                         <div class="publish-fields" id="publishFields" hidden>
                             <h3>發布物資資訊</h3>
                             <div class="grid-2">
                                 <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
                                 <label>商家取貨地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>" required></label>
-                                <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
-                                <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
-                                <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
-                                <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($viewingDonation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
+                                </div>
+                                <?php $renderPublishItemFields($viewingDonation); ?>
+                                <div class="grid-2">
                                 <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
                                 <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                             </div>
@@ -568,10 +559,9 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <div class="grid-2">
                             <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
                             <label>商家取貨地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>" required></label>
-                            <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
-                            <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
-                            <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
-                            <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($viewingDonation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
+                            </div>
+                            <?php $renderPublishItemFields($viewingDonation); ?>
+                            <div class="grid-2">
                             <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
                             <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                         </div>
@@ -629,9 +619,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
         const rejectionReasonPanel = document.getElementById('rejectionReasonPanel');
         const rejectionReasonInput = document.getElementById('rejectionReason');
         const showPublishChoiceButton = document.getElementById('showPublishChoiceButton');
-        const publishChoicePanel = document.getElementById('publishChoicePanel');
-        const showPublishFieldsButton = document.getElementById('showPublishFieldsButton');
-        const publishFields = document.getElementById('publishFields');
+                const publishFields = document.getElementById('publishFields');
         const publishNowInput = document.getElementById('publishNowInput');
         const closeModal = function () {
             if (reviewModal) {
@@ -653,20 +641,15 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
             });
         }
 
-        if (showPublishChoiceButton && publishChoicePanel) {
+        // 接受＝直接發布：按下「接受」就展開發布欄位，按「發布」才會送出
+        if (showPublishChoiceButton && publishFields) {
             showPublishChoiceButton.addEventListener('click', function () {
-                publishChoicePanel.hidden = false;
-                showPublishChoiceButton.hidden = true;
-            });
-        }
-
-        if (showPublishFieldsButton && publishFields) {
-            showPublishFieldsButton.addEventListener('click', function () {
                 publishFields.hidden = false;
-                publishChoicePanel.hidden = true;
+                showPublishChoiceButton.hidden = true;
                 if (publishNowInput) {
                     publishNowInput.value = '1';
                 }
+                publishFields.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
             });
         }
 
@@ -715,6 +698,11 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                 }
 
                 const weightInput = form.querySelector('input[name="weight_kg"]');
+                // 一次多項物資時，重量是各項物資重量的加總
+                let totalItemWeight = 0;
+                form.querySelectorAll('input[name$="[item_weight_kg]"]').forEach(function (input) {
+                    totalItemWeight += Number.parseFloat(input.value) || 0;
+                });
                 const splitInput = form.querySelector('input[name="split_count"]');
                 const splitEnabled = form.querySelector('input[name="split_enabled"][value="1"]');
                 const splitCount = splitEnabled && !splitEnabled.checked
@@ -722,7 +710,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                     : Math.max(1, Number.parseInt(splitInput ? splitInput.value : '1', 10) || 1);
                 const vehicleInput = form.querySelector('input[name="vehicle_type"]');
                 const vehicle = vehicleInput && vehicleInput.value === 'car' ? 'car' : 'motorcycle';
-                const weightPerTask = Math.max(0, Number.parseFloat(weightInput ? weightInput.value : '0') || 0) / splitCount;
+                const weightPerTask = Math.max(0, weightInput ? (Number.parseFloat(weightInput.value) || 0) : totalItemWeight) / splitCount;
                 const distance = Math.max(0, Number.parseFloat(preview.dataset.distanceKm || '0') || 0);
                 const perTask = calculateTaskPoints(vehicle, distance, weightPerTask);
                 totalLabel.textContent = splitCount > 1
@@ -730,7 +718,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                     : `約 ${perTask} 枚`;
             };
 
-            form.querySelectorAll('input[name="foodbank_delivery_option"], input[name="weight_kg"], input[name="split_count"], input[name="split_enabled"], input[name="vehicle_type"]').forEach(function (input) {
+            form.querySelectorAll('input[name="foodbank_delivery_option"], input[name="weight_kg"], input[name$="[item_weight_kg]"], input[name="split_count"], input[name="split_enabled"], input[name="vehicle_type"]').forEach(function (input) {
                 input.addEventListener('input', updatePreview);
                 input.addEventListener('change', updatePreview);
             });
@@ -760,8 +748,23 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     })();
 </script>
 
-<?php if ($viewingDonation): ?>
 <style>
+    /* 文字一律橫向排列：表格不擠壓欄位，太窄時改為橫向捲動 */
+    .page-content .card-body { overflow-x: auto; }
+    .review-pending-table, .review-assessed-table, .review-publish-table, .review-published-table, .review-history-table { min-width: 760px; }
+    .review-pending-table th, .review-pending-table td,
+    .review-assessed-table th, .review-assessed-table td,
+    .review-publish-table th, .review-publish-table td,
+    .review-published-table th, .review-published-table td,
+    .review-history-table th, .review-history-table td { white-space: nowrap; word-break: keep-all; writing-mode: horizontal-tb; }
+    .review-pending-table td:last-child, .review-assessed-table td:last-child,
+    .review-publish-table td:last-child, .review-published-table td:last-child,
+    .review-history-table td:last-child { min-width: 0; }
+    .donation-review-modal, .donation-review-modal * { writing-mode: horizontal-tb; }
+    .donation-review-modal p, .donation-review-modal span, .donation-review-modal td, .donation-review-modal th { word-break: normal; overflow-wrap: break-word; white-space: normal; }
+    .donation-review-modal .data-table th, .donation-review-modal .data-table td { white-space: nowrap; }
+    .publish-items { margin: 12px 0; }
+    .publish-items input { width: 100%; min-width: 90px; }
     .donation-review-overlay {
         position: fixed;
         inset: 0;
@@ -907,4 +910,3 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
         }
     }
 </style>
-<?php endif; ?>

@@ -10,11 +10,11 @@ require __DIR__ . '/../src/models/PermissionModel.php';
 
 function oldRolePages($role, $memberType) {
     $rolePages = [
-        'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'news', 'inventory', 'item_categories', 'rewards', 'settings', 'users', 'volunteer_management', 'rider_review', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
+        'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'news', 'inventory', 'item_categories', 'rewards', 'settings', 'users', 'rider_review', 'activities', 'id_verification', 'carbon_report', 'reports', 'notifications', 'certificate', 'activity_certificate'],
         'member' => $memberType === 'enterprise'
-            ? ['dashboard', 'order_tracking', 'news', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate']
+            ? ['dashboard', 'order_tracking', 'news', 'activities', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate']
             : ($memberType === 'general'
-                ? ['dashboard', 'rider_application', 'news', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate']
+                ? ['dashboard', 'rider_application', 'id_verification', 'news', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate']
                 : ['dashboard']),
     ];
     return $rolePages[$role] ?? ['dashboard'];
@@ -23,7 +23,7 @@ function oldRolePages($role, $memberType) {
 $permissionModel = new PermissionModel();
 $failures = 0;
 
-// 1. 角色 + 會員類型的預設權限應與舊版 $rolePages 完全一致。
+// 1. 角色 + 會員類型的預設權限應與下方 oldRolePages() 列出的頁面清單完全一致（頁面增減時請同步更新）。
 $cases = [
     ['role' => 'foodbank_staff', 'member_type' => null],
     ['role' => 'member', 'member_type' => 'general'],
