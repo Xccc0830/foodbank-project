@@ -91,7 +91,7 @@ if ($isEnterpriseMember) {
     $recordRows = [];
     $recordResult = $connection->query(
         "SELECT d.delivered_at, n.item_name, n.quantity, n.unit, d.delivery_method,
-                CASE WHEN d.delivery_method = 'food_bank' THEN '忠信派車' ELSE 'GO Rider 派車' END AS delivery_label
+                CASE WHEN d.delivery_method = 'food_bank' THEN '忠信派車' ELSE '志工派車' END AS delivery_label
          FROM deliveries d
          INNER JOIN donations n ON n.donation_id = d.donation_id
          WHERE n.donor_id = {$enterpriseId}

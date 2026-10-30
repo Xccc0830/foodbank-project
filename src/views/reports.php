@@ -55,7 +55,7 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
     header('Content-Disposition: attachment; filename="volunteer_ranking.csv"');
     $output = fopen('php://output', 'w');
     fwrite($output, "\xEF\xBB\xBF");
-    fputcsv($output, ['GO Rider 姓名', '完成配送次數', '累積興毅幣']);
+    fputcsv($output, ['忠信GO RIDER姓名', '完成配送次數', '累積興毅幣']);
     foreach ($volunteerRanking as $row) {
         fputcsv($output, [$row['full_name'], $row['delivery_count'], $row['total_points']]);
     }
@@ -95,14 +95,14 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="card mt-32">
     <div class="card-header">
         <div class="toolbar-row">
-            <div><h2>GO Rider 派車排行</h2><p class="toolbar-meta">依累積興毅幣排序</p></div>
+            <div><h2>忠信GO RIDER派車排行</h2><p class="toolbar-meta">依累積興毅幣排序</p></div>
             <?php if (!$isVolunteer): ?><div class="toolbar-actions"><a class="btn btn-secondary btn-sm" href="?page=reports&amp;start_date=<?php echo urlencode($startDate); ?>&amp;end_date=<?php echo urlencode($endDate); ?>&amp;export=volunteers_csv"><i class="fas fa-download"></i> 匯出 CSV</a></div><?php endif; ?>
         </div>
     </div>
     <div class="card-body">
         <?php if ($volunteerRanking): ?>
             <table class="data-table ranking-table">
-                <thead><tr><th>排名</th><th>GO Rider</th><th>完成配送次數</th><th>累積興毅幣</th></tr></thead>
+                <thead><tr><th>排名</th><th>忠信GO RIDER</th><th>完成配送次數</th><th>累積興毅幣</th></tr></thead>
                 <tbody>
                 <?php foreach ($volunteerRanking as $index => $row): ?>
                     <?php $pos = $index + 1; $rankClass = $pos <= 3 ? 'rank-' . $pos : ''; ?>
@@ -176,7 +176,7 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
                 </tbody>
             </table>
         <?php else: ?>
-            <div class="empty-state"><i class="fas fa-ranking-star"></i><p>目前尚無 GO Rider 點數紀錄</p></div>
+            <div class="empty-state"><i class="fas fa-ranking-star"></i><p>目前尚無忠信GO RIDER點數紀錄</p></div>
         <?php endif; ?>
     </div>
 </div>

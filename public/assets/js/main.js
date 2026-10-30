@@ -100,8 +100,8 @@
                 const statusDetails = {
                     open: { title: '等待配送員接單', message: '訂單已準備，等待配送員接單。', step: 0, progress: 8 },
                     claimed: { title: '配送員已接單', message: '配送員已接單，正在前往取貨。', step: 1, progress: 32 },
-                    picked_up: { title: 'GO Rider 正在前往送達地點', message: '物資已取貨，GO Rider 正在前往送達地點。', step: 2, progress: 72 },
-                    in_transit: { title: 'GO Rider 正在前往送達地點', message: 'GO Rider 正在配送途中。', step: 2, progress: 72 },
+                    picked_up: { title: 'Go Rider 正在前往送達地點', message: '物資已取貨，Go Rider 正在前往送達地點。', step: 2, progress: 72 },
+                    in_transit: { title: 'Go Rider 正在前往送達地點', message: 'Go Rider 正在配送途中。', step: 2, progress: 72 },
                     delivered: { title: '物資已送達', message: '配送已完成，感謝您的愛心。', step: 3, progress: 100 },
                     exception: { title: '配送狀況處理中', message: '配送遇到狀況，食物銀行人員正在協助處理。', step: 1, progress: 36 },
                     cancelled: { title: '配送任務已取消', message: '此配送任務已取消。', step: 0, progress: 0 }
@@ -158,7 +158,7 @@
                     const otherStops = Number(result.other_active_delivery_count) || 0;
                     stopAlert.hidden = otherStops === 0 || result.status === 'delivered';
                     stopAlert.textContent = otherStops > 0
-                        ? 'GO Rider 目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
+                        ? 'Go Rider 目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
                         : '';
                 }
             } catch (error) {
@@ -595,7 +595,7 @@
                     <label>配送方式*</label>
                     <select name="delivery_option" required>
                         <option value="food_bank_pickup">忠信派車</option>
-                        <option value="volunteer_delivery">GO Rider 派車</option>
+                        <option value="volunteer_delivery">忠信GO RIDER派車</option>
                     </select>
                 </div>
                 <div class="form-group">

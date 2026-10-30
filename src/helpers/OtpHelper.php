@@ -3,7 +3,7 @@
  * OTP 產生與驗證工具（開發環境：驗證碼直接顯示於頁面，尚未串接簡訊服務商）
  */
 
-function generateOtpForUser($connection, int $userId, string $phone, string $purpose): string {
+function generateOtpForUser(mysqli $connection, int $userId, string $phone, string $purpose): string {
     $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
     $codeHash = hash('sha256', $code);
     $phoneEscaped = $connection->real_escape_string($phone);
@@ -16,7 +16,7 @@ function generateOtpForUser($connection, int $userId, string $phone, string $pur
     return $code;
 }
 
-function verifyOtpForUser($connection, int $userId, string $purpose, string $code): bool {
+function verifyOtpForUser(mysqli $connection, int $userId, string $purpose, string $code): bool {
     $purposeEscaped = $connection->real_escape_string($purpose);
     $result = $connection->query("SELECT otp_id, code_hash, attempts, expires_at FROM otp_codes WHERE user_id = {$userId} AND purpose = '{$purposeEscaped}' AND consumed_at IS NULL ORDER BY otp_id DESC LIMIT 1");
     $otp = $result ? $result->fetch_assoc() : null;

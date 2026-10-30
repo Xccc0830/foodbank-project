@@ -23,7 +23,7 @@ function getNotificationTarget($notification) {
         return '?page=donation_materials';
     }
 
-    $deliveryTitles = ['新的配送任務', '新的 GO Rider 配送任務', '新的 Go Rider 配送任務', '配送任務已接單', '配送異常回報'];
+    $deliveryTitles = ['新的配送任務', '新的 Go Rider 配送任務', '配送任務已接單', '配送異常回報'];
     if (in_array($notification['title'], $deliveryTitles, true)) {
         $deliveryId = null;
         if (preg_match('/配送任務\s*#(\d+)/u', $notification['message'], $matches)) {

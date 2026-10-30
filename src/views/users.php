@@ -49,16 +49,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $accountError = '此帳號不在黑名單中。';
         }
+    } elseif ($postAction === 'update_staff_type') {
+        $staffType = $_POST['staff_type'] ?? '';
+        if (!$target || $target['role'] !== 'foodbank_staff' || !in_array($staffType, ['admin', 'clerk'], true)) {
+            $accountError = '無法變更此帳號類型。';
+        } elseif (in_array($target['username'], $protectedUsernames, true) || (int) $target['user_id'] === $currentUserId) {
+            $accountError = '系統保護帳號與目前登入的帳號不能變更類型。';
+        } else {
+            $connection->query("UPDATE users SET staff_type = '{$staffType}' WHERE user_id = {$targetId}");
+            $accountMessage = '食物銀行帳號類型已更新，下次載入頁面即生效。';
+        }
     } elseif ($postAction === 'create_staff') {
         $newUsername = trim((string) ($_POST['username'] ?? ''));
         $newName = trim((string) ($_POST['full_name'] ?? ''));
         $newEmail = trim((string) ($_POST['email'] ?? ''));
         $newPassword = (string) ($_POST['password'] ?? '');
+        $newType = $_POST['staff_type'] ?? '';
         $usernameSql = $connection->real_escape_string($newUsername);
         $emailSql = $connection->real_escape_string($newEmail);
         $exists = $connection->query("SELECT user_id FROM users WHERE username = '{$usernameSql}' OR email = '{$emailSql}' LIMIT 1");
 
-        if ($newUsername === '' || $newName === '' || !filter_var($newEmail, FILTER_VALIDATE_EMAIL) || strlen($newPassword) < 8) {
+        if ($newUsername === '' || $newName === '' || !filter_var($newEmail, FILTER_VALIDATE_EMAIL) || strlen($newPassword) < 8 || !in_array($newType, ['admin', 'clerk'], true)) {
             $accountError = '請完整填寫帳號資料；密碼至少需要 8 個字元。';
         } elseif ($exists && $exists->num_rows > 0) {
             $accountError = '帳號或電子郵件已經被使用。';
@@ -67,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $passwordSql = $connection->real_escape_string(password_hash($newPassword, PASSWORD_DEFAULT));
             $connection->query(
                 "INSERT INTO users (username, password, email, full_name, role, member_type, staff_type, status, phone_verified)
-                 VALUES ('{$usernameSql}', '{$passwordSql}', '{$emailSql}', '{$nameSql}', 'foodbank_staff', 'general', 'admin', 'active', 1)"
+                 VALUES ('{$usernameSql}', '{$passwordSql}', '{$emailSql}', '{$nameSql}', 'foodbank_staff', 'general', '{$newType}', 'active', 1)"
             );
             $accountMessage = '已建立食物銀行帳號。';
         }
@@ -87,7 +98,7 @@ if ($result) {
         $users[] = $user;
     }
 }
-$roleLabels = ['foodbank_staff' => '食物銀行管理員', 'member' => '會員'];
+$roleLabels = ['foodbank_staff' => '忠信食物銀行', 'member' => '會員'];
 $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended' => '已停用'];
 ?>
 
@@ -101,13 +112,13 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
     </div>
     <div class="card-body users-table-body">
         <table class="data-table users-table">
-            <thead><tr><th>姓名</th><th>帳號</th><th>會員類型</th><th>電話</th><th>電子郵件</th><th>教育訓練（GO Rider）</th><th>狀態</th><th>操作</th></tr></thead>
+            <thead><tr><th>姓名</th><th>帳號</th><th>會員類型</th><th>電話</th><th>電子郵件</th><th>教育訓練（外送志工）</th><th>狀態</th><th>操作</th></tr></thead>
             <tbody>
                 <?php foreach ($users as $user): ?>
                     <?php
                     $memberLabel = $user['role'] === 'member'
                         ? ($user['member_type'] === 'enterprise' ? '企業會員' : '一般會員')
-                        : '食物銀行管理員';
+                        : ($user['staff_type'] === 'clerk' ? '食物銀行行政人員' : '食物銀行管理員');
                     $requiresConsent = $user['role'] === 'member' && $user['member_type'] === 'general';
                     $isBlacklisted = !empty($user['blacklisted_at']);
                     $isProtected = in_array($user['username'], $protectedUsernames, true);
@@ -142,6 +153,18 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
                                     </select>
                                     <button class="btn btn-primary btn-sm" type="submit">更新</button>
                                 </form>
+                                <?php if ($user['role'] === 'foodbank_staff' && (int) $user['user_id'] !== $currentUserId): ?>
+                                    <form method="post" class="btn-group">
+                                        <?php echo csrfField(); ?>
+                                        <input type="hidden" name="action" value="update_staff_type">
+                                        <input type="hidden" name="user_id" value="<?php echo (int) $user['user_id']; ?>">
+                                        <select name="staff_type" aria-label="食物銀行帳號類型">
+                                            <option value="admin" <?php echo $user['staff_type'] !== 'clerk' ? 'selected' : ''; ?>>管理員</option>
+                                            <option value="clerk" <?php echo $user['staff_type'] === 'clerk' ? 'selected' : ''; ?>>行政人員</option>
+                                        </select>
+                                        <button class="btn btn-secondary btn-sm" type="submit">變更類型</button>
+                                    </form>
+                                <?php endif; ?>
                                 <?php if ($user['role'] === 'member'): ?>
                                     <?php if ($isBlacklisted): ?>
                                         <form method="post" class="btn-group" onsubmit="return confirm('確定要解除此會員的黑名單嗎？');">
@@ -173,7 +196,7 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
 
 <?php if (!$isVolunteerManagement): ?>
 <div class="card mt-32">
-    <div class="card-header"><h2>新增食物銀行管理員帳號</h2><p>食物銀行管理員擁有全部系統功能，包含確認 GO Rider 抵達與清點物資</p></div>
+    <div class="card-header"><h2>新增食物銀行帳號</h2><p>管理員擁有全部功能；行政人員只負責配送、清點與確認查收</p></div>
     <div class="card-body">
         <form method="post">
             <?php echo csrfField(); ?>
@@ -186,6 +209,7 @@ $statusLabels = ['active' => '已開通', 'inactive' => '待審核', 'suspended'
                 <div class="form-group"><label>電子郵件*</label><input type="email" name="email" required maxlength="100"></div>
                 <div class="form-group"><label>密碼*（至少 8 個字元）</label><input type="password" name="password" required minlength="8" autocomplete="new-password"></div>
             </div>
+            <div class="form-group"><label>帳號類型*</label><select name="staff_type" required><option value="clerk">行政人員</option><option value="admin">管理員</option></select></div>
             <button class="btn btn-primary" type="submit">建立帳號</button>
         </form>
     </div>

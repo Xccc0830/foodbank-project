@@ -1,12 +1,12 @@
 <?php
 /**
- * 食物銀行審核一般會員的 GO Rider 申請
+ * 食物銀行審核一般會員的外送志工申請
  */
 
 require_once BASE_PATH . '/src/models/RiderApplicationModel.php';
 
 if (!$authService->can('page.rider_review')) {
-    echo '<div class="alert alert-error">您沒有審核 GO Rider 申請的權限。</div>';
+    echo '<div class="alert alert-error">您沒有審核外送志工申請的權限。</div>';
     return;
 }
 
@@ -21,11 +21,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($postAction === 'approve_rider') {
         $reviewMessage = $riderModel->approve($applicationId, $reviewerId, $reviewNotes)
-            ? ['type' => 'success', 'text' => '已核准 GO Rider 申請，會員現在可以接單。']
+            ? ['type' => 'success', 'text' => '已核准外送志工申請，會員現在可以接單。']
             : ['type' => 'error', 'text' => '核准失敗，申請可能已被處理。'];
     } elseif ($postAction === 'reject_rider') {
         $reviewMessage = $riderModel->reject($applicationId, $reviewerId, $reviewNotes)
-            ? ['type' => 'success', 'text' => '已退回 GO Rider 申請。']
+            ? ['type' => 'success', 'text' => '已退回外送志工申請。']
             : ['type' => 'error', 'text' => '退回申請時必須填寫原因；申請也可能已被處理。'];
     }
 }
@@ -38,7 +38,7 @@ $statusClasses = ['pending' => 'pending', 'approved' => 'active', 'rejected' => 
 
 <div class="view-header">
     <div>
-        <h1 class="view-title">GO Rider 審核</h1>
+        <h1 class="view-title">外送志工審核</h1>
         <p class="view-subtitle">查看一般會員上傳的駕照，核准後才具備外送權限</p>
     </div>
 </div>
@@ -86,7 +86,7 @@ $statusClasses = ['pending' => 'pending', 'approved' => 'active', 'rejected' => 
                 </tbody>
             </table>
         <?php else: ?>
-            <div class="empty-state"><i class="fas fa-id-card"></i><p>目前沒有 GO Rider 申請</p></div>
+            <div class="empty-state"><i class="fas fa-id-card"></i><p>目前沒有外送志工申請</p></div>
         <?php endif; ?>
     </div>
 </div>

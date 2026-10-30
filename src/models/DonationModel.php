@@ -344,7 +344,7 @@ class DonationModel extends BaseModel {
             require_once __DIR__ . '/NotificationModel.php';
             $notificationModel = new NotificationModel($this->db);
             $notifiedCount = $notificationModel->notifyMembers(
-                '新的 GO Rider 配送任務',
+                '新的 Go Rider 配送任務',
                 sprintf(
                     '物資「%s」已發布 %d 筆配送任務，請立即前往配送任務查看並接單。',
                     (string) ($publishData['item_name'] ?? $existingDonation['item_name'] ?? '新物資'),
@@ -354,7 +354,7 @@ class DonationModel extends BaseModel {
                 'general'
             );
             if ($notifiedCount === 0) {
-                error_log("配送任務發布後沒有通知到 GO Rider：donation_id={$donation_id}");
+                error_log("配送任務發布後沒有通知到忠信 GO RIDER：donation_id={$donation_id}");
             }
         }
         return true;
@@ -419,8 +419,8 @@ class DonationModel extends BaseModel {
         $sql = "SELECT n.donation_id, n.order_number, n.donor_name, n.item_name, n.quantity, n.unit,
                        n.donation_date, n.status AS donation_status, n.current_status,
                        COUNT(d.delivery_id) AS delivery_count,
-                       STRING_AGG(d.delivery_id::text, ',' ORDER BY d.delivery_id) AS delivery_ids,
-                       STRING_AGG(DISTINCT (uv.full_name || '：' || COALESCE(NULLIF(uv.phone, ''), '未提供電話')), '；') AS volunteer_contacts,
+                       GROUP_CONCAT(d.delivery_id ORDER BY d.delivery_id) AS delivery_ids,
+                       GROUP_CONCAT(DISTINCT CONCAT(uv.full_name, '：', COALESCE(NULLIF(uv.phone, ''), '未提供電話')) SEPARATOR '；') AS volunteer_contacts,
                        SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) AS completed_delivery_count,
                        MAX(d.status) AS latest_delivery_status,
                        CASE

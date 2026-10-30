@@ -1,6 +1,6 @@
 <?php
 /**
- * 一般會員申請成為 GO Rider（上傳駕照、完成教育訓練與條款同意，待食物銀行審核）
+ * 一般會員申請成為外送志工（上傳駕照、完成教育訓練與條款同意，待食物銀行審核）
  */
 
 require_once BASE_PATH . '/src/models/RiderApplicationModel.php';
@@ -35,8 +35,8 @@ $vehicleLabels = ['motorcycle' => '機車', 'car' => '汽車', 'both' => '機車
 
 <div class="view-header">
     <div>
-        <h1 class="view-title">申請 GO Rider</h1>
-        <p class="view-subtitle">成為 GO Rider 後，即可在「配送任務」接單協助運送物資</p>
+        <h1 class="view-title">申請外送志工</h1>
+        <p class="view-subtitle">成為外送志工後，即可在「配送任務」接單協助運送物資</p>
     </div>
 </div>
 
@@ -49,7 +49,7 @@ $vehicleLabels = ['motorcycle' => '機車', 'car' => '汽車', 'both' => '機車
 
 <?php if ($isRider): ?>
     <div class="card"><div class="card-body">
-        <p><i class="fas fa-circle-check"></i> 您已具備 GO Rider 資格，請前往「配送任務」接單。</p>
+        <p><i class="fas fa-circle-check"></i> 您已具備外送志工資格，請前往「配送任務」接單。</p>
     </div></div>
 <?php elseif ($isPending): ?>
     <div class="card"><div class="card-body">
@@ -63,7 +63,7 @@ $vehicleLabels = ['motorcycle' => '機車', 'car' => '汽車', 'both' => '機車
         </div>
     <?php endif; ?>
     <div class="card">
-        <div class="card-header"><h2>GO Rider 申請</h2><p>駕照照片僅供食物銀行審核人員查看。</p></div>
+        <div class="card-header"><h2>外送志工申請</h2><p>駕照照片僅供食物銀行審核人員查看。</p></div>
         <div class="card-body">
             <video id="safetyVideo" class="consent-video" controls preload="metadata">
                 <source src="<?php echo htmlspecialchars(APP_URL . '/assets/videos/food-safety-briefing.mp4'); ?>" type="video/mp4">
@@ -86,8 +86,8 @@ $vehicleLabels = ['motorcycle' => '機車', 'car' => '汽車', 'both' => '機車
                     <label for="licensePhoto">駕照照片*</label>
                     <input id="licensePhoto" type="file" name="license_photo" accept="image/png,image/jpeg,image/webp" required>
                 </div>
-                <label><input type="checkbox" name="agreed_disclaimer" value="1" required> 我已閱讀並同意《GO Rider 免責聲明》，了解配送過程中的風險由本人自行承擔一般注意義務。</label>
-                <label><input type="checkbox" name="agreed_mutual_aid" value="1" required> 我同意《GO Rider 互助條款》，了解本平台為公益互助性質，不具僱傭關係，僅提供興毅幣作為回饋。</label>
+                <label><input type="checkbox" name="agreed_disclaimer" value="1" required> 我已閱讀並同意《忠信GO RIDER免責聲明》，了解配送過程中的風險由本人自行承擔一般注意義務。</label>
+                <label><input type="checkbox" name="agreed_mutual_aid" value="1" required> 我同意《忠信GO RIDER互助條款》，了解本平台為公益互助性質，不具僱傭關係，僅提供興毅幣作為回饋。</label>
                 <label><input type="checkbox" id="videoWatchedCheckbox" name="video_watched" value="1" required disabled> 我已完整觀看食安運送短片。</label>
                 <button class="btn btn-primary" type="submit">送出申請</button>
             </form>

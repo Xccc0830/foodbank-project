@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($activityId) {
             $notifiedCount = $notificationModel->notifyMembers(
                 '有新的公益活動',
-                sprintf('「%s」已開放報名，愛心商家可優先認領，剩餘名額同步開放 GO Rider。', $data['title']),
+                sprintf('「%s」已開放報名，愛心商家可優先認領，剩餘名額同步開放 Go Rider。', $data['title']),
                 'info'
             );
             if ($notifiedCount === 0) {
@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (int) $currentUser['user_id'],
                     '活動報名已確認',
                     $assignmentType === 'company'
-                        ? sprintf('您已為「%s」報名 %d 人；剩餘名額已同步開放 GO Rider。', $activity['title'], $participantCount)
+                        ? sprintf('您已為「%s」報名 %d 人；剩餘名額已同步開放 Go Rider。', $activity['title'], $participantCount)
                         : sprintf('您已成功報名「%s」。', $activity['title']),
                     'success'
                 );
@@ -89,15 +89,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($assignmentType === 'company' && is_int($remainingCapacity) && $remainingCapacity > 0) {
                     $riderNotifications = $notificationModel->notifyMembers(
                         '公益活動名額已開放',
-                        sprintf('愛心商家已認領「%s」，目前尚有 %d 個名額，GO Rider 現可報名。', $activity['title'], $remainingCapacity),
+                        sprintf('愛心商家已認領「%s」，目前尚有 %d 個名額，Go Rider 現可報名。', $activity['title'], $remainingCapacity),
                         'info',
                         'general'
                     );
                     if ($riderNotifications === 0) {
-                        error_log("企業認領後沒有通知 GO Rider 剩餘活動名額：activity_id={$activityId}");
+                        error_log("企業認領後沒有通知 Go Rider 剩餘活動名額：activity_id={$activityId}");
                     }
                 }
-                $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業活動認領已送出，剩餘名額同步開放 GO Rider。' : '活動報名完成，預計可獲得 5 枚興毅幣。'];
+                $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業活動認領已送出，剩餘名額同步開放 Go Rider。' : '活動報名完成，預計可獲得 5 枚興毅幣。'];
             } else {
                 $message = ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或剩餘名額不足。'];
             }
@@ -233,7 +233,7 @@ $activityStatusLabels = [
     }
 </style>
 <?php if (empty($activitiesEmbedded)): ?>
-<div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '愛心商家可優先認領並填寫企業參與人數；尚未認領的名額立即開放 GO Rider，雙方皆可同時報名' : '愛心商家認領後的剩餘名額會立即開放，GO Rider 可同步報名並參與在地行動') : '發布公益活動，邀請會員參與在地行動'; ?></p></div></div>
+<div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '愛心商家可優先認領並填寫企業參與人數；尚未認領的名額立即開放 Go Rider，雙方皆可同時報名' : '愛心商家認領後的剩餘名額會立即開放，Go Rider 可同步報名並參與在地行動') : '發布公益活動，邀請會員參與在地行動'; ?></p></div></div>
 <?php endif; ?>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 

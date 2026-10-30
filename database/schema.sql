@@ -105,6 +105,39 @@ CREATE TABLE `audit_logs` (
 
 -- --------------------------------------------------------
 
+--
+-- 資料表結構 `beneficiaries`
+--
+
+DROP TABLE IF EXISTS `beneficiaries`;
+CREATE TABLE `beneficiaries` (
+  `beneficiary_id` int(11) NOT NULL,
+  `beneficiary_code` varchar(50) NOT NULL,
+  `first_name` varchar(50) NOT NULL,
+  `last_name` varchar(50) NOT NULL,
+  `email` varchar(100) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `city` varchar(50) DEFAULT NULL,
+  `postal_code` varchar(20) DEFAULT NULL,
+  `family_size` int(11) DEFAULT NULL,
+  `income_level` enum('low','medium','high') NOT NULL,
+  `registration_date` date NOT NULL,
+  `status` enum('active','inactive','suspended') DEFAULT 'active',
+  `case_worker_id` int(11) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `beneficiaries`
+--
+
+INSERT INTO `beneficiaries` (`beneficiary_id`, `beneficiary_code`, `first_name`, `last_name`, `email`, `phone`, `address`, `city`, `postal_code`, `family_size`, `income_level`, `registration_date`, `status`, `case_worker_id`, `notes`, `created_at`, `updated_at`) VALUES
+(1, 'DEMO-BEN-001', '王小美', '陳', NULL, NULL, NULL, NULL, NULL, 4, 'low', '2026-09-15', 'active', NULL, 'Demo 展示用受益者', '2026-09-15 06:02:07', '2026-09-15 06:02:07'),
+(2, 'DEMO-BEN-002', '林志明', '黃', NULL, NULL, NULL, NULL, NULL, 2, 'medium', '2026-09-15', 'active', NULL, 'Demo 展示用受益者', '2026-09-15 06:02:07', '2026-09-15 06:02:07');
+
 -- --------------------------------------------------------
 
 --
@@ -524,7 +557,50 @@ CREATE TABLE `public_relations` (
 
 -- --------------------------------------------------------
 
+--
+-- 資料表結構 `purchases`
+--
+
+DROP TABLE IF EXISTS `purchases`;
+CREATE TABLE `purchases` (
+  `purchase_id` int(11) NOT NULL,
+  `purchase_code` varchar(50) NOT NULL,
+  `supplier_id` int(11) DEFAULT NULL,
+  `supplier_name` varchar(100) NOT NULL,
+  `purchase_date` date NOT NULL,
+  `delivery_date` date DEFAULT NULL,
+  `total_amount` decimal(12,2) DEFAULT NULL,
+  `status` enum('draft','pending','approved','received','cancelled') DEFAULT 'draft',
+  `requested_by` int(11) DEFAULT NULL,
+  `approved_by` int(11) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `purchases`
+--
+
+INSERT INTO `purchases` (`purchase_id`, `purchase_code`, `supplier_id`, `supplier_name`, `purchase_date`, `delivery_date`, `total_amount`, `status`, `requested_by`, `approved_by`, `notes`, `created_at`, `updated_at`) VALUES
+(1, 'PUR20260815001', 1, 'ABC 食品供應公司', '2026-08-15', '2026-08-20', 5000.00, 'pending', NULL, NULL, NULL, '2026-09-16 07:57:28', '2026-09-16 07:57:28'),
+(2, 'PUR20260814001', 2, 'XYZ 商貿公司', '2026-08-14', '2026-08-18', 3500.00, 'approved', NULL, NULL, NULL, '2026-09-16 07:57:28', '2026-09-16 07:57:28');
+
 -- --------------------------------------------------------
+
+--
+-- 資料表結構 `purchase_items`
+--
+
+DROP TABLE IF EXISTS `purchase_items`;
+CREATE TABLE `purchase_items` (
+  `purchase_item_id` int(11) NOT NULL,
+  `purchase_id` int(11) NOT NULL,
+  `item_name` varchar(100) NOT NULL,
+  `quantity` decimal(10,2) NOT NULL,
+  `unit_price` decimal(10,2) DEFAULT NULL,
+  `total_price` decimal(12,2) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -630,6 +706,34 @@ CREATE TABLE `sale_items` (
 
 -- --------------------------------------------------------
 
+--
+-- 資料表結構 `suppliers`
+--
+
+DROP TABLE IF EXISTS `suppliers`;
+CREATE TABLE `suppliers` (
+  `supplier_id` int(11) NOT NULL,
+  `supplier_code` varchar(50) NOT NULL,
+  `supplier_name` varchar(100) NOT NULL,
+  `contact_person` varchar(100) DEFAULT NULL,
+  `email` varchar(100) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `address` text DEFAULT NULL,
+  `city` varchar(50) DEFAULT NULL,
+  `postal_code` varchar(20) DEFAULT NULL,
+  `status` enum('active','inactive') DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `suppliers`
+--
+
+INSERT INTO `suppliers` (`supplier_id`, `supplier_code`, `supplier_name`, `contact_person`, `email`, `phone`, `address`, `city`, `postal_code`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'ABC001', 'ABC 食品供應公司', '王經理', 'contact@abc.com', '010-1234-5678', NULL, '北京', NULL, 'active', '2026-09-16 07:57:28', '2026-09-16 07:57:28'),
+(2, 'XYZ001', 'XYZ 商貿公司', '李主任', 'contact@xyz.com', '010-9876-5432', NULL, '上海', NULL, 'active', '2026-09-16 07:57:28', '2026-09-16 07:57:28');
+
 -- --------------------------------------------------------
 
 --
@@ -716,6 +820,30 @@ INSERT INTO `volunteer_consents` (`user_id`, `agreed_disclaimer`, `agreed_mutual
 -- --------------------------------------------------------
 
 --
+-- 資料表結構 `warehouses`
+--
+
+DROP TABLE IF EXISTS `warehouses`;
+CREATE TABLE `warehouses` (
+  `warehouse_id` int(11) NOT NULL,
+  `warehouse_code` varchar(50) NOT NULL,
+  `warehouse_name` varchar(100) NOT NULL,
+  `address` text NOT NULL,
+  `city` varchar(50) DEFAULT NULL,
+  `postal_code` varchar(20) DEFAULT NULL,
+  `manager_id` int(11) DEFAULT NULL,
+  `capacity` decimal(10,2) DEFAULT NULL,
+  `current_usage` decimal(10,2) DEFAULT NULL,
+  `status` enum('active','inactive','maintenance') DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 已傾印資料表的索引
+--
+
+--
 -- 資料表索引 `activities`
 --
 ALTER TABLE `activities`
@@ -738,6 +866,18 @@ ALTER TABLE `audit_logs`
   ADD KEY `action_timestamp` (`action_timestamp`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `action_type` (`action_type`);
+
+--
+-- 資料表索引 `beneficiaries`
+--
+ALTER TABLE `beneficiaries`
+  ADD PRIMARY KEY (`beneficiary_id`),
+  ADD UNIQUE KEY `beneficiary_code` (`beneficiary_code`),
+  ADD KEY `case_worker_id` (`case_worker_id`),
+  ADD KEY `status` (`status`),
+  ADD KEY `registration_date` (`registration_date`),
+  ADD KEY `income_level` (`income_level`),
+  ADD KEY `idx_beneficiaries_status` (`status`);
 
 --
 -- 資料表索引 `deliveries`
@@ -854,6 +994,26 @@ ALTER TABLE `public_relations`
   ADD KEY `status` (`status`);
 
 --
+-- 資料表索引 `purchases`
+--
+ALTER TABLE `purchases`
+  ADD PRIMARY KEY (`purchase_id`),
+  ADD UNIQUE KEY `purchase_code` (`purchase_code`),
+  ADD KEY `requested_by` (`requested_by`),
+  ADD KEY `approved_by` (`approved_by`),
+  ADD KEY `purchase_date` (`purchase_date`),
+  ADD KEY `status` (`status`),
+  ADD KEY `supplier_name` (`supplier_name`),
+  ADD KEY `idx_purchases_status` (`status`);
+
+--
+-- 資料表索引 `purchase_items`
+--
+ALTER TABLE `purchase_items`
+  ADD PRIMARY KEY (`purchase_item_id`),
+  ADD KEY `purchase_id` (`purchase_id`);
+
+--
 -- 資料表索引 `reward_catalog`
 --
 ALTER TABLE `reward_catalog`
@@ -896,6 +1056,14 @@ ALTER TABLE `sale_items`
   ADD KEY `sale_id` (`sale_id`);
 
 --
+-- 資料表索引 `suppliers`
+--
+ALTER TABLE `suppliers`
+  ADD PRIMARY KEY (`supplier_id`),
+  ADD UNIQUE KEY `supplier_code` (`supplier_code`),
+  ADD KEY `status` (`status`);
+
+--
 -- 資料表索引 `users`
 --
 ALTER TABLE `users`
@@ -914,6 +1082,19 @@ ALTER TABLE `volunteer_consents`
   ADD PRIMARY KEY (`user_id`);
 
 --
+-- 資料表索引 `warehouses`
+--
+ALTER TABLE `warehouses`
+  ADD PRIMARY KEY (`warehouse_id`),
+  ADD UNIQUE KEY `warehouse_code` (`warehouse_code`),
+  ADD KEY `manager_id` (`manager_id`),
+  ADD KEY `status` (`status`);
+
+--
+-- 在傾印的資料表使用自動遞增(AUTO_INCREMENT)
+--
+
+--
 -- 使用資料表自動遞增(AUTO_INCREMENT) `activities`
 --
 ALTER TABLE `activities`
@@ -930,6 +1111,12 @@ ALTER TABLE `activity_assignments`
 --
 ALTER TABLE `audit_logs`
   MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `beneficiaries`
+--
+ALTER TABLE `beneficiaries`
+  MODIFY `beneficiary_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `deliveries`
@@ -1010,6 +1197,18 @@ ALTER TABLE `public_relations`
   MODIFY `pr_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- 使用資料表自動遞增(AUTO_INCREMENT) `purchases`
+--
+ALTER TABLE `purchases`
+  MODIFY `purchase_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `purchase_items`
+--
+ALTER TABLE `purchase_items`
+  MODIFY `purchase_item_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- 使用資料表自動遞增(AUTO_INCREMENT) `reward_catalog`
 --
 ALTER TABLE `reward_catalog`
@@ -1040,16 +1239,38 @@ ALTER TABLE `sale_items`
   MODIFY `sale_item_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- 使用資料表自動遞增(AUTO_INCREMENT) `suppliers`
+--
+ALTER TABLE `suppliers`
+  MODIFY `supplier_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
 -- 使用資料表自動遞增(AUTO_INCREMENT) `users`
 --
 ALTER TABLE `users`
   MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
+-- 使用資料表自動遞增(AUTO_INCREMENT) `warehouses`
+--
+ALTER TABLE `warehouses`
+  MODIFY `warehouse_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 已傾印資料表的限制式
+--
+
+--
 -- 資料表的限制式 `audit_logs`
 --
 ALTER TABLE `audit_logs`
   ADD CONSTRAINT `audit_logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
+
+--
+-- 資料表的限制式 `beneficiaries`
+--
+ALTER TABLE `beneficiaries`
+  ADD CONSTRAINT `beneficiaries_ibfk_1` FOREIGN KEY (`case_worker_id`) REFERENCES `users` (`user_id`);
 
 --
 -- 資料表的限制式 `departments`
@@ -1096,6 +1317,19 @@ ALTER TABLE `public_relations`
   ADD CONSTRAINT `public_relations_ibfk_1` FOREIGN KEY (`organizer_id`) REFERENCES `users` (`user_id`);
 
 --
+-- 資料表的限制式 `purchases`
+--
+ALTER TABLE `purchases`
+  ADD CONSTRAINT `purchases_ibfk_1` FOREIGN KEY (`requested_by`) REFERENCES `users` (`user_id`),
+  ADD CONSTRAINT `purchases_ibfk_2` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`);
+
+--
+-- 資料表的限制式 `purchase_items`
+--
+ALTER TABLE `purchase_items`
+  ADD CONSTRAINT `purchase_items_ibfk_1` FOREIGN KEY (`purchase_id`) REFERENCES `purchases` (`purchase_id`);
+
+--
 -- 資料表的限制式 `sales`
 --
 ALTER TABLE `sales`
@@ -1106,6 +1340,12 @@ ALTER TABLE `sales`
 --
 ALTER TABLE `sale_items`
   ADD CONSTRAINT `sale_items_ibfk_1` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`);
+
+--
+-- 資料表的限制式 `warehouses`
+--
+ALTER TABLE `warehouses`
+  ADD CONSTRAINT `warehouses_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
 
 --
 -- 資料表結構 `donation_items`
@@ -1139,6 +1379,11 @@ INSERT INTO `donation_items` (`donation_id`, `item_name`, `specification`, `quan
 SELECT `donation_id`, COALESCE(NULLIF(`item_name`, ''), '未命名物資'), `size_description`, COALESCE(`quantity`, 0), COALESCE(`unit`, '件'), `expiry_date`
 FROM `donations`;
 
+--
+-- 資料表的限制式 `donations`
+--
+ALTER TABLE `donations`
+  ADD CONSTRAINT `donations_ibfk_2` FOREIGN KEY (`beneficiary_id`) REFERENCES `beneficiaries` (`beneficiary_id`) ON DELETE SET NULL;
 
 -- 修正舊資料殘留的「忠信GO RIDER」字樣，統一顯示為「忠信GO RIDER」
 UPDATE `notifications` SET `message` = REPLACE(`message`, '忠信GO RIDER', '忠信GO RIDER') WHERE `message` LIKE '%忠信GO RIDER%';

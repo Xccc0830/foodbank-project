@@ -106,7 +106,7 @@ $activitiesHtml = ob_get_clean();
             <?php foreach ($ads as $ad): ?>
                 <article class="news-ad-card">
                     <?php if (!empty($ad['image_path'])): ?>
-                        <img src="<?php echo htmlspecialchars(storedPublicImageUrl($ad['image_path']), ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($ad['title'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <img src="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($ad['image_path'], '/'), ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($ad['title'], ENT_QUOTES, 'UTF-8'); ?>">
                     <?php endif; ?>
                     <div class="news-ad-body">
                         <h3><?php echo htmlspecialchars($ad['title']); ?></h3>

@@ -3,7 +3,7 @@
  * 補齊 users 資料表的新欄位，讓舊資料庫在不匯入破壞性 schema.sql 的情況下仍可登入。
  * 此相容處理不會完成資料庫升級；需要新功能的資料庫應使用全新安裝。
  */
-function ensureUserColumns($connection) {
+function ensureUserColumns(mysqli $connection) {
     $check = $connection->query("SHOW COLUMNS FROM users LIKE 'blacklist_reason'");
     if (!$check || $check->num_rows > 0) {
         return;

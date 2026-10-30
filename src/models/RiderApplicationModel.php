@@ -1,6 +1,6 @@
 <?php
 /**
- * GO Rider 申請模型
+ * 外送志工申請模型
  * 一般會員註冊後預設不具外送權限，需上傳駕照申請並經食物銀行審核；
  * 審核通過後以個人權限覆寫（user_permission_overrides）授予外送相關能力。
  */
@@ -62,13 +62,13 @@ class RiderApplicationModel extends BaseModel {
         $userId = (int) $userId;
         $user = $this->getMember($userId);
         if (!$user || $user['status'] !== 'active') {
-            return ['success' => false, 'message' => '只有已開通的一般會員可以申請成為 GO Rider。'];
+            return ['success' => false, 'message' => '只有已開通的一般會員可以申請成為外送志工。'];
         }
         if (!in_array($vehicleType, self::VEHICLE_TYPES, true) || trim((string) $licensePhotoPath) === '') {
             return ['success' => false, 'message' => '請選擇可駕駛的車種並上傳駕照照片。'];
         }
         if ($this->isRider($userId)) {
-            return ['success' => false, 'message' => '您已具備 GO Rider 資格。'];
+            return ['success' => false, 'message' => '您已具備外送志工資格。'];
         }
         $latest = $this->getLatestForUser($userId);
         if ($latest && $latest['status'] === 'pending') {
@@ -82,26 +82,11 @@ class RiderApplicationModel extends BaseModel {
             "INSERT INTO rider_applications (user_id, vehicle_type, license_photo_path)
              VALUES ({$userId}, '{$vehicleEscaped}', '{$pathEscaped}')"
         );
-        $consented = false;
-        if ($saved && $this->db instanceof PostgresConnection) {
-            $this->db->query("SELECT pg_advisory_xact_lock({$userId})");
-            $updatedConsent = $this->db->query(
-                "UPDATE volunteer_consents
-                 SET agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = CURRENT_TIMESTAMP
-                 WHERE user_id = {$userId}"
-            );
-            $consented = $updatedConsent && ($this->db->affected_rows > 0
-                || $this->db->query(
-                    "INSERT INTO volunteer_consents (user_id, agreed_disclaimer, agreed_mutual_aid, video_watched, completed_at)
-                     VALUES ({$userId}, 1, 1, 1, CURRENT_TIMESTAMP)"
-                ));
-        } elseif ($saved) {
-            $consented = $this->db->query(
-                "INSERT INTO volunteer_consents (user_id, agreed_disclaimer, agreed_mutual_aid, video_watched, completed_at)
-                 VALUES ({$userId}, 1, 1, 1, NOW())
-                 ON DUPLICATE KEY UPDATE agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = NOW()"
-            );
-        }
+        $consented = $saved && $this->db->query(
+            "INSERT INTO volunteer_consents (user_id, agreed_disclaimer, agreed_mutual_aid, video_watched, completed_at)
+             VALUES ({$userId}, 1, 1, 1, NOW())
+             ON DUPLICATE KEY UPDATE agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = NOW()"
+        );
         if (!$consented) {
             $this->db->rollback();
             return ['success' => false, 'message' => '申請送出失敗，請稍後再試。'];
@@ -110,8 +95,8 @@ class RiderApplicationModel extends BaseModel {
 
         (new NotificationModel($this->db))->notifyRole(
             'foodbank_staff',
-            '新的 GO Rider 申請',
-            ($user['full_name'] ?? '一般會員') . ' 已送出 GO Rider 申請，請至「GO Rider 審核」處理。',
+            '新的外送志工申請',
+            ($user['full_name'] ?? '一般會員') . ' 已送出外送志工申請，請至「外送志工審核」處理。',
             'info'
         );
 
@@ -151,8 +136,8 @@ class RiderApplicationModel extends BaseModel {
 
         (new NotificationModel($this->db))->notify(
             $userId,
-            'GO Rider 申請通過',
-            '您的 GO Rider 申請已通過，現在可以前往「配送任務」接單。',
+            '外送志工申請通過',
+            '您的外送志工申請已通過，現在可以前往「配送任務」接單。',
             'success'
         );
         return true;
@@ -179,8 +164,8 @@ class RiderApplicationModel extends BaseModel {
 
         (new NotificationModel($this->db))->notify(
             (int) $application['user_id'],
-            'GO Rider 申請未通過',
-            '您的 GO Rider 申請未通過：' . $notes . '。您可以補齊資料後重新申請。',
+            '外送志工申請未通過',
+            '您的外送志工申請未通過：' . $notes . '。您可以補齊資料後重新申請。',
             'warning'
         );
         return true;

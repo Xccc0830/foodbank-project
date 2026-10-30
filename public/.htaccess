@@ -1,5 +1,0 @@
-Options -Indexes
-
-<FilesMatch "(?i)(^\.|\.sql$|^cookies\.txt$|^AGENT\.md$)">
-    Require all denied
-</FilesMatch>
