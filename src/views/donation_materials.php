@@ -622,7 +622,7 @@ $formatDateTime = static function ($value) {
                         <?php if (!empty($viewingDonation['photo_path'])): ?>
                             <?php $paths = array_filter(array_map('trim', preg_split('/\s*,\s*/', (string) $viewingDonation['photo_path']))); ?>
                             <?php foreach ($paths as $path): ?>
-                                <img src="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($path, '/')); ?>" style="max-width: 220px; margin: 10px 10px 0 0; border-radius: 8px; border: 1px solid #dfe3ea;" alt="捐贈照片">
+                                <img src="<?php echo htmlspecialchars(storedPublicImageUrl($path)); ?>" style="max-width: 220px; margin: 10px 10px 0 0; border-radius: 8px; border: 1px solid #dfe3ea;" alt="捐贈照片">
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>

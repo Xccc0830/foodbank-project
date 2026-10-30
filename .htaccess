@@ -1,0 +1,9 @@
+DirectoryIndex index.php
+Options -Indexes
+
+RewriteEngine On
+RewriteRule ^(config|src|database|storage|tests|docs|\.git|\.vscode)(/|$) - [F,NC,L]
+
+<FilesMatch "(?i)(^\.|\.sql$|^cookies\.txt$|^AGENT\.md$)">
+    Require all denied
+</FilesMatch>

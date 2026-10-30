@@ -32,6 +32,10 @@ function uploadRiderLicensePhoto(array $file) {
     return saveUploadedImage($file, 'rider_licenses', 'license', BASE_PATH . '/storage');
 }
 
+function storedPublicImageUrl($storedPath) {
+    return APP_URL . '/' . ltrim((string) $storedPath, '/');
+}
+
 function saveUploadedImage(array $file, $relativeDirectory, $prefix, $rootDirectory) {
     if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
         return false;
@@ -58,6 +62,7 @@ function saveUploadedImage(array $file, $relativeDirectory, $prefix, $rootDirect
 
     $extension = $allowedMimeToExt[$mimeType];
     $filename = $prefix . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
+
     $destinationDir = $rootDirectory . '/' . $relativeDirectory;
     $destinationPath = $destinationDir . '/' . $filename;
 

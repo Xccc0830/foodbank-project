@@ -3,10 +3,6 @@
  * 食物銀行系統 - 主入口文件
  */
 
-// 啟用錯誤報告（開發環境）
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 // 定義基礎路徑
 define('BASE_PATH', __DIR__ . '/..');
 define('ROOT_PATH', __DIR__);
@@ -15,10 +11,18 @@ define('ROOT_PATH', __DIR__);
 require_once BASE_PATH . '/config/database.php';
 require_once BASE_PATH . '/src/helpers/SecurityHelper.php';
 require_once BASE_PATH . '/src/helpers/SchemaHelper.php';
+require_once BASE_PATH . '/src/helpers/UploadHelper.php';
 
+error_reporting(E_ALL);
+ini_set('display_errors', APP_DEBUG ? '1' : '0');
 date_default_timezone_set('Asia/Taipei');
 
 // 啟用會話
+session_set_cookie_params([
+    'httponly' => true,
+    'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    'samesite' => 'Lax',
+]);
 session_start();
 getCsrfToken();
 

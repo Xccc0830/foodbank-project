@@ -1,2 +1,5 @@
 config/local.php
+.env*
+!.env.example
 storage/rider_licenses/
+cookies.txt
