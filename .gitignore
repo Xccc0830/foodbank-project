@@ -4,3 +4,5 @@ config/local.php
 storage/rider_licenses/
 cookies.txt
 storage/keys/
+
+.DS_Store
