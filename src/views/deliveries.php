@@ -17,6 +17,11 @@ $canManageDeliveries = $isOfficial && $authService->can('delivery.manage');
 $canConfirmArrival = $isOfficial && $authService->can('delivery.confirm_arrival');
 $isVolunteer = $currentRole === 'member' && $memberType === 'general' && $authService->can('rider.accept_task');
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST) && empty($_FILES)
+    && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+    $message = ['type' => 'error', 'text' => '上傳內容超過伺服器允許的大小，請縮小照片後再試。'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     if ($action === 'create_delivery') {
@@ -47,12 +52,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : ['type' => 'error', 'text' => '接單失敗，任務可能已被其他配送會員接取。'];
     } elseif ($action === 'confirm_pickup') {
         require_once BASE_PATH . '/src/helpers/UploadHelper.php';
-        $pickupPhotoPath = $isVolunteer && !empty($_FILES['pickup_photo']['name'])
-            ? uploadPickupPhoto($_FILES['pickup_photo'])
-            : false;
-        $message = $pickupPhotoPath !== false && $deliveryModel->confirmPickup((int) $_POST['delivery_id'], $currentUserId, $pickupPhotoPath)
-            ? ['type' => 'success', 'text' => '取貨已確認，請將物資送往食物銀行。']
-            : ['type' => 'error', 'text' => '取貨確認失敗，請上傳取貨照片（JPG、PNG 或 WebP，5MB 以內）。'];
+        $photoFile = $_FILES['pickup_photo'] ?? null;
+        if (!$isVolunteer) {
+            $message = ['type' => 'error', 'text' => '只有目前接單的配送會員可以確認取貨。'];
+        } elseif (!$photoFile || ($photoFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $uploadError = (int) ($photoFile['error'] ?? UPLOAD_ERR_NO_FILE);
+            $uploadMessage = $uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE
+                ? '照片超過伺服器允許的上傳大小，請縮小照片後重試。'
+                : '請先選取取貨照片，再按「完成取件」。';
+            $message = ['type' => 'error', 'text' => $uploadMessage];
+        } else {
+            $pickupPhotoPath = uploadPickupPhoto($photoFile);
+            $confirmed = $pickupPhotoPath !== false
+                && $deliveryModel->confirmPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId, $pickupPhotoPath);
+            $message = $confirmed
+                ? ['type' => 'success', 'text' => '取貨已確認，請將物資送往食物銀行。']
+                : ['type' => 'error', 'text' => '取貨照片無法儲存，請確認格式為 JPG、PNG 或 WebP 且不超過 5MB，並重試。'];
+        }
     } elseif ($action === 'report_exception') {
         $message = $isVolunteer && $deliveryModel->reportException((int) $_POST['delivery_id'], $currentUserId, $_POST['exception_notes'] ?? '')
             ? ['type' => 'success', 'text' => '異常已回報，食物銀行官方人員會進行處理。']
@@ -162,20 +178,20 @@ if ($isVolunteer) {
     .driver-trip-map { position: relative; min-height: 220px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; transition: background .25s ease, color .25s ease; background: linear-gradient(160deg, #0b1222 0%, #131b31 55%, #0f172a 100%); }
     .driver-trip-map[data-theme="light"] { background: linear-gradient(160deg, #eef2ff 0%, #f8fafc 55%, #ffffff 100%); color: #1f2937; }
     .driver-trip-map-topbar { display: flex; align-items: center; justify-content: space-between; }
-    .driver-trip-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(99,91,255,.22); color: #c7c2ff; }
-    .driver-trip-map[data-theme="light"] .driver-trip-status-pill { background: rgba(99,91,255,.12); color: #4E47E5; }
+    .driver-trip-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(242,169,0,.2); color: #FFD166; }
+    .driver-trip-map[data-theme="light"] .driver-trip-status-pill { background: rgba(32,59,143,.12); color: #203B8F; }
     .driver-map-theme-toggle { border: 1px solid rgba(248,250,252,.3); background: rgba(255,255,255,.08); color: inherit; border-radius: 999px; width: 36px; height: 36px; cursor: pointer; font-size: 14px; }
     .driver-trip-map[data-theme="light"] .driver-map-theme-toggle { border-color: rgba(15,23,42,.15); background: rgba(15,23,42,.06); }
     .driver-trip-route { display: flex; align-items: center; gap: 10px; margin: 28px 0; }
     .driver-trip-pin { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 15px; flex: 0 0 auto; }
     .driver-trip-pin-start { background: #14b8a6; color: #06281f; }
     .driver-trip-pin-end { background: #f97316; color: #3a1c02; }
-    .driver-trip-route-line { flex: 1; position: relative; height: 3px; border-radius: 3px; background: repeating-linear-gradient(90deg, #635BFF 0, #635BFF 10px, transparent 10px, transparent 18px); }
-    .driver-trip-map[data-theme="light"] .driver-trip-route-line { background: repeating-linear-gradient(90deg, #4E47E5 0, #4E47E5 10px, transparent 10px, transparent 18px); }
+    .driver-trip-route-line { flex: 1; position: relative; height: 3px; border-radius: 3px; background: repeating-linear-gradient(90deg, #F2A900 0, #F2A900 10px, transparent 10px, transparent 18px); }
+    .driver-trip-map[data-theme="light"] .driver-trip-route-line { background: repeating-linear-gradient(90deg, #203B8F 0, #203B8F 10px, transparent 10px, transparent 18px); }
     .driver-trip-route-line::after { content: "\f3c5"; font-family: "Font Awesome 5 Free"; font-weight: 900; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: 14px; color: #f8fafc; }
-    .driver-trip-map[data-theme="light"] .driver-trip-route-line::after { color: #4E47E5; }
-    .driver-navigate-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: none; background: #635BFF; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; }
-    .driver-navigate-btn:hover { background: #4E47E5; }
+    .driver-trip-map[data-theme="light"] .driver-trip-route-line::after { color: #203B8F; }
+    .driver-navigate-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: none; background: #203B8F; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; }
+    .driver-navigate-btn:hover { background: #172F75; }
     .driver-trip-sheet { background: var(--bg-primary, #fff); color: var(--text-primary, #111827); padding: 18px 20px 20px; }
     .driver-trip-sheet-handle { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; border: none; background: transparent; cursor: pointer; padding: 0 0 12px; }
     .driver-trip-sheet-summary { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
@@ -184,13 +200,13 @@ if ($isVolunteer) {
     .driver-trip-sheet-details { margin-top: 16px; display: grid; gap: 14px; }
     .driver-trip-sheet-details[hidden] { display: none; }
     .driver-trip-stop { display: flex; gap: 12px; align-items: flex-start; }
-    .driver-trip-stop i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-secondary, #f7f9fc); color: var(--primary-color, #635BFF); flex: 0 0 auto; }
+    .driver-trip-stop i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-secondary, #f7f9fc); color: var(--primary-color, #203B8F); flex: 0 0 auto; }
     .driver-trip-stop strong { display: block; font-size: 13px; color: var(--text-secondary, #6b7280); }
     .driver-trip-stop span { display: block; font-size: 14px; font-weight: 600; }
     .driver-trip-note { margin-top: 4px; padding: 10px 12px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-size: 12px; }
     .driver-trip-checklist { margin-top: 16px; display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--bg-secondary, #f7f9fc); }
     .driver-trip-checklist label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .driver-action-button { margin-top: 16px; width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(90deg, #635BFF, #7A73FF); box-shadow: 0 10px 24px rgba(99,91,255,.35); }
+    .driver-action-button { margin-top: 16px; width: 100%; border: none; border-radius: 14px; padding: 16px; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(90deg, #203B8F, #3B5DB2); box-shadow: 0 10px 24px rgba(32,59,143,.3); }
     .driver-action-button.driver-action-complete { background: linear-gradient(90deg, #10B981, #34d399); box-shadow: 0 10px 24px rgba(16,185,129,.35); }
     .driver-action-button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
     .driver-action-button i { transition: transform .2s ease; }
@@ -286,7 +302,7 @@ if ($isVolunteer) {
                     <div class="driver-trip-checklist">
                         <label>取貨照片（拍下取得的物資）<input type="file" name="pickup_photo" accept="image/png,image/jpeg,image/webp" capture="environment" data-pickup-photo required></label>
                     </div>
-                    <button type="submit" class="driver-action-button" data-pickup-submit disabled><i class="fas fa-box-open"></i> 完成取件</button>
+                    <button type="submit" class="driver-action-button" data-pickup-submit><i class="fas fa-box-open"></i> 完成取件</button>
                 </form>
                 <form method="post" class="delivery-action-form">
                     <?php echo csrfField(); ?>
@@ -298,7 +314,7 @@ if ($isVolunteer) {
             <?php else: ?>
                 <div class="driver-trip-note">
                     <i class="fas fa-circle-info"></i>
-                    送達食物銀行後，請將物資交給行政人員；由行政人員確認「已抵達」並清點物資後，任務才算完成。
+                    送達食物銀行後，請將物資交給食物銀行管理員；由食物銀行管理員確認「已抵達」並清點物資後，任務才算完成。
                     <?php if (!empty($activeDriverTrip['estimated_arrival_start']) && !empty($activeDriverTrip['estimated_arrival_end'])): ?>
                         預估送達時間：<?php echo htmlspecialchars(date('H:i', strtotime($activeDriverTrip['estimated_arrival_start'])) . '–' . date('H:i', strtotime($activeDriverTrip['estimated_arrival_end']))); ?>
                     <?php endif; ?>
@@ -335,7 +351,7 @@ if ($isVolunteer) {
             <form method="post">
                 <input type="hidden" name="action" value="create_delivery">
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" max="2147483647" placeholder="可留白"></div>
-                <div class="form-group"><label>配送方式*</label><select name="delivery_method" required><option value="food_bank">忠信派車</option><option value="volunteer" selected>志工派車</option></select></div>
+                <div class="form-group"><label>配送方式*</label><select name="delivery_method" required><option value="food_bank">忠信派車</option><option value="volunteer" selected>GO Rider 派車</option></select></div>
                 <div class="grid-2">
                     <div class="form-group"><label>交通工具</label><select name="vehicle_type"><option value="motorcycle">機車</option><option value="car">汽車</option></select></div>
                     <div class="form-group"><label>總配送距離（公里）*</label><input type="number" name="total_distance_km" min="0" step="0.1" required></div>
@@ -377,7 +393,7 @@ if ($isVolunteer) {
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" value="<?php echo (int) ($editingDelivery['donation_id'] ?? 0); ?>"></div>
                 <div class="form-group"><label>運送方式*</label><select name="delivery_method" required>
                     <option value="food_bank" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'food_bank' ? 'selected' : ''; ?>>忠信派車</option>
-                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>志工派車</option>
+                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>GO Rider 派車</option>
                 </select></div>
                 <div class="form-group"><label>交通工具</label><select name="vehicle_type">
                     <option value="motorcycle" <?php echo $editingDelivery['vehicle_type'] === 'motorcycle' ? 'selected' : ''; ?>>機車</option>
@@ -460,7 +476,7 @@ if ($isVolunteer) {
                             <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
                         </div>
                     </td>
-                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => '志工派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
+                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => 'GO Rider 派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>
@@ -486,10 +502,10 @@ if ($isVolunteer) {
                     <td>
                         <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' ? '待忠信派車' : (['open' => '待接單', 'claimed' => '已接單', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']); ?></span>
                         <?php if ($isOfficial && !empty($delivery['pickup_photo_path'])): ?>
-                            <br><a href="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($delivery['pickup_photo_path'], '/'), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
+                            <br><a href="<?php echo htmlspecialchars(storedPublicImageUrl($delivery['pickup_photo_path']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
                         <?php endif; ?>
                         <?php if ($isOfficial && !empty($delivery['volunteer_id'])): ?>
-                            <br><small>志工：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
+                            <br><small>GO Rider：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
                             <?php if (!empty($delivery['volunteer_phone'])): ?>
                                 <a href="tel:<?php echo htmlspecialchars($delivery['volunteer_phone'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($delivery['volunteer_phone']); ?></a>
                             <?php else: ?>（未提供電話）<?php endif; ?></small>
@@ -581,7 +597,7 @@ if ($isVolunteer) {
                             <span class="delivery-route-point"><strong>終點</strong><?php echo htmlspecialchars($delivery['delivery_address']); ?></span>
                         </div>
                     </td>
-                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => '志工派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
+                    <td><?php echo ['food_bank' => '忠信派車', 'volunteer' => 'GO Rider 派車', 'donor' => '忠信派車'][$delivery['delivery_method'] ?? 'volunteer']; ?></td>
                     <td><?php echo $delivery['vehicle_type'] === 'car' ? '汽車' : '機車'; ?></td>
                     <td><?php echo htmlspecialchars($delivery['total_distance_km']); ?> km</td>
                     <td><?php echo htmlspecialchars($delivery['weight_kg']); ?> kg</td>

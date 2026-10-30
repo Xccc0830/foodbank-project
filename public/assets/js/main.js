@@ -100,8 +100,8 @@
                 const statusDetails = {
                     open: { title: '等待配送員接單', message: '訂單已準備，等待配送員接單。', step: 0, progress: 8 },
                     claimed: { title: '配送員已接單', message: '配送員已接單，正在前往取貨。', step: 1, progress: 32 },
-                    picked_up: { title: 'Go Rider 正在前往送達地點', message: '物資已取貨，Go Rider 正在前往送達地點。', step: 2, progress: 72 },
-                    in_transit: { title: 'Go Rider 正在前往送達地點', message: 'Go Rider 正在配送途中。', step: 2, progress: 72 },
+                    picked_up: { title: 'GO Rider 正在前往送達地點', message: '物資已取貨，GO Rider 正在前往送達地點。', step: 2, progress: 72 },
+                    in_transit: { title: 'GO Rider 正在前往送達地點', message: 'GO Rider 正在配送途中。', step: 2, progress: 72 },
                     delivered: { title: '物資已送達', message: '配送已完成，感謝您的愛心。', step: 3, progress: 100 },
                     exception: { title: '配送狀況處理中', message: '配送遇到狀況，食物銀行人員正在協助處理。', step: 1, progress: 36 },
                     cancelled: { title: '配送任務已取消', message: '此配送任務已取消。', step: 0, progress: 0 }
@@ -158,7 +158,7 @@
                     const otherStops = Number(result.other_active_delivery_count) || 0;
                     stopAlert.hidden = otherStops === 0 || result.status === 'delivered';
                     stopAlert.textContent = otherStops > 0
-                        ? 'Go Rider 目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
+                        ? 'GO Rider 目前另有 ' + otherStops + ' 筆進行中的配送，途中可能還有其他停靠點。'
                         : '';
                 }
             } catch (error) {
@@ -207,6 +207,7 @@
             }
 
             let requestToken = 0;
+            let estimateTimer = null;
 
             function endpoint(action) {
                 const url = new URL(window.location.href);
@@ -239,6 +240,7 @@
             }
 
             async function fetchDistance() {
+                window.clearTimeout(estimateTimer);
                 const origin = originInput.value.trim();
                 const destination = destinationInput.value.trim();
                 if (origin.length < 4 || destination.length < 4) {
@@ -250,44 +252,66 @@
                 const currentToken = ++requestToken;
                 setStatus('正在計算配送距離與時間…', false);
 
-                const url = endpoint('calculate_distance');
-                url.searchParams.set('origin', origin);
-                url.searchParams.set('destination', destination);
-
                 try {
+                    const url = endpoint('calculate_distance');
+                    url.searchParams.set('origin', origin);
+                    url.searchParams.set('destination', destination);
                     const response = await fetch(url.toString(), { credentials: 'same-origin' });
                     const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.error || '無法計算配送距離。');
+                    }
                     if (currentToken !== requestToken) {
                         return;
                     }
-                    if (!response.ok || !result.success) {
+                    const estimate = {
+                        distanceKm: Number(result.distance_km),
+                        durationMinutes: Number(result.duration_minutes),
+                        distanceText: result.distance_text,
+                        durationText: result.duration_text,
+                        approximate: Boolean(result.approximate)
+                    };
+                    if (!Number.isFinite(estimate.distanceKm) || !Number.isFinite(estimate.durationMinutes)) {
                         clearEstimate();
-                        setStatus(result.error || '無法計算配送距離，請確認地址是否完整。', true);
+                        setStatus('無法計算配送距離，請確認地址內容；您仍可繼續填寫物資。', true);
                         return;
                     }
 
                     if (distanceValue) {
-                        distanceValue.textContent = result.distance_text;
+                        distanceValue.textContent = estimate.distanceText;
                     }
                     if (durationValue) {
-                        durationValue.textContent = result.duration_text;
+                        durationValue.textContent = estimate.durationText;
                     }
                     if (distanceInput) {
-                        distanceInput.value = result.distance_km;
+                        distanceInput.value = (Math.round(estimate.distanceKm * 100) / 100).toFixed(2);
                     }
                     if (durationInput) {
-                        durationInput.value = result.duration_minutes;
+                        durationInput.value = String(Math.round(estimate.durationMinutes));
                     }
                     wrapper.hidden = false;
-                    setStatus(result.approximate ? '地址門牌資料不完整，此為路段層級的概略估算。' : '', false);
+                    setStatus(estimate.approximate
+                        ? '地址以路段位置估算，距離可能有差異。'
+                        : '', false);
                 } catch (error) {
                     if (currentToken !== requestToken) {
                         return;
                     }
                     clearEstimate();
-                    setStatus('無法連線計算配送距離，請稍後再試。', true);
+                    const reason = error.message || '無法連線計算配送距離，請稍後再試。';
+                    setStatus('距離估算失敗：' + reason + ' 您仍可繼續填寫物資。', true);
                 }
             }
+
+            [originInput, destinationInput].forEach(function (input) {
+                input.addEventListener('input', function () {
+                    requestToken++;
+                    clearEstimate();
+                    setStatus('', false);
+                    window.clearTimeout(estimateTimer);
+                    estimateTimer = window.setTimeout(fetchDistance, 700);
+                });
+            });
 
             [originInput, destinationInput].forEach(function (input) {
                 input.addEventListener('blur', fetchDistance);
@@ -571,7 +595,7 @@
                     <label>配送方式*</label>
                     <select name="delivery_option" required>
                         <option value="food_bank_pickup">忠信派車</option>
-                        <option value="volunteer_delivery">忠信GO RIDER派車</option>
+                        <option value="volunteer_delivery">GO Rider 派車</option>
                     </select>
                 </div>
                 <div class="form-group">

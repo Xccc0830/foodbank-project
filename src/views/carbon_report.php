@@ -91,7 +91,7 @@ if ($isEnterpriseMember) {
     $recordRows = [];
     $recordResult = $connection->query(
         "SELECT d.delivered_at, n.item_name, n.quantity, n.unit, d.delivery_method,
-                CASE WHEN d.delivery_method = 'food_bank' THEN '忠信派車' ELSE '志工派車' END AS delivery_label
+                CASE WHEN d.delivery_method = 'food_bank' THEN '忠信派車' ELSE 'GO Rider 派車' END AS delivery_label
          FROM deliveries d
          INNER JOIN donations n ON n.donation_id = d.donation_id
          WHERE n.donor_id = {$enterpriseId}
@@ -169,7 +169,7 @@ if ($isEnterpriseMember) {
         <div class="card-header"><h2><?php echo $selectedYear; ?> 年度捐贈紀錄</h2><p>資料由系統完成的配送自動產生。</p></div>
         <div class="card-body">
             <?php if ($recordRows): ?>
-                <table class="data-table"><thead><tr><th>日期</th><th>物資</th><th>數量</th><th>配送方式</th><th>狀態</th></tr></thead><tbody>
+                <table class="data-table carbon-donations-table"><thead><tr><th>日期</th><th>物資</th><th>數量</th><th>配送方式</th><th>狀態</th></tr></thead><tbody>
                     <?php foreach ($recordRows as $record): ?><tr><td><?php echo htmlspecialchars(date('Y-m-d', strtotime($record['delivered_at']))); ?></td><td><?php echo htmlspecialchars($record['item_name'] ?? '未填寫'); ?></td><td><?php echo htmlspecialchars($record['quantity'] . ' ' . $record['unit']); ?></td><td><?php echo htmlspecialchars($record['delivery_label']); ?></td><td><span class="status status-success">已完成</span></td></tr><?php endforeach; ?>
                 </tbody></table>
             <?php else: ?><div class="empty-state"><i class="fas fa-seedling"></i><p>本年度尚無完成配送的捐贈紀錄。</p></div><?php endif; ?>
@@ -187,7 +187,7 @@ if ($isEnterpriseMember) {
         <div class="card-header"><h2>公益活動紀錄</h2><p>企業會員參與的活動筆數：<?php echo number_format((int) $summary['activity_count']); ?>。</p></div>
         <div class="card-body">
             <?php if ($activityRows): ?>
-                <table class="data-table"><thead><tr><th>活動名稱</th><th>日期</th><th>狀態</th></tr></thead><tbody>
+                <table class="data-table carbon-activities-table"><thead><tr><th>活動名稱</th><th>日期</th><th>狀態</th></tr></thead><tbody>
                     <?php foreach ($activityRows as $activity): ?><tr><td><?php echo htmlspecialchars($activity['title']); ?></td><td><?php echo htmlspecialchars(date('Y-m-d H:i', strtotime($activity['start_at']))); ?></td><td><?php echo $activity['status'] === 'attended' ? '已參與' : '已報名'; ?></td></tr><?php endforeach; ?>
                 </tbody></table>
             <?php else: ?><div class="empty-state"><i class="fas fa-calendar-check"></i><p>本年度尚無公益活動紀錄。</p></div><?php endif; ?>
@@ -259,7 +259,7 @@ $totals = [
     <div class="card-header"><h2>月度永續成效報表</h2><p>展示物資流動的環境與社會效益（依配達月份彙總）</p></div>
     <div class="card-body">
         <?php if ($monthlyRows): ?>
-            <table class="data-table">
+            <table class="data-table carbon-monthly-table">
                 <thead><tr><th>月份</th><th>配送趟次</th><th>物資重量 (kg)</th><th>配送里程 (km)</th><th>惜食避免排放</th><th>運輸排放</th><th>淨減碳量</th></tr></thead>
                 <tbody>
                 <?php foreach ($monthlyRows as $row): ?>

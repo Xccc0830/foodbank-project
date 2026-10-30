@@ -276,7 +276,7 @@ class RewardModel extends BaseModel {
             return ['success' => false, 'message' => '此兌換憑證已完成、已取消或不存在，請確認兌換編號或 QR Code。'];
         }
         if (strtotime($claim['token_expires_at']) <= time()) {
-            return ['success' => false, 'message' => 'QR Code 已逾時，請忠信GO RIDER重新開啟兌換憑證。'];
+            return ['success' => false, 'message' => 'QR Code 已逾時，請 GO Rider 重新開啟兌換憑證。'];
         }
         if ($claim['source_type'] === 'foodbank' && $verifierRole !== 'foodbank_staff') {
             return ['success' => false, 'message' => '此品項只能由食物銀行方核銷。'];
@@ -307,7 +307,7 @@ class RewardModel extends BaseModel {
 
     private function notifyRedemptionCreated($volunteerId, $sourceType, $sourceId, $title, $cost) {
         $title = $this->db->real_escape_string($title);
-        $message = $this->db->real_escape_string("忠信GO RIDER已兌換「{$title}」，使用 {$cost} 枚興毅幣，請至興毅幣兌換頁面查看並核銷。");
+        $message = $this->db->real_escape_string("GO Rider 已兌換「{$title}」，使用 {$cost} 枚興毅幣，請至興毅幣兌換頁面查看並核銷。");
         $roles = $sourceType === 'foodbank' ? "('foodbank_staff')" : "('member')";
         $ownerCondition = $sourceType === 'donor'
             ? " AND u.member_type = 'enterprise' AND u.user_id = (SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $sourceId . " LIMIT 1)"

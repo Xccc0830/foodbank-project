@@ -1,0 +1,10 @@
+.git
+.vscode
+.env*
+config/local.php
+cookies.txt
+migration.load
+supabase-ca.crt
+storage/rider_licenses
+public/uploads
+tests

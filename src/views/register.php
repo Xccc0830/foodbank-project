@@ -11,6 +11,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>申請帳號 | <?php echo htmlspecialchars(APP_NAME); ?></title>
+    <link rel="icon" type="image/jpeg" href="<?php echo htmlspecialchars(APP_URL . '/assets/images/foundation-logo.jpg'); ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -20,7 +21,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
 <body class="login-page">
     <main class="login-shell register-shell">
         <section class="login-showcase">
-            <div class="login-brand"><span class="login-brand-mark"><i class="fa-solid fa-hand-holding-heart"></i></span><span><?php echo htmlspecialchars(APP_NAME); ?></span></div>
+            <div class="login-brand"><img class="login-brand-image" src="<?php echo htmlspecialchars(APP_URL . '/assets/images/foundation-logo.jpg'); ?>" alt=""><span><?php echo htmlspecialchars(APP_NAME); ?></span></div>
             <div class="showcase-copy"><p class="eyebrow">JOIN THE MOVEMENT</p><h1>一起讓惜食，<em>流向更好的地方。</em></h1><p>成為平台夥伴，參與物資媒合、公益配送與社區活動。</p></div>
             <div class="showcase-features"><div><span><i class="fa-solid fa-user-check"></i></span><strong>安全審核</strong><small>每個會員帳號都經過審核</small></div><div><span><i class="fa-solid fa-people-group"></i></span><strong>一起協作</strong><small>和食物銀行與平台會員合作</small></div><div><span><i class="fa-solid fa-award"></i></span><strong>累積貢獻</strong><small>記錄你的公益參與</small></div></div>
         </section>
@@ -33,7 +34,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
                 <div class="form-group"><label for="username">帳號</label><div class="input-with-icon"><i class="fa-regular fa-user"></i><input id="username" name="username" required autocomplete="username" placeholder="設定登入帳號"></div></div>
                 <div class="form-group"><label for="email">電子郵件</label><div class="input-with-icon"><i class="fa-regular fa-envelope"></i><input id="email" name="email" type="email" required placeholder="name@example.com"></div></div>
                 <div class="form-group"><label for="phone">手機號碼</label><div class="input-with-icon"><i class="fa-solid fa-mobile-screen"></i><input id="phone" name="phone" type="tel" pattern="09\d{8}" required placeholder="09xxxxxxxx"></div></div>
-                <div class="form-group"><label for="member_type">會員類型</label><select id="member_type" name="member_type" required><option value="general">一般會員（公益活動、可另外申請外送志工）</option><option value="enterprise">企業會員（活動報名、剩餘物資捐贈）</option></select></div>
+                <div class="form-group"><label for="member_type">會員類型</label><select id="member_type" name="member_type" required><option value="general">一般會員（公益活動、可另外申請 GO Rider）</option><option value="enterprise">企業會員（活動報名、剩餘物資捐贈）</option></select></div>
                 <div class="form-group" id="enterprise-name-field" hidden><label for="enterprise_name">企業／組織名稱</label><input id="enterprise_name" name="enterprise_name" maxlength="150" placeholder="輸入企業或組織名稱"></div>
                 <div class="form-group" id="enterprise-tax-field" hidden><label for="tax_id">統一編號（商家身分認證）</label><input id="tax_id" name="tax_id" inputmode="numeric" pattern="\d{8}" maxlength="8" placeholder="8 碼統一編號"></div>
                 <div class="form-group" id="enterprise-referral-field" hidden>

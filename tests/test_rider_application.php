@@ -1,6 +1,6 @@
 <?php
 /**
- * 外送志工申請流程測試：一般會員預設無外送權限 → 申請 → 退回 → 重新申請 → 核准後取得外送權限。
+ * GO Rider 申請流程測試：一般會員預設無外送權限 → 申請 → 退回 → 重新申請 → 核准後取得外送權限。
  * 使用暫時建立的測試帳號，結束時會清除所有相關資料。
  */
 require __DIR__ . '/../config/database.php';
@@ -22,7 +22,7 @@ function check($label, $condition) {
 $suffix = bin2hex(random_bytes(4));
 $connection->query(
     "INSERT INTO users (username, password, email, full_name, phone, role, member_type, status, phone_verified)
-     VALUES ('tmp_rider_{$suffix}', 'x', 'tmp_rider_{$suffix}@example.test', '測試志工申請人', '0900000000', 'member', 'general', 'active', 1)"
+     VALUES ('tmp_rider_{$suffix}', 'x', 'tmp_rider_{$suffix}@example.test', '測試 GO Rider 申請人', '0900000000', 'member', 'general', 'active', 1)"
 );
 $userId = (int) $connection->insert_id;
 if ($userId === 0) {
@@ -61,7 +61,7 @@ try {
     $connection->query("DELETE FROM user_permission_overrides WHERE user_id = {$userId}");
     $connection->query("DELETE FROM rider_applications WHERE user_id = {$userId}");
     $connection->query("DELETE FROM volunteer_consents WHERE user_id = {$userId}");
-    $connection->query("DELETE FROM notifications WHERE user_id = {$userId} OR message LIKE '測試志工申請人 %'");
+    $connection->query("DELETE FROM notifications WHERE user_id = {$userId} OR message LIKE '測試 GO Rider 申請人 %'");
     $connection->query("DELETE FROM users WHERE user_id = {$userId}");
 }
 

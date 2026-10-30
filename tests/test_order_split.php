@@ -67,6 +67,8 @@ $conn->query("UPDATE donations SET status = 'assessed' WHERE donation_id = {$don
 $itemsBefore = $conn->query("SELECT item_id, quantity FROM donation_items WHERE donation_id = {$donationId}")->fetch_all(MYSQLI_ASSOC);
 $notificationCursorResult = $conn->query("SELECT COALESCE(MAX(notification_id), 0) AS latest_id FROM notifications");
 $notificationCursor = $notificationCursorResult ? (int) $notificationCursorResult->fetch_assoc()['latest_id'] : 0;
+$deliveryCursorResult = $conn->query("SELECT COALESCE(MAX(delivery_id), 0) AS latest_id FROM deliveries");
+$deliveryCursor = $deliveryCursorResult ? (int) $deliveryCursorResult->fetch_assoc()['latest_id'] : 0;
 
 $published = $donationModel->publishDonation($donationId, ['split_count' => 3, 'delivery_method' => 'volunteer', 'urgency' => 'normal']);
 
@@ -77,11 +79,42 @@ if ($published) {
     $failures++;
 }
 
+$pointsRowResult = $conn->query(
+    "SELECT d.delivery_method, d.points, d.total_distance_km, d.weight_kg, d.vehicle_type, d.urgency,
+            n.estimated_distance_km
+     FROM deliveries d
+     JOIN donations n ON n.donation_id = d.donation_id
+     WHERE d.donation_id = {$donationId} AND d.delivery_id > {$deliveryCursor}
+     ORDER BY d.delivery_id ASC LIMIT 1"
+);
+$pointsRow = $pointsRowResult ? $pointsRowResult->fetch_assoc() : null;
+if ($pointsRow) {
+    $expectedPoints = $pointsRow['delivery_method'] === 'volunteer'
+        ? DeliveryModel::calculatePoints(
+            $pointsRow['vehicle_type'],
+            (float) ($pointsRow['estimated_distance_km'] ?? 0),
+            (float) $pointsRow['weight_kg'],
+            $pointsRow['urgency']
+        )
+        : 0;
+    $hasCalculatedPoints = (int) $pointsRow['points'] === $expectedPoints
+        && abs((float) $pointsRow['total_distance_km'] - (float) ($pointsRow['estimated_distance_km'] ?? 0)) < 0.01;
+    if ($hasCalculatedPoints) {
+        echo "PASS published-delivery-points-use-estimated-distance-and-weight\n";
+    } else {
+        echo "FAIL published-delivery-points-use-estimated-distance-and-weight\n";
+        $failures++;
+    }
+} else {
+    echo "FAIL published-delivery-points-use-estimated-distance-and-weight (no delivery task)\n";
+    $failures++;
+}
+
 $activeRidersResult = $conn->query("SELECT COUNT(*) AS total FROM users WHERE role = 'member' AND member_type = 'general' AND status = 'active'");
 $activeRiderCount = $activeRidersResult ? (int) $activeRidersResult->fetch_assoc()['total'] : 0;
 $notifiedRidersResult = $conn->query(
     "SELECT COUNT(DISTINCT user_id) AS total FROM notifications
-     WHERE notification_id > {$notificationCursor} AND title = '新的 Go Rider 配送任務'"
+     WHERE notification_id > {$notificationCursor} AND title = '新的 GO Rider 配送任務'"
 );
 $notifiedRiderCount = $notifiedRidersResult ? (int) $notifiedRidersResult->fetch_assoc()['total'] : 0;
 if ($published && $activeRiderCount > 0 && $notifiedRiderCount === $activeRiderCount) {

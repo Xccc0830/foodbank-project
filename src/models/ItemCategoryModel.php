@@ -72,6 +72,6 @@ class ItemCategoryModel extends BaseModel {
 
     public function deleteCategory($categoryId) {
         $categoryId = (int) $categoryId;
-        return $this->db->query("DELETE FROM item_categories WHERE category_id = {$categoryId} LIMIT 1");
+        return $this->db->query("DELETE FROM item_categories WHERE category_id = {$categoryId}");
     }
 }

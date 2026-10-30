@@ -11,15 +11,17 @@ $deliveryModel = new DeliveryModel();
 $notificationModel = new NotificationModel();
 $connection = $db->getConnection();
 $currentUserId = isset($currentUser['user_id']) ? (int) $currentUser['user_id'] : 0;
+$donorName = trim((string) ($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? ''));
+$deliveryAddress = array_key_exists('delivery_address', $_POST)
+    ? trim((string) $_POST['delivery_address'])
+    : '臺北市文山區明義里興隆路四段42巷3號1樓';
 $formMessage = null;
 $viewingDonation = null;
 $viewingItems = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_material_donation') {
-    $donorName = trim((string) ($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? ''));
-    $deliveryMode = (string) ($_POST['delivery_mode'] ?? '');
-    $deliveryOption = $deliveryMode === 'food_bank' ? 'food_bank_pickup' : 'volunteer_delivery';
-    $deliveryMethod = $deliveryMode === 'food_bank' ? 'self_delivery' : 'volunteer_assist';
+    $deliveryOption = 'volunteer_delivery';
+    $deliveryMethod = 'volunteer_assist';
     $deliveryDate = trim((string) ($_POST['delivery_date'] ?? '')) ?: null;
     $deliveryTime = trim((string) ($_POST['delivery_time'] ?? '')) ?: null;
     $donorAddress = trim((string) ($_POST['donor_address'] ?? ''));
@@ -161,8 +163,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $addressError = validateAddress($donorAddress, '取貨地址') ?? validateAddress($deliveryAddress, '送達地址');
     if ($addressError !== null) {
         $formMessage = ['type' => 'error', 'text' => $addressError];
-    } elseif ($donorName === '' || $deliveryMode === '' || !$deliveryDate || !$deliveryTime || $hasInvalidItem) {
-        $formMessage = ['type' => 'error', 'text' => '請完成企業資料、配送方式、日期時間，以及至少一筆物資。'];
+    } elseif ($donorName === '' || !$deliveryDate || !$deliveryTime || $hasInvalidItem) {
+        $formMessage = ['type' => 'error', 'text' => '請完成企業資料、日期時間，以及至少一筆物資。'];
     } else {
         $connection->begin_transaction();
         $insertedId = $donationModel->addDonation($donationData);
@@ -235,8 +237,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'donor_confirm_pickup') {
     $confirmed = $deliveryModel->donorConfirmPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId);
     $formMessage = $confirmed
-        ? ['type' => 'success', 'text' => '已確認 Go Rider 領取物資，運送狀態已更新。']
-        : ['type' => 'error', 'text' => '確認失敗，請確認 Go Rider 已接受任務。'];
+        ? ['type' => 'success', 'text' => '已確認 GO Rider 領取物資，運送狀態已更新。']
+        : ['type' => 'error', 'text' => '確認失敗，請確認 GO Rider 已接受任務。'];
 }
 
 $merchantDonations = $donationModel->getAllDonations(null, $currentUserId);
@@ -256,12 +258,12 @@ $donationTypeLabels = [
 ];
 $deliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
@@ -342,25 +344,18 @@ $formatDateTime = static function ($value) {
             </div>
 
             <section class="material-step-panel is-active" data-step-panel="1">
-                <div class="form-section-heading"><span>Step 1</span><h3>配送資訊</h3><p>先確認誰配送、何時送達，以及配送目的地。</p></div>
+                <div class="form-section-heading"><span>Step 1</span><h3>配送資訊</h3><p>請填寫取貨地點、預計時間與送達地址；配送方式由食物銀行評估後安排。</p></div>
                 <div class="form-section-heading"><span>商家資料</span><h3>企業取貨資訊</h3><p>這是配送人員前往取物資的地點，不是物資送達地址。</p></div>
                 <div class="grid-2">
                     <div class="form-group"><label for="donorName">捐贈企業／組織</label><input id="donorName" type="text" value="<?php echo htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
                     <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
                 </div>
                 <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點。</p></div>
-                <div class="form-group">
-                    <label>配送方式 <span class="required-mark">*</span></label>
-                    <div class="delivery-mode-options">
-                        <label><input type="radio" name="delivery_mode" value="food_bank" required> <span><strong>忠信派車</strong><small>由忠信食物銀行安排配送</small></span></label>
-                        <label><input type="radio" name="delivery_mode" value="volunteer"> <span><strong>Rider 媒合</strong><small>由 Rider 會員接取配送任務</small></span></label>
-                    </div>
-                </div>
                 <div class="grid-2">
                     <div class="form-group"><label for="deliveryDate">預計配送日期 <span class="required-mark">*</span></label><input id="deliveryDate" type="date" name="delivery_date" required></div>
                     <div class="form-group"><label for="deliveryTime">預計配送時間 <span class="required-mark">*</span></label><input id="deliveryTime" type="time" name="delivery_time" required></div>
                 </div>
-                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
+                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
                 <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
                     <label>預計運送距離與時間</label>
                     <div class="distance-estimate-box">
@@ -371,7 +366,7 @@ $formatDateTime = static function ($value) {
                     <input type="hidden" name="estimated_duration_minutes" data-duration-input>
                 </div>
                 <p class="distance-estimate-status" data-distance-status hidden></p>
-                <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 選擇 Rider 媒合後，配送會員接單時才會自動顯示姓名、電話與車輛資訊。</div>
+                <div class="dispatch-details-note"><i class="fas fa-circle-info"></i> 若由 GO Rider 配送，配送會員接單後才會自動顯示姓名、電話與車輛資訊。</div>
                 <div class="form-group"><label for="deliveryNotes">備註</label><textarea id="deliveryNotes" name="notes" rows="3" placeholder="特殊配送需求或補充資訊"></textarea></div>
                 <div class="step-actions"><button type="button" class="btn btn-primary" data-next-step>下一步：填寫物資</button></div>
             </section>
@@ -403,7 +398,7 @@ $formatDateTime = static function ($value) {
     </div>
     <div class="card-body">
         <?php if (!empty($pendingDonations)): ?>
-            <table class="data-table">
+            <table class="data-table donation-pending-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -451,7 +446,7 @@ $formatDateTime = static function ($value) {
     </div>
     <div class="card-body">
         <?php if (!empty($evaluatedDonations)): ?>
-            <table class="data-table">
+            <table class="data-table donation-evaluated-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -498,7 +493,7 @@ $formatDateTime = static function ($value) {
     </div>
     <div class="card-body">
         <?php if (!empty($transportTasks)): ?>
-            <table class="data-table">
+            <table class="data-table donation-transport-table">
                 <thead><tr><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>數量</th><th>狀態與配送資訊</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($transportTasks as $task): ?>
@@ -506,7 +501,7 @@ $formatDateTime = static function ($value) {
                     $transportStatus = $task['status'] ?? 'open';
                     $transportStatusLabel = $transportStatus === 'open'
                         ? '尚在等待運送人員'
-                        : ($transportStatus === 'claimed' ? 'Go Rider 正在路上' : '物資已領取，運送中');
+                        : ($transportStatus === 'claimed' ? 'GO Rider 正在路上' : '物資已領取，運送中');
                     ?>
                     <tr>
                         <td><?php echo htmlspecialchars($task['donor_name'] ?? ''); ?></td>
@@ -535,7 +530,7 @@ $formatDateTime = static function ($value) {
                                 <form method="post" class="inline-form">
                                     <input type="hidden" name="action" value="donor_confirm_pickup">
                                     <input type="hidden" name="delivery_id" value="<?php echo (int) $task['delivery_id']; ?>">
-                                    <button type="submit" class="btn btn-primary btn-sm">Go Rider 已將物資領取</button>
+                                    <button type="submit" class="btn btn-primary btn-sm">GO Rider 已將物資領取</button>
                                 </form>
                             <?php else: ?>
                                 <span class="text-muted">等待狀態更新</span>
@@ -612,10 +607,11 @@ $formatDateTime = static function ($value) {
                     <div>
                         <p><strong>最後領取期限：</strong> <?php echo htmlspecialchars($viewingDonation['pickup_deadline'] ?? '未填寫'); ?></p>
                         <p><strong>配送選擇：</strong> <?php
-                            $detailDeliveryLabels = ($viewingDonation['status'] ?? '') === 'pending'
-                                ? $merchantDeliveryOptionLabels
-                                : $deliveryOptionLabels;
-                            echo htmlspecialchars($detailDeliveryLabels[$viewingDonation['delivery_option'] ?? ''] ?? '未指定');
+                            if (($viewingDonation['status'] ?? '') === 'pending') {
+                                echo '待食物銀行安排';
+                            } else {
+                                echo htmlspecialchars($deliveryOptionLabels[$viewingDonation['delivery_option'] ?? ''] ?? '未指定');
+                            }
                         ?></p>
                         <p><strong>運送評估：</strong> <?php echo htmlspecialchars($formatVehicleTypes($viewingDonation)); ?></p>
                         <p><strong><?php echo htmlspecialchars($viewingProcessTimeLabel); ?>：</strong> <?php echo htmlspecialchars($formatDateTime($viewingProcessTime)); ?></p>
@@ -626,7 +622,7 @@ $formatDateTime = static function ($value) {
                         <?php if (!empty($viewingDonation['photo_path'])): ?>
                             <?php $paths = array_filter(array_map('trim', preg_split('/\s*,\s*/', (string) $viewingDonation['photo_path']))); ?>
                             <?php foreach ($paths as $path): ?>
-                                <img src="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($path, '/')); ?>" style="max-width: 220px; margin: 10px 10px 0 0; border-radius: 8px; border: 1px solid #dfe3ea;" alt="捐贈照片">
+                                <img src="<?php echo htmlspecialchars(storedPublicImageUrl($path)); ?>" style="max-width: 220px; margin: 10px 10px 0 0; border-radius: 8px; border: 1px solid #dfe3ea;" alt="捐贈照片">
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
@@ -634,7 +630,7 @@ $formatDateTime = static function ($value) {
                 <?php if (!empty($viewingItems)): ?>
                     <div class="material-items-summary">
                         <h3>物資規格</h3>
-                        <div class="data-table-wrapper"><table class="data-table"><thead><tr><th>物資名稱</th><th>品牌</th><th>規格</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th><th>備註</th></tr></thead><tbody>
+                        <div class="data-table-wrapper"><table class="data-table donation-items-table"><thead><tr><th>物資名稱</th><th>品牌</th><th>規格</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th><th>備註</th></tr></thead><tbody>
                             <?php foreach ($viewingItems as $item):
                                 $dimensionParts = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($value) {
                                     return $value !== null && $value !== '';
@@ -693,6 +689,9 @@ $formatDateTime = static function ($value) {
         };
         document.querySelectorAll('[data-next-step]').forEach(function (button) {
             button.addEventListener('click', function () {
+                if (button.disabled) {
+                    return;
+                }
                 const deliveryPanel = document.querySelector('[data-step-panel="1"]');
                 const deliveryFieldsValid = deliveryPanel && Array.from(deliveryPanel.querySelectorAll('[required]')).every(function (field) {
                     return field.reportValidity();

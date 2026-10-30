@@ -119,12 +119,12 @@ $donationTypeLabels = [
 ];
 $deliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $merchantDeliveryOptionLabels = [
     'donor_delivery' => '忠信派車',
-    'volunteer_delivery' => '志工派車',
+    'volunteer_delivery' => 'GO Rider 派車',
     'food_bank_pickup' => '忠信派車',
 ];
 $vehicleTypeLabels = [
@@ -160,6 +160,20 @@ $formatDateTime = static function ($value) {
     $timestamp = strtotime((string) $value);
     return $timestamp ? date('Y年m月d日 H:i', $timestamp) : '未填寫';
 };
+$estimateRewardPoints = static function ($donation, $deliveryOption, $splitCount = 1) {
+    if ($deliveryOption !== 'volunteer_delivery') {
+        return 0;
+    }
+
+    $splitCount = max(1, (int) $splitCount);
+    $weight = (float) ($donation['weight_kg'] ?? 0) / $splitCount;
+    $vehicleType = in_array(($donation['vehicle_type'] ?? ''), ['car', 'motorcycle'], true)
+        ? $donation['vehicle_type']
+        : 'motorcycle';
+    $distance = max(0, (float) ($donation['estimated_distance_km'] ?? 0));
+
+    return DeliveryModel::calculatePoints($vehicleType, $distance, $weight, 'normal') * $splitCount;
+};
 
 $getProcessTime = static function ($donation) {
     $status = strtolower((string) ($donation['status'] ?? ''));
@@ -184,7 +198,7 @@ $getProcessTime = static function ($donation) {
     return ['label' => '更新時間', 'value' => $donation['updated_at'] ?? null];
 };
 
-$renderDetails = static function ($donation) use ($donationTypeLabels, $deliveryOptionLabels, $merchantDeliveryOptionLabels, $formatVehicleTypes, $formatDateTime, $getProcessTime) {
+$renderDetails = static function ($donation) use ($donationTypeLabels, $deliveryOptionLabels, $formatVehicleTypes, $formatDateTime, $getProcessTime) {
     $photoPaths = !empty($donation['photo_path'])
         ? array_filter(array_map('trim', preg_split('/\s*,\s*/', (string) $donation['photo_path'])))
         : [];
@@ -210,10 +224,11 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
         <div>
             <p><strong>最後領取期限：</strong><?php echo htmlspecialchars($formatDateTime($donation['pickup_deadline'] ?? null)); ?></p>
             <p><strong>配送選擇：</strong><?php
-                $detailDeliveryLabels = ($donation['status'] ?? '') === 'pending'
-                    ? $merchantDeliveryOptionLabels
-                    : $deliveryOptionLabels;
-                echo htmlspecialchars($detailDeliveryLabels[$donation['delivery_option'] ?? ''] ?? '未指定');
+                if (($donation['status'] ?? '') === 'pending') {
+                    echo '待食物銀行安排';
+                } else {
+                    echo htmlspecialchars($deliveryOptionLabels[$donation['delivery_option'] ?? ''] ?? '未指定');
+                }
             ?></p>
             <p><strong>運送評估：</strong><?php echo htmlspecialchars($formatVehicleTypes($donation)); ?></p>
             <p><strong><?php echo htmlspecialchars($processTime['label']); ?>：</strong><?php echo htmlspecialchars($formatDateTime($processTime['value'])); ?></p>
@@ -230,7 +245,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
             <strong>安全驗證照片：</strong>
             <div>
                 <?php foreach ($photoPaths as $photoPath): ?>
-                    <img src="<?php echo htmlspecialchars(APP_URL . '/' . ltrim($photoPath, '/')); ?>" alt="捐贈物資照片">
+                    <img src="<?php echo htmlspecialchars(storedPublicImageUrl($photoPath)); ?>" alt="捐贈物資照片">
                 <?php endforeach; ?>
             </div>
         </div>
@@ -260,7 +275,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($pendingDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-pending-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -309,7 +324,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($assessedDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-assessed-table">
                 <thead>
                     <tr>
                         <th>狀態</th>
@@ -364,7 +379,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($pendingPublishDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-publish-table">
                 <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>配送選擇</th><th>已評估完成時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($pendingPublishDonations as $donation): ?>
@@ -393,7 +408,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     </div>
     <div class="card-body">
         <?php if (!empty($publishedDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-published-table">
                 <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>配送選擇</th><th>目前進度</th><th>發布時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($publishedDonations as $donation): ?>
@@ -444,7 +459,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
     <div class="card-header"><h2>歷史紀錄</h2><p>已完成運送或婉拒的物資會出現在這裡。</p></div>
     <div class="card-body">
         <?php if (!empty($historyDonations)): ?>
-            <table class="data-table">
+            <table class="data-table review-history-table">
                 <thead><tr><th>狀態</th><th>店家名稱</th><th>物資類型</th><th>名稱</th><th>數量</th><th>時間</th><th>操作</th></tr></thead>
                 <tbody>
                 <?php foreach ($historyDonations as $donation): ?>
@@ -496,7 +511,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <div class="foodbank-delivery-options">
                             <strong>配送方式</strong>
                             <label><input type="radio" name="foodbank_delivery_option" value="food_bank_pickup" required> 忠信派車</label>
-                            <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery"> 志工派車</label>
+                            <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery"> GO Rider 派車</label>
                         </div>
                         <div class="modal-actions">
                             <button type="button" id="showRejectionReasonButton" class="btn btn-danger">婉拒</button>
@@ -515,12 +530,15 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                                 <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
                                 <label>商家取貨地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>" required></label>
                                 <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
-                                <label>數量<input type="number" step="1" min="1" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
-                                <label>重量（公斤）<input type="number" step="1" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
+                                <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
+                                <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
                                 <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($viewingDonation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
                                 <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
                                 <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                             </div>
+                            <p class="form-hint" data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="">
+                                預估興毅幣：<span data-points-total>請先由食物銀行選擇配送方式</span>（依預估距離、重量與一般任務計算）
+                            </p>
                             <div class="publish-options">
                                 <strong>是否需協助檢查物資</strong>
                                 <label><input type="checkbox" name="need_inspection" value="1" checked> 檢查物資</label>
@@ -551,12 +569,15 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <label>商家店名<input type="text" name="donor_name" value="<?php echo htmlspecialchars($viewingDonation['donor_name'] ?? '', ENT_QUOTES); ?>" required></label>
                             <label>商家取貨地址<input type="text" name="donor_address" value="<?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '', ENT_QUOTES); ?>" required></label>
                             <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($viewingDonation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
-                            <label>數量<input type="number" step="1" min="1" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
-                            <label>重量（公斤）<input type="number" step="1" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
+                            <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($viewingDonation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
+                            <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
                             <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($viewingDonation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
                             <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
                             <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                         </div>
+                        <p class="form-hint" data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="<?php echo htmlspecialchars((string) ($viewingDonation['delivery_option'] ?? ''), ENT_QUOTES); ?>">
+                            預估興毅幣：<span data-points-total><?php echo (int) $estimateRewardPoints($viewingDonation, $viewingDonation['delivery_option'] ?? ''); ?> 枚</span>（依預估距離、重量與一般任務計算）
+                        </p>
                         <div class="publish-options">
                             <strong>是否需協助檢查物資</strong>
                             <label><input type="radio" name="need_inspection" value="1" <?php echo (int) ($viewingDonation['need_inspection'] ?? 1) === 1 ? 'checked' : ''; ?>> 檢查物資</label>
@@ -648,6 +669,73 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                 }
             });
         }
+
+        document.querySelectorAll('[data-points-preview]').forEach(function (preview) {
+            const form = preview.closest('form');
+            const totalLabel = preview.querySelector('[data-points-total]');
+            if (!form || !totalLabel) {
+                return;
+            }
+
+            const calculateTaskPoints = function (vehicle, distance, weight) {
+                const isCar = vehicle === 'car';
+                let points = isCar ? 10 : 5;
+                if (distance <= 2) {
+                    points += isCar ? 5 : 3;
+                } else if (distance <= 4) {
+                    points += isCar ? 8 : 5;
+                } else if (distance <= 6) {
+                    points += isCar ? 11 : 7;
+                } else if (distance <= 8) {
+                    points += isCar ? 14 : 10;
+                } else if (distance <= 10) {
+                    points += isCar ? 17 : 13;
+                } else {
+                    points += isCar ? 20 : 15;
+                }
+                if (weight <= 5) {
+                    points += isCar ? 2 : 0;
+                } else if (weight <= 10) {
+                    points += isCar ? 5 : 3;
+                } else if (weight <= 20) {
+                    points += isCar ? 8 : 6;
+                } else {
+                    points += isCar ? 12 : 10;
+                }
+                return points + (isCar ? 3 : 0);
+            };
+            const updatePreview = function () {
+                const selectedOption = form.querySelector('input[name="foodbank_delivery_option"]:checked');
+                const deliveryOption = selectedOption ? selectedOption.value : preview.dataset.defaultOption;
+                if (deliveryOption !== 'volunteer_delivery') {
+                    totalLabel.textContent = selectedOption
+                        ? '忠信派車不發放 Rider 興毅幣'
+                        : '請先由食物銀行選擇配送方式';
+                    return;
+                }
+
+                const weightInput = form.querySelector('input[name="weight_kg"]');
+                const splitInput = form.querySelector('input[name="split_count"]');
+                const splitEnabled = form.querySelector('input[name="split_enabled"][value="1"]');
+                const splitCount = splitEnabled && !splitEnabled.checked
+                    ? 1
+                    : Math.max(1, Number.parseInt(splitInput ? splitInput.value : '1', 10) || 1);
+                const vehicleInput = form.querySelector('input[name="vehicle_type"]');
+                const vehicle = vehicleInput && vehicleInput.value === 'car' ? 'car' : 'motorcycle';
+                const weightPerTask = Math.max(0, Number.parseFloat(weightInput ? weightInput.value : '0') || 0) / splitCount;
+                const distance = Math.max(0, Number.parseFloat(preview.dataset.distanceKm || '0') || 0);
+                const perTask = calculateTaskPoints(vehicle, distance, weightPerTask);
+                totalLabel.textContent = splitCount > 1
+                    ? `每筆約 ${perTask} 枚，共 ${perTask * splitCount} 枚`
+                    : `約 ${perTask} 枚`;
+            };
+
+            form.querySelectorAll('input[name="foodbank_delivery_option"], input[name="weight_kg"], input[name="split_count"], input[name="split_enabled"], input[name="vehicle_type"]').forEach(function (input) {
+                input.addEventListener('input', updatePreview);
+                input.addEventListener('change', updatePreview);
+            });
+            updatePreview();
+        });
 
         const splitRadios = document.querySelectorAll('input[name="split_enabled"]');
         const splitCountInput = document.querySelector('input[name="split_count"]');

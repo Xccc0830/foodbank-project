@@ -38,10 +38,10 @@ if ($isEnterpriseMember) {
         $enterpriseSustainability['food_waste_avoided'] = $enterpriseSustainability['total_weight'] * 2.5;
     }
 }
-$donationListPage = $isEnterpriseMember ? 'donation_materials' : (($currentUser['staff_type'] ?? null) === 'clerk' ? 'inventory' : 'donation_materials_review');
+$donationListPage = $isEnterpriseMember ? 'donation_materials' : 'donation_materials_review';
 $dashboardRoleLabels = [
-    'foodbank_staff' => ($currentUser['staff_type'] ?? null) === 'clerk' ? '食物銀行行政人員' : '管理介面',
-    'member' => $isEnterpriseMember ? '企業公益行動中心' : 'Go Rider服務中心',
+    'foodbank_staff' => '管理介面',
+    'member' => $isEnterpriseMember ? '企業公益行動中心' : 'GO Rider 服務中心',
 ];
 
 require_once BASE_PATH . '/src/models/AdvertisementModel.php';
@@ -127,7 +127,7 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
         </div>
     </div>
     <div class="card">
-        <div class="card-header"><h2>志工運送任務排行榜</h2><p>依完成運送任務數排序</p></div>
+        <div class="card-header"><h2>GO Rider 運送任務排行榜</h2><p>依完成運送任務數排序</p></div>
         <div class="card-body">
             <?php if ($riderLeaderboard): ?>
                 <ol class="leaderboard-list">
@@ -153,14 +153,10 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
                 <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄興毅幣。</p>
                 <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
             <?php else: ?>
-                <h2>你的公益任務</h2><p>瀏覽並參加公益活動；想協助運送物資，可以申請成為外送志工。</p>
+                <h2>你的公益任務</h2><p>瀏覽並參加公益活動；想協助運送物資，可以申請成為 GO Rider。</p>
                 <a href="?page=news" class="btn btn-primary btn-sm">查看最新消息</a>
-                <a href="?page=rider_application" class="btn btn-secondary btn-sm">申請外送志工</a>
+                <a href="?page=rider_application" class="btn btn-secondary btn-sm">申請 GO Rider</a>
             <?php endif; ?>
-        <?php elseif ($dashboardRole === 'foodbank_staff' && ($currentUser['staff_type'] ?? null) === 'clerk'): ?>
-            <h2>配送與清點</h2><p>確認志工已抵達並清點、檢查現場物資，再於系統確認查收。</p>
-            <a href="?page=deliveries" class="btn btn-primary btn-sm">配送任務</a>
-            <a href="?page=inventory" class="btn btn-secondary btn-sm">物資盤點</a>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
             <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
             <a href="?page=rewards" class="btn btn-secondary btn-sm">管理興毅幣兌換</a>
@@ -168,7 +164,7 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
             <h2>企業惜食行動</h2><p>報名公益活動，也可將企業剩餘食物或物資捐贈給食物銀行。</p>
             <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>
         <?php else: ?>
-            <h2>忠信食物銀行管理</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
+            <h2>食物銀行管理員</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
             <a href="?page=settings" class="btn btn-primary btn-sm">前往系統設置</a>
         <?php endif; ?>
     </div>
