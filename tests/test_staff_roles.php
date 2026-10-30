@@ -86,7 +86,7 @@ try {
     check('on-time delivery is not flagged', $deliveryModel->notifyOverdueDeliveries() === 0);
 
     // 取貨後會設定預估送達範圍
-    $connection->query("UPDATE deliveries SET status = 'claimed', estimated_arrival_start = NULL, estimated_arrival_end = NULL WHERE delivery_id = {$createdDeliveryId}");
+    $connection->query("UPDATE deliveries SET status = 'arrived_pickup', estimated_arrival_start = NULL, estimated_arrival_end = NULL WHERE delivery_id = {$createdDeliveryId}");
     check('pickup with photo succeeds', $deliveryModel->confirmPickup($createdDeliveryId, $riderId, 'uploads/pickups/test.jpg'));
     $window = $connection->query("SELECT estimated_arrival_start < estimated_arrival_end AS ok, estimated_arrival_start > NOW() AS future FROM deliveries WHERE delivery_id = {$createdDeliveryId}")->fetch_assoc();
     check('pickup sets an estimated arrival window', $window && (int) $window['ok'] === 1 && (int) $window['future'] === 1);
@@ -96,7 +96,7 @@ try {
     check('ad without content is rejected', $adModel->create($enterpriseId, '標題', '') === false);
     check('ad with non-http link is rejected', $adModel->create($enterpriseId, '標題', '內容', 'javascript:alert(1)') === false);
     check('ad with reversed dates is rejected', $adModel->create($enterpriseId, '標題', '內容', null, null, '2026-12-31', '2026-01-01') === false);
-    $createdAdId = $adModel->create($enterpriseId, 'T廣告', '測試內容', 'https://example.com');
+    $createdAdId = $adModel->create($enterpriseId, 'T廣告', '測試內容', 'https://example.com', null, null, null, true);
     check('valid ad is created', $createdAdId !== false);
     $activeTitles = array_column($adModel->getActiveAds(50), 'title');
     check('new ad is listed', in_array('T廣告', $activeTitles, true));

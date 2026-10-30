@@ -49,6 +49,22 @@ $donationModel = new class($conn) extends DonationModel {
     }
 };
 
+// 正式資料庫可能沒有已核准的捐贈：此時只在複製出來的測試資料庫裡補兩筆假資料（測完整個測試庫會被刪除）。
+$approvedCountResult = $conn->query('SELECT COUNT(*) AS total FROM donations WHERE status = "approved"');
+$approvedCount = $approvedCountResult ? (int) $approvedCountResult->fetch_assoc()['total'] : 0;
+for ($i = $approvedCount; $i < 2; $i++) {
+    $fixtureNumber = 'TEST-SPLIT-' . ($i + 1);
+    $conn->query(
+        "INSERT INTO donations (order_number, donor_name, donation_type, donation_date, status, evaluation_status, item_name, quantity, unit, weight_kg, estimated_distance_km, vehicle_type)
+         VALUES ('{$fixtureNumber}', '測試捐贈者', 'food', NOW(), 'approved', 'approved_volunteer', '測試物資', 10, '件', 12, 4.5, 'motorcycle')"
+    );
+    $fixtureId = (int) $conn->insert_id;
+    $conn->query(
+        "INSERT INTO donation_items (donation_id, item_name, quantity, unit, item_weight_kg)
+         VALUES ({$fixtureId}, '測試白米', 10, '包', 8), ({$fixtureId}, '測試罐頭', 7, '罐', 4)"
+    );
+}
+
 $sourceRow = $conn->query('SELECT donation_id, order_number FROM donations WHERE status = "approved" LIMIT 1');
 $donation = $sourceRow ? $sourceRow->fetch_assoc() : null;
 
