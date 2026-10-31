@@ -12,6 +12,9 @@ $notificationModel = new NotificationModel();
 $connection = $db->getConnection();
 $currentUserId = isset($currentUser['user_id']) ? (int) $currentUser['user_id'] : 0;
 $donorName = trim((string) ($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? ''));
+$donorAddress = array_key_exists('donor_address', $_POST)
+    ? trim((string) $_POST['donor_address'])
+    : trim((string) ($currentUser['business_address'] ?? ''));
 $deliveryAddress = array_key_exists('delivery_address', $_POST)
     ? trim((string) $_POST['delivery_address'])
     : '臺北市文山區明義里興隆路四段42巷3號1樓';
@@ -223,6 +226,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_material_details') {
     $viewingDonation = $donationModel->getDonationById((int) ($_POST['donation_id'] ?? 0));
+    if ($viewingDonation && (int) ($viewingDonation['donor_id'] ?? 0) !== $currentUserId) {
+        $viewingDonation = null;
+    }
     if ($viewingDonation) {
         $viewingDonationId = (int) $viewingDonation['donation_id'];
         $itemResult = $connection->query("SELECT * FROM donation_items WHERE donation_id = {$viewingDonationId} ORDER BY item_id ASC");
@@ -348,14 +354,14 @@ $formatDateTime = static function ($value) {
                 <div class="form-section-heading"><span>商家資料</span><h3>企業取貨資訊</h3><p>這是配送人員前往取物資的地點，不是物資送達地址。</p></div>
                 <div class="grid-2">
                     <div class="form-group"><label for="donorName">捐贈企業／組織</label><input id="donorName" type="text" value="<?php echo htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
-                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
+                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" value="<?php echo htmlspecialchars($donorAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="street-address" data-address-input data-address-label="取貨地址"></div>
                 </div>
                 <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點。</p></div>
                 <div class="grid-2">
                     <div class="form-group"><label for="deliveryDate">預計配送日期 <span class="required-mark">*</span></label><input id="deliveryDate" type="date" name="delivery_date" required></div>
                     <div class="form-group"><label for="deliveryTime">預計配送時間 <span class="required-mark">*</span></label><input id="deliveryTime" type="time" name="delivery_time" required></div>
                 </div>
-                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
+                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><div class="input-with-action"><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"><button class="btn btn-secondary btn-sm" type="button" id="copyDonorAddressButton">使用商家地址</button></div></div>
                 <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
                     <label>預計運送距離與時間</label>
                     <div class="distance-estimate-box">

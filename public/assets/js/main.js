@@ -196,6 +196,7 @@
         forms.forEach(function (form) {
             const originInput = form.querySelector('#donorAddress');
             const destinationInput = form.querySelector('#deliveryAddress');
+            const copyDonorAddressButton = form.querySelector('#copyDonorAddressButton');
             const wrapper = form.querySelector('[data-distance-estimate]');
             const distanceValue = form.querySelector('[data-distance-value]');
             const durationValue = form.querySelector('[data-duration-value]');
@@ -204,6 +205,19 @@
             const statusText = form.querySelector('[data-distance-status]');
             if (!originInput || !destinationInput || !wrapper) {
                 return;
+            }
+
+            if (copyDonorAddressButton) {
+                copyDonorAddressButton.addEventListener('click', function () {
+                    if (!originInput.value.trim()) {
+                        originInput.focus();
+                        originInput.reportValidity();
+                        return;
+                    }
+                    destinationInput.value = originInput.value.trim();
+                    destinationInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    destinationInput.dispatchEvent(new Event('change', { bubbles: true }));
+                });
             }
 
             let requestToken = 0;

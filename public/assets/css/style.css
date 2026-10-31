@@ -3055,7 +3055,27 @@ body {
     outline: none;
 }
 
+.input-with-action {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.input-with-action input {
+    flex: 1;
+    min-width: 0;
+}
+
+.input-with-action .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 @media (max-width: 768px) {
+    .input-with-action {
+        flex-direction: column;
+    }
+
     .view-header {
         align-items: stretch;
     }

@@ -92,12 +92,16 @@ class PermissionModel extends BaseModel {
             return false;
         }
 
-        return (bool) $this->db->query(
-            "INSERT INTO user_permission_overrides (user_id, permission_key, granted)
-             VALUES ({$userId}, '{$permissionKeyEscaped}', {$granted})
-             ON CONFLICT (user_id, permission_key) DO UPDATE
-             SET granted = EXCLUDED.granted, updated_at = CURRENT_TIMESTAMP"
-        );
+        $sql = "INSERT INTO user_permission_overrides (user_id, permission_key, granted)
+                VALUES ({$userId}, '{$permissionKeyEscaped}', {$granted})";
+        if (DB_DRIVER === 'pgsql') {
+            $sql .= " ON CONFLICT (user_id, permission_key) DO UPDATE
+                      SET granted = EXCLUDED.granted, updated_at = CURRENT_TIMESTAMP";
+        } else {
+            $sql .= ' ON DUPLICATE KEY UPDATE granted = VALUES(granted), updated_at = CURRENT_TIMESTAMP';
+        }
+
+        return (bool) $this->db->query($sql);
     }
 
     /**

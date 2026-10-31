@@ -79,7 +79,7 @@ foodbank-project/
 │   ├── models/         # 數據模型（PHP MVC）
 │   └── views/          # 視圖模板
 ├── database/
-│   └── schema.sql             # 唯一 SQL；僅供新安裝
+│   └── shinigyi_foodbank.sql # 資料庫備份；非空白 schema
 ├── config/             # 配置文件
 └── docs/               # 📍 您在這裡
     ├── guides/         # 開發指南

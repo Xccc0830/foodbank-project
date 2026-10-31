@@ -1,8 +1,7 @@
 <?php
 /**
  * 授權服務 (Auth Service)
- * 包裝 PermissionModel，提供 can()/canAny() 供 Route Guard 與選單渲染使用，
- * 並將計算結果快取於 $_SESSION，避免每次請求都查詢資料庫。
+ * 包裝 PermissionModel，提供 can()/canAny() 供 Route Guard 與選單渲染使用。
  *
  * 用法：
  *   $authService = AuthService::forCurrentUser($currentUser);
@@ -21,17 +20,12 @@ class AuthService {
     }
 
     /**
-     * 依目前登入使用者建立 AuthService，優先讀取 session 快取；
-     * 若快取不存在（例如剛登入或版本升級後的舊 session），重新計算並寫回 session。
+     * 每次請求重新載入權限，確保核准或撤銷的權限即時生效。
      */
     public static function forCurrentUser(array $currentUser) {
         $userId = (int) ($currentUser['user_id'] ?? 0);
         $role = $currentUser['role'] ?? 'member';
         $memberType = $currentUser['member_type'] ?? null;
-
-        if (isset($_SESSION['user']['permissions']) && is_array($_SESSION['user']['permissions'])) {
-            return new self($_SESSION['user']['permissions'], $userId);
-        }
 
         $permissions = self::resolvePermissions($userId, $role, $memberType);
         if (isset($_SESSION['user'])) {

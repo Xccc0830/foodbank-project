@@ -11,9 +11,9 @@
 
 ### 資料庫
 
-`database/schema.sql` 是新安裝用的結構與種子資料；它會刪除並重建其中列出的資料表。
-若要還原目前提供的資料庫備份，請使用專案根目錄的 `shinigyi_foodbank.sql`。這是 2026-10-22 匯出的 MariaDB 備份，包含資料表結構與資料，但不會先刪除同名資料表。
-兩個 SQL 都只適合匯入新建的空資料庫，不是既有資料庫升級檔。匯入前先備份；若資料庫已有需要保留的資料，請勿直接匯入。
+目前版本未提供 `database/schema.sql` 新安裝架構檔。`database/shinigyi_foodbank.sql` 是 2026-10-22 匯出的 MariaDB 備份，包含資料表結構與資料，匯入前請先確認內容及資料是否適合你的環境。
+此備份不會先刪除同名資料表，也不是既有資料庫升級檔；請只匯入新建的空資料庫，不要用於含有需要保留資料的資料庫。
+舊資料庫首次啟動新版本時，系統會在 `users` 表中補上商家地址欄位；既有會員不會被自動填入地址，請由商家在捐贈頁補填。
 依 2026/10/13 專題會議決議，系統不提供即時 GPS 定位；配送進度以狀態（接單、取貨、送達）呈現。
 
 駕照照片存放於 `storage/rider_licenses/`（不在網站根目錄內），部署時請確認 PHP 可寫入該資料夾，並由網站伺服器禁止直接存取 `storage/`。
@@ -57,13 +57,13 @@ CREATE DATABASE shinigyi_foodbank CHARACTER SET utf8mb4 COLLATE utf8mb4_general_
 ### 第 4 步：匯入資料庫
 
 1. 在 phpMyAdmin 中選擇剛建立的空白 `shinigyi_foodbank` 資料庫。
-2. 點擊 **匯入**，選擇專案根目錄的 `shinigyi_foodbank.sql`，再執行匯入。
-3. 如果你要的是空白測試資料，改匯入 `database/schema.sql`；不要將兩個 SQL 連續匯入同一資料庫。
+2. 點擊 **匯入**，選擇 `database/shinigyi_foodbank.sql`，再執行匯入。
+3. 目前未提供不含備份資料的空白 schema；不要將其他 SQL 備份匯入同一資料庫。
 
 **或者** 使用命令行：
 
 ```bash
-mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\SA\foodbank-project\foodbank-project\shinigyi_foodbank.sql"
+mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\SA\foodbank-project\foodbank-project\database\shinigyi_foodbank.sql"
 ```
 
 ### 第 5 步：驗證安裝
@@ -73,25 +73,9 @@ mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\SA\foodbank-project\foodbank-
 http://localhost/SA/foodbank-project/foodbank-project/
 ```
 
-### 第 6 步：登錄應用
+### 第 6 步：登入應用
 
-使用以下預設帳號登錄：
-
-#### 管理介面
-- **用戶名**: `manager`
-- **密碼**: `manager123`
-
-#### 店家身份（捐贈店家）
-- **用戶名**: `store_demo`
-- **密碼**: `store123`
-- **會員類型**: 企業會員
-
-#### 忠信GO RIDER
-- **用戶名**: `courier_demo`
-- **密碼**: `courier123`
-- **會員類型**: 一般會員
-
-> 這些帳號已經在資料庫中建立好，可直接用於測試捐贈與配送流程。
+使用你已設定的帳號登入。若使用含有測試帳號的資料庫備份，請在部署前更換或停用所有測試帳號密碼；不要在公開環境使用共用的示範憑證。
 
 ### 第 7 步：讓同一個區域網路的組員連線
 
@@ -139,8 +123,7 @@ foodbank-project/
 │       ├── js/               # JavaScript
 │       └── images/           # 圖片資源
 ├── database/
-│   └── schema.sql            # 新安裝用結構與種子資料
-├── shinigyi_foodbank.sql     # 本機資料庫備份；不要提交至 Git
+│   └── shinigyi_foodbank.sql # 資料庫備份；匯入前確認內容及適用範圍
 └── README.md                 # 項目文檔
 ```
 
@@ -159,7 +142,7 @@ foodbank-project/
 
 ### Q3: 無法登錄
 **A**:
-- 確認密碼正確（默認密碼：`admin123`）
+- 確認帳號密碼正確
 - 檢查數據庫中是否有 users 表
 - 查看 PHP 錯誤日誌
 
@@ -196,7 +179,7 @@ ini_set('display_errors', 1);
 如遇到問題，請檢查以下資源：
 
 - README.md - 項目文檔
-- database/schema.sql - 完整資料庫架構與必要種子資料
+- database/shinigyi_foodbank.sql - MariaDB 資料庫備份
 - 瀏覽器控制台 - JavaScript 錯誤信息
 - PHP 錯誤日誌 - `C:\xampp\apache\logs\error.log`
 

@@ -46,7 +46,7 @@ foodbank-project/
 │   └── database.php               # ⭐ 數據庫連接配置
 │
 ├── 📁 database/                    # 數據庫文件夾
-│   └── schema.sql                 # ⭐ 唯一 SQL；僅供新安裝
+│   └── shinigyi_foodbank.sql     # 資料庫備份；含資料，非空白 schema
 │
 ├── 📁 public/                      # 公開文件夾（Web 根目錄）
 │   ├── index.php                  # ⭐ 主入口文件
@@ -173,9 +173,9 @@ CREATE DATABASE shinigyi_foodbank CHARACTER SET utf8mb4 COLLATE utf8mb4_general_
 
 ### Step 3: 導入數據庫架構
 ```bash
-# 方法 1：phpMyAdmin - 導入 database/schema.sql
-# 方法 2：命令行
-mysql -u root shinigyi_foodbank < database/schema.sql
+# database/shinigyi_foodbank.sql 是含資料的備份，只可匯入新建的空資料庫。
+# 目前未提供空白 schema 或既有資料升級 SQL。
+mysql -u root shinigyi_foodbank < database/shinigyi_foodbank.sql
 ```
 
 ### Step 4: 訪問應用

@@ -4,10 +4,11 @@
  * 且所有報名類型都受活動總人數上限限制。
  */
 require __DIR__ . '/../config/database.php';
+require __DIR__ . '/database_test_helpers.php';
 
 $testDbName = 'foodbank_test_activity_capacity_' . bin2hex(random_bytes(4));
-$mysqlBin = '/Applications/XAMPP/xamppfiles/bin/mysql';
-$mysqldumpBin = '/Applications/XAMPP/xamppfiles/bin/mysqldump';
+$mysqlBin = findDatabaseCli('mysql');
+$mysqldumpBin = findDatabaseCli('mysqldump');
 $sourceDbName = DB_NAME;
 $failures = 0;
 
@@ -18,25 +19,27 @@ function activityTestShellOk($command) {
     return $exitCode === 0;
 }
 
-if (!file_exists($mysqlBin) || !file_exists($mysqldumpBin)) {
-    echo "SKIP activity-capacity-tests (mysql/mysqldump binaries not found at expected XAMPP path)\n";
+if (DB_DRIVER !== 'mysql' || !$mysqlBin || !$mysqldumpBin) {
+    echo "SKIP activity-capacity-tests (MySQL driver or mysql/mysqldump binaries unavailable)\n";
     exit(0);
 }
 
+$mysqlCommand = databaseCliPrefix($mysqlBin);
+$mysqldumpCommand = databaseCliPrefix($mysqldumpBin);
 $created = activityTestShellOk(
-    escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' -e ' .
+    $mysqlCommand . ' -e ' .
     escapeshellarg("CREATE DATABASE {$testDbName};")
 );
 $cloned = $created && activityTestShellOk(
-    escapeshellarg($mysqldumpBin) . ' -u ' . escapeshellarg(DB_USER) . ' ' . escapeshellarg($sourceDbName) .
-    ' | ' . escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' ' . escapeshellarg($testDbName)
+    $mysqldumpCommand . ' ' . escapeshellarg($sourceDbName) .
+    ' | ' . $mysqlCommand . ' ' . escapeshellarg($testDbName)
 );
 
 if (!$cloned) {
     echo "SKIP activity-capacity-tests (failed to clone database for isolated testing)\n";
     if ($created) {
         activityTestShellOk(
-            escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' -e ' .
+            $mysqlCommand . ' -e ' .
             escapeshellarg("DROP DATABASE IF EXISTS {$testDbName};")
         );
     }
@@ -121,7 +124,7 @@ if (!$activityCreated || count($testUserIds) !== count($testUsers)) {
 
 $conn->close();
 activityTestShellOk(
-    escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' -e ' .
+    $mysqlCommand . ' -e ' .
     escapeshellarg("DROP DATABASE IF EXISTS {$testDbName};")
 );
 

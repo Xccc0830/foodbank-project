@@ -15,7 +15,7 @@
 | Web 入口／流程控制 | `public/index.php` | 處理登入、註冊、手機驗證、密碼重設、頁面路由、權限檢查，以及配送定位／距離計算 action | 單一前端控制器；大部分頁面由 `src/views/` 載入。沒有獨立 controllers 目錄。 |
 | 身分驗證與授權 | PHP Session、`AuthService`、`PermissionModel`、CSRF helper | 以 `foodbank_staff`、`member` 及會員類型決定頁面／操作權限；支援個人權限覆寫 | 權限表包含於 SQL 快照及遷移檔；需在目標資料庫完成匯入，才可確認部署環境可正常使用。 |
 | 業務邏輯 | `src/models/`、`src/services/`、`src/helpers/` | 管理捐贈、配送、活動、物資分類、通知、獎勵／興毅幣及會員權限 | 採 PHP 模型與服務分層，但部分頁面本身亦直接處理表單與資料庫操作。 |
-| 資料層 | MySQL／MariaDB 相容資料庫；MySQLi | 保存會員、捐贈及物資明細、配送及位置、活動、通知、點數／兌換、權限等資料 | 新安裝主 SQL 為 `database/schema.sql`；資料庫實際匯入及既有資料遷移尚未確認成功。 |
+| 資料層 | MySQL／MariaDB 相容資料庫；MySQLi | 保存會員、捐贈及物資明細、配送及位置、活動、通知、點數／兌換、權限等資料 | 目前僅有含資料的 `database/shinigyi_foodbank.sql` 備份，沒有空白新安裝 schema；匯入與升級流程需另行準備及驗證。 |
 | 外部服務 | OpenStreetMap Nominatim／OSRM、OpenStreetMap 圖資、Google Maps 導航連結、CDN 資產 | 地址定位與路徑距離估算、地圖檢視、外部導航、前端字型／圖示／QR 掃描資產 | 距離估算依賴伺服器可連外及 PHP cURL；使用者開啟地圖或外部導航時會離開系統至第三方服務。 |
 | 執行／部署環境 | 安裝文件指定 Apache、PHP 7.4+、MySQL 5.7+；文件以 XAMPP 為例 | 提供 PHP 網站與資料庫服務 | 以上為文件記載的需求，並非本次對實際伺服器版本或正式環境所做的檢測。 |
 

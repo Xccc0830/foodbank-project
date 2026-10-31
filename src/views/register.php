@@ -36,6 +36,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
                 <div class="form-group"><label for="phone">手機號碼</label><div class="input-with-icon"><i class="fa-solid fa-mobile-screen"></i><input id="phone" name="phone" type="tel" pattern="09\d{8}" required placeholder="09xxxxxxxx"></div></div>
                 <div class="form-group"><label for="member_type">會員類型</label><select id="member_type" name="member_type" required><option value="general">一般會員（公益活動、可另外申請外送志工）</option><option value="enterprise">企業會員（活動報名、剩餘物資捐贈）</option></select></div>
                 <div class="form-group" id="enterprise-name-field" hidden><label for="enterprise_name">企業／組織名稱</label><input id="enterprise_name" name="enterprise_name" maxlength="150" placeholder="輸入企業或組織名稱"></div>
+                <div class="form-group" id="enterprise-address-field" hidden><label for="business_address">商家地址</label><input id="business_address" name="business_address" maxlength="255" minlength="5" autocomplete="street-address" placeholder="輸入商家取貨地址"></div>
                 <div class="form-group" id="enterprise-tax-field" hidden><label for="tax_id">統一編號（商家身分認證）</label><input id="tax_id" name="tax_id" inputmode="numeric" pattern="\d{8}" maxlength="8" placeholder="8 碼統一編號"></div>
                 <div class="form-group" id="enterprise-referral-field" hidden>
                     <label for="referral_source">從何得知此系統（選填）</label>
@@ -52,13 +53,15 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
     </main>
     <script>
         const memberType = document.getElementById('member_type');
-        const enterpriseFields = ['enterprise-name-field', 'enterprise-tax-field', 'enterprise-referral-field'].map(function (id) { return document.getElementById(id); });
+        const enterpriseFields = ['enterprise-name-field', 'enterprise-address-field', 'enterprise-tax-field', 'enterprise-referral-field'].map(function (id) { return document.getElementById(id); });
         const enterpriseName = document.getElementById('enterprise_name');
+        const businessAddress = document.getElementById('business_address');
         const taxId = document.getElementById('tax_id');
         function updateEnterpriseField() {
             const isEnterprise = memberType.value === 'enterprise';
             enterpriseFields.forEach(function (field) { field.hidden = !isEnterprise; });
             enterpriseName.required = isEnterprise;
+            businessAddress.required = isEnterprise;
             taxId.required = isEnterprise;
         }
         memberType.addEventListener('change', updateEnterpriseField);

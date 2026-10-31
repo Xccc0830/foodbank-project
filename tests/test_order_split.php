@@ -7,10 +7,11 @@
  * 在其中執行拆單發布，驗證結果後刪除該測試資料庫，不會影響正式資料。
  */
 require __DIR__ . '/../config/database.php';
+require __DIR__ . '/database_test_helpers.php';
 
 $testDbName = 'foodbank_test_order_split_' . bin2hex(random_bytes(4));
-$mysqlBin = '/Applications/XAMPP/xamppfiles/bin/mysql';
-$mysqldumpBin = '/Applications/XAMPP/xamppfiles/bin/mysqldump';
+$mysqlBin = findDatabaseCli('mysql');
+$mysqldumpBin = findDatabaseCli('mysqldump');
 $sourceDbName = DB_NAME;
 
 $failures = 0;
@@ -22,16 +23,21 @@ function shellOk($command) {
     return $exitCode === 0;
 }
 
-if (!file_exists($mysqlBin) || !file_exists($mysqldumpBin)) {
-    echo "SKIP order-split-tests (mysql/mysqldump binaries not found at expected XAMPP path)\n";
+if (DB_DRIVER !== 'mysql' || !$mysqlBin || !$mysqldumpBin) {
+    echo "SKIP order-split-tests (MySQL driver or mysql/mysqldump binaries unavailable)\n";
     exit(0);
 }
 
-$created = shellOk(escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' -e ' . escapeshellarg("DROP DATABASE IF EXISTS {$testDbName}; CREATE DATABASE {$testDbName};"));
-$cloned = $created && shellOk(escapeshellarg($mysqldumpBin) . ' -u ' . escapeshellarg(DB_USER) . ' ' . escapeshellarg($sourceDbName) . ' | ' . escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' ' . escapeshellarg($testDbName));
+$mysqlCommand = databaseCliPrefix($mysqlBin);
+$mysqldumpCommand = databaseCliPrefix($mysqldumpBin);
+$created = shellOk($mysqlCommand . ' -e ' . escapeshellarg("CREATE DATABASE {$testDbName};"));
+$cloned = $created && shellOk($mysqldumpCommand . ' ' . escapeshellarg($sourceDbName) . ' | ' . $mysqlCommand . ' ' . escapeshellarg($testDbName));
 
 if (!$cloned) {
     echo "SKIP order-split-tests (failed to clone database for isolated testing)\n";
+    if ($created) {
+        shellOk($mysqlCommand . ' -e ' . escapeshellarg("DROP DATABASE IF EXISTS {$testDbName};"));
+    }
     exit(0);
 }
 
@@ -55,7 +61,7 @@ $donation = $sourceRow ? $sourceRow->fetch_assoc() : null;
 if (!$donation) {
     echo "SKIP order-split-tests (no approved donation available as fixture)\n";
     $conn->close();
-    shellOk(escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' -e ' . escapeshellarg("DROP DATABASE IF EXISTS {$testDbName};"));
+    shellOk($mysqlCommand . ' -e ' . escapeshellarg("DROP DATABASE IF EXISTS {$testDbName};"));
     exit(0);
 }
 
@@ -202,7 +208,7 @@ if ($secondDonation) {
 }
 
 $conn->close();
-shellOk(escapeshellarg($mysqlBin) . ' -u ' . escapeshellarg(DB_USER) . ' -e ' . escapeshellarg("DROP DATABASE IF EXISTS {$testDbName};"));
+shellOk($mysqlCommand . ' -e ' . escapeshellarg("DROP DATABASE IF EXISTS {$testDbName};"));
 
 if ($failures > 0) {
     echo "\n{$failures} test(s) failed.\n";

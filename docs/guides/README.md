@@ -22,7 +22,7 @@
 ## 🎯 當前重點 (2026/09/18)
 
 ### 🔴 高優先級
-- [x] **整合資料庫 SQL 快照** (`database/schema.sql`)
+- [x] **保留資料庫備份** (`database/shinigyi_foodbank.sql`；含資料，非空白 schema)
 - [ ] 商家獎勵方案功能調試
 - [ ] 企業驗證流程實作
 
@@ -51,7 +51,7 @@ foodbank-project/
 │   ├── models/          # 數據模型
 │   └── views/           # 視圖模板
 ├── database/            # 數據庫
-│   └── schema.sql             # 唯一 SQL；僅供新安裝
+│   └── shinigyi_foodbank.sql # 資料庫備份；非空白 schema
 └── config/              # 配置文件
 ```
 

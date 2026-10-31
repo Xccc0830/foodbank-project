@@ -5,4 +5,4 @@ storage/rider_licenses/
 cookies.txt
 migration.load
 supabase-ca.crt
-
+database/shinigyi_foodbank.sql

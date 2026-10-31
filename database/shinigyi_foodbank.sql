@@ -949,6 +949,7 @@ CREATE TABLE `users` (
   `phone_verified` tinyint(1) NOT NULL DEFAULT 0,
   `is_enterprise_verified` tinyint(1) DEFAULT 0,
   `enterprise_name` varchar(150) DEFAULT NULL,
+  `business_address` varchar(255) DEFAULT NULL,
   `enterprise_verified_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

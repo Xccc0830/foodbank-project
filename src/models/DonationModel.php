@@ -89,27 +89,7 @@ class DonationModel extends BaseModel {
     public function addDonation($donor_data) {
         $donor_data['donation_date'] = date('Y-m-d H:i:s');
         $donor_data['order_number'] = $this->generateOrderNumber();
-        $itemData = [
-            'item_name' => $donor_data['item_name'] ?? null,
-            'donation_type' => $donor_data['donation_type'] ?? 'other',
-            'quantity' => $donor_data['quantity'] ?? null,
-            'unit' => $donor_data['unit'] ?? null,
-            'weight_kg' => $donor_data['weight_kg'] ?? null,
-            'size_description' => $donor_data['size_description'] ?? null,
-            'expiry_date' => $donor_data['expiry_date'] ?? null,
-            'photo_path' => $donor_data['photo_path'] ?? null,
-        ];
-        $donationId = $this->insert($donor_data);
-        if ($donationId && $this->hasDonationItemsTable()) {
-            $columns = array_keys($itemData);
-            $values = array_map(function ($value) {
-                return $value === null ? 'NULL' : "'" . $this->db->real_escape_string((string) $value) . "'";
-            }, $itemData);
-            $this->db->query(
-                "INSERT INTO donation_items (donation_id, " . implode(', ', $columns) . ") VALUES (" . (int) $donationId . ", " . implode(', ', $values) . ")"
-            );
-        }
-        return $donationId;
+        return $this->insert($donor_data);
     }
 
     private function hasDonationItemsTable() {

@@ -66,9 +66,19 @@ $connection->query(
 );
 if (!empty($_SESSION['user']['username'])) {
     $sessionUsername = $connection->real_escape_string($_SESSION['user']['username']);
-    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, staff_type, enterprise_name, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
-    if ($sessionUserResult && ($sessionUser = $sessionUserResult->fetch_assoc())) {
+    $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, staff_type, enterprise_name, business_address, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
+    if (!$sessionUserResult) {
+        http_response_code(500);
+        error_log('Unable to verify the current session user: ' . $connection->error);
+        exit('系統暫時無法驗證登入狀態，請稍後再試。');
+    }
+
+    $sessionUser = $sessionUserResult->fetch_assoc();
+    if ($sessionUser && $sessionUser['status'] === 'active') {
         $_SESSION['user'] = $sessionUser;
+    } else {
+        unset($_SESSION['user']);
+        session_regenerate_id(true);
     }
 }
 
@@ -119,13 +129,17 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $memberType = $_POST['member_type'] ?? '';
     $enterpriseName = trim($_POST['enterprise_name'] ?? '');
+    $businessAddress = trim($_POST['business_address'] ?? '');
     $taxId = trim($_POST['tax_id'] ?? '');
     $referralSource = trim($_POST['referral_source'] ?? '');
     $allowedMemberTypes = ['general', 'enterprise'];
     require_once BASE_PATH . '/src/helpers/ValidationHelper.php';
+    require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 
-    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && $enterpriseName === '')) {
-        $registrationError = '請完整填寫資料；企業會員須填寫企業／組織名稱，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
+    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && ($enterpriseName === '' || $businessAddress === ''))) {
+        $registrationError = '請完整填寫資料；企業會員須填寫企業／組織名稱與商家地址，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
+    } elseif ($memberType === 'enterprise' && ($addressError = validateAddress($businessAddress, '商家地址')) !== null) {
+        $registrationError = $addressError;
     } elseif ($memberType === 'enterprise' && !isValidTaiwanTaxId($taxId)) {
         $registrationError = '請輸入正確的 8 碼統一編號，作為企業或商家身分認證。';
     } elseif ($referralSource !== '' && !in_array($referralSource, registrationReferralSources(), true)) {
@@ -137,6 +151,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $phoneEscaped = $connection->real_escape_string($phone);
         $memberTypeEscaped = $connection->real_escape_string($memberType);
         $enterpriseNameEscaped = $connection->real_escape_string($enterpriseName);
+        $businessAddressSql = $memberType === 'enterprise' ? "'" . $connection->real_escape_string($businessAddress) . "'" : 'NULL';
         $taxIdSql = $memberType === 'enterprise' ? "'" . $connection->real_escape_string($taxId) . "'" : 'NULL';
         $referralSql = ($memberType === 'enterprise' && $referralSource !== '') ? "'" . $connection->real_escape_string($referralSource) . "'" : 'NULL';
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
@@ -148,7 +163,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($exists && $exists->num_rows > 0) {
             $registrationError = '帳號或電子郵件已經被使用。';
         } else {
-            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, tax_id, referral_source, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", {$taxIdSql}, {$referralSql}, 'inactive')");
+            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, business_address, tax_id, referral_source, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", {$businessAddressSql}, {$taxIdSql}, {$referralSql}, 'inactive')");
             $newUserId = (int) $connection->insert_id;
 
             if ($newUserId > 0) {
