@@ -69,7 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$balance = $rewardModel->getBalance($userId);
+$balanceSummary = $discountModel->getBalanceSummary($userId);
+$balance = $balanceSummary['usable'];
+$usageTotals = $discountModel->getUsageTotals($userId);
 $e = static function ($value) {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 };
@@ -119,7 +121,11 @@ $discountStatusLabels = ['completed' => '已完成', 'reversed' => '已沖銷'];
 
 <?php if ($isVolunteer || $isStaff): ?>
 <div class="stats-grid">
-    <div class="stat-card"><h3>目前可用興毅幣</h3><div class="stat-number"><?php echo number_format($balance); ?></div><p class="stat-label">≈ 可折抵 <?php echo number_format($balance); ?> 元</p></div>
+    <div class="stat-card"><h3>目前可用興毅幣</h3><div class="stat-number"><?php echo number_format($balance); ?></div><p class="stat-label">≈ 可折抵 <?php echo number_format($balance); ?> 元<?php if ($balanceSummary['expiring_soon'] > 0): ?>・<?php echo (int) $balanceSummary['expiring_soon']; ?> 幣將於 <?php echo MerchantDiscountModel::EXPIRING_SOON_DAYS; ?> 天內到期<?php endif; ?></p></div>
+    <?php if ($isVolunteer): ?>
+    <div class="stat-card"><h3>今日已折抵</h3><div class="stat-number"><?php echo (int) $usageTotals['day_used']; ?></div><p class="stat-label">上限 <?php echo MerchantDiscountModel::DAILY_CAP; ?> 幣</p></div>
+    <div class="stat-card"><h3>本月已折抵</h3><div class="stat-number"><?php echo (int) $usageTotals['month_used']; ?></div><p class="stat-label">上限 <?php echo number_format(MerchantDiscountModel::MONTHLY_CAP); ?> 幣</p></div>
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -168,6 +174,8 @@ $discountStatusLabels = ['completed' => '已完成', 'reversed' => '已沖銷'];
         <ul>
             <li>折抵金額 = 取「持有興毅幣」與「消費金額 × 商家折抵上限%」較小者，小數無條件捨去。</li>
             <li>消費金額需達商家滿額門檻才可折抵。例：滿 100 元、上限 20%，消費 150 元最多折 30 元，實付 120 元。</li>
+            <li>興毅幣自取得日起 <?php echo MerchantDiscountModel::EXPIRY_MONTHS; ?> 個月內有效，逾期失效；使用時先扣最早取得的幣。</li>
+            <li>每人每日最多折抵 <?php echo MerchantDiscountModel::DAILY_CAP; ?> 幣、每月最多 <?php echo number_format(MerchantDiscountModel::MONTHLY_CAP); ?> 幣。</li>
             <li>興毅幣不可兌現、不可轉讓；折抵後若店家誤操作，可在 <?php echo MerchantDiscountModel::REVERSAL_WINDOW_HOURS; ?> 小時內沖銷並退幣。</li>
         </ul>
     </div>

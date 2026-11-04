@@ -13,6 +13,10 @@ class MerchantDiscountModel extends BaseModel {
     const TOKEN_TTL_MINUTES = 10;
     const REVERSAL_WINDOW_HOURS = 24;
     const MAX_BILL_AMOUNT = 1000000;
+    const EXPIRY_MONTHS = 12;
+    const EXPIRING_SOON_DAYS = 30;
+    const DAILY_CAP = 200;
+    const MONTHLY_CAP = 1000;
 
     const CATEGORIES = [
         'dining' => '餐飲',
@@ -97,9 +101,12 @@ class MerchantDiscountModel extends BaseModel {
     /**
      * 可折抵幣數：未達滿額門檻為 0；否則取「持有幣數」與「消費金額 × 上限%」較小者（1 幣 = 1 元，無條件捨去）。
      */
-    public static function calculateDiscount($billAmount, $balance, $minSpend, $maxPercent) {
+    public static function calculateDiscount($billAmount, $balance, $minSpend, $maxPercent, $capRemaining = null) {
         $bill = (int) $billAmount;
         $balance = max(0, (int) $balance);
+        if ($capRemaining !== null) {
+            $balance = min($balance, max(0, (int) $capRemaining));
+        }
         $minSpend = max(0, (int) $minSpend);
         $percent = max(0, min(100, (int) $maxPercent));
         if ($bill <= 0 || $bill < $minSpend || $percent <= 0) {
@@ -108,13 +115,81 @@ class MerchantDiscountModel extends BaseModel {
         return min($balance, intdiv($bill * $percent, 100));
     }
 
-    public function getBalance($userId, $forUpdate = false) {
+    /**
+     * 未過期可用幣數：取得滿 EXPIRY_MONTHS 個月即到期，使用時先扣最早取得者（FIFO）。
+     * $lots 為 [['ts' => 取得時間戳, 'points' => 正數], ...]，$spent 為歷來已使用總數。
+     */
+    public static function computeUsableBalance(array $lots, $spent, $nowTs) {
+        usort($lots, static function ($a, $b) {
+            return $a['ts'] <=> $b['ts'];
+        });
+        $spent = max(0, (int) $spent);
+        $usable = 0;
+        foreach ($lots as $lot) {
+            $remaining = (int) $lot['points'];
+            $consumed = min($remaining, $spent);
+            $spent -= $consumed;
+            $remaining -= $consumed;
+            if ($remaining > 0 && strtotime('+' . self::EXPIRY_MONTHS . ' months', (int) $lot['ts']) > $nowTs) {
+                $usable += $remaining;
+            }
+        }
+        return $usable;
+    }
+
+    private function loadLedger($userId, $forUpdate) {
         $userId = (int) $userId;
         $result = $this->db->query(
-            "SELECT COALESCE(SUM(points), 0) AS balance FROM point_transactions WHERE user_id = {$userId}" . ($forUpdate ? ' FOR UPDATE' : '')
+            "SELECT points, UNIX_TIMESTAMP(created_at) AS ts, UNIX_TIMESTAMP(NOW()) AS now_ts
+             FROM point_transactions WHERE user_id = {$userId} ORDER BY created_at, transaction_id" . ($forUpdate ? ' FOR UPDATE' : '')
+        );
+        $lots = [];
+        $spent = 0;
+        $now = time();
+        while ($result && ($row = $result->fetch_assoc())) {
+            $now = (int) $row['now_ts'];
+            $points = (int) $row['points'];
+            if ($points > 0) {
+                $lots[] = ['ts' => (int) $row['ts'], 'points' => $points];
+            } else {
+                $spent -= $points;
+            }
+        }
+        return [$lots, $spent, $now];
+    }
+
+    /** 未過期可用幣數 */
+    public function getBalance($userId, $forUpdate = false) {
+        list($lots, $spent, $now) = $this->loadLedger($userId, $forUpdate);
+        return self::computeUsableBalance($lots, $spent, $now);
+    }
+
+    /** 可用幣數與 30 天內即將到期幣數 */
+    public function getBalanceSummary($userId) {
+        list($lots, $spent, $now) = $this->loadLedger($userId, false);
+        $usable = self::computeUsableBalance($lots, $spent, $now);
+        $later = self::computeUsableBalance($lots, $spent, strtotime('+' . self::EXPIRING_SOON_DAYS . ' days', $now));
+        return ['usable' => $usable, 'expiring_soon' => max(0, $usable - $later)];
+    }
+
+    /** 今日與本月已折抵幣數（未沖銷） */
+    public function getUsageTotals($userId) {
+        $userId = (int) $userId;
+        $result = $this->db->query(
+            "SELECT
+                COALESCE(SUM(CASE WHEN DATE(created_at) = CURDATE() THEN coins_used END), 0) AS day_used,
+                COALESCE(SUM(CASE WHEN DATE_FORMAT(created_at, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m') THEN coins_used END), 0) AS month_used
+             FROM merchant_discount_redemptions
+             WHERE user_id = {$userId} AND status = 'completed'"
         );
         $row = $result ? $result->fetch_assoc() : null;
-        return max(0, $row ? (int) $row['balance'] : 0);
+        return ['day_used' => (int) ($row['day_used'] ?? 0), 'month_used' => (int) ($row['month_used'] ?? 0)];
+    }
+
+    /** 依每日、每月上限計算目前還能折抵的幣數 */
+    public function getCapRemaining($userId) {
+        $usage = $this->getUsageTotals($userId);
+        return max(0, min(self::DAILY_CAP - $usage['day_used'], self::MONTHLY_CAP - $usage['month_used']));
     }
 
     // ---------- 商家折扣規則 ----------
@@ -296,12 +371,15 @@ class MerchantDiscountModel extends BaseModel {
         }
 
         $balance = $this->getBalance($row['user_id']);
-        $coins = self::calculateDiscount($bill, $balance, $rule['min_spend'], $rule['max_discount_percent']);
+        $capRemaining = $this->getCapRemaining($row['user_id']);
+        $coins = self::calculateDiscount($bill, $balance, $rule['min_spend'], $rule['max_discount_percent'], $capRemaining);
         $reason = null;
         if ($bill < (int) $rule['min_spend']) {
             $reason = '消費金額未達滿額門檻 ' . (int) $rule['min_spend'] . ' 元，無法折抵。';
         } elseif ($balance <= 0) {
-            $reason = '此 GO Rider 目前沒有可用興毅幣。';
+            $reason = '此 GO Rider 目前沒有可用（未過期）興毅幣。';
+        } elseif ($capRemaining <= 0) {
+            $reason = '此 GO Rider 已達每日 ' . self::DAILY_CAP . ' 幣或每月 ' . self::MONTHLY_CAP . ' 幣折抵上限。';
         } elseif ($coins <= 0) {
             $reason = '依目前規則可折抵金額為 0。';
         }
@@ -310,6 +388,7 @@ class MerchantDiscountModel extends BaseModel {
             'user_id' => (int) $row['user_id'],
             'rider_name' => $row['full_name'],
             'balance' => $balance,
+            'cap_remaining' => $capRemaining,
             'bill_amount' => $bill,
             'coins' => $coins,
             'final_amount' => $bill - $coins,
@@ -347,12 +426,16 @@ class MerchantDiscountModel extends BaseModel {
 
             $userId = (int) $row['user_id'];
             $balance = $this->getBalance($userId, true);
-            $coins = self::calculateDiscount($bill, $balance, $rule['min_spend'], $rule['max_discount_percent']);
+            $capRemaining = $this->getCapRemaining($userId);
+            $coins = self::calculateDiscount($bill, $balance, $rule['min_spend'], $rule['max_discount_percent'], $capRemaining);
             if ($coins <= 0) {
                 $this->db->rollback();
-                return ['error' => $bill < (int) $rule['min_spend']
-                    ? '消費金額未達滿額門檻 ' . (int) $rule['min_spend'] . ' 元，無法折抵。'
-                    : '此 GO Rider 的興毅幣不足或依規則可折抵金額為 0。'];
+                if ($bill < (int) $rule['min_spend']) {
+                    return ['error' => '消費金額未達滿額門檻 ' . (int) $rule['min_spend'] . ' 元，無法折抵。'];
+                }
+                return ['error' => $capRemaining <= 0
+                    ? '此 GO Rider 已達每日 ' . self::DAILY_CAP . ' 幣或每月 ' . self::MONTHLY_CAP . ' 幣折抵上限。'
+                    : '此 GO Rider 的可用興毅幣不足（已過期的幣不可使用）或依規則可折抵金額為 0。'];
             }
 
             $consume = $this->db->prepare(
