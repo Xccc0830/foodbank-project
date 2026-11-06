@@ -150,7 +150,7 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
     <div class="card-body">
         <?php if ($dashboardRole === 'member' && !$isEnterpriseMember): ?>
             <?php if ($authService->can('rider.accept_task')): ?>
-                <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄興毅幣。</p>
+                <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄心意幣。</p>
                 <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
             <?php else: ?>
                 <h2>你的公益任務</h2><p>瀏覽並參加公益活動；想協助運送物資，可以申請成為 GO Rider。</p>
@@ -159,7 +159,7 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
             <?php endif; ?>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
             <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
-            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理興毅幣兌換</a>
+            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理心意幣兌換</a>
         <?php elseif ($isEnterpriseMember): ?>
             <h2>企業惜食行動</h2><p>報名公益活動，也可將企業剩餘食物或物資捐贈給食物銀行。</p>
             <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>

@@ -16,6 +16,7 @@
         initializeNotifications();
         initializeMaterialDonationDistanceEstimate();
         initializeDriverTripCard();
+        initializeRiderLocationButtons();
         injectRuntimeStyles();
     });
 
@@ -331,6 +332,29 @@
         });
     }
 
+    // 食物銀行／商家：點「騎手位置」查看騎手最新位置（在新分頁開啟 Google 地圖）
+    function initializeRiderLocationButtons() {
+        document.addEventListener('click', function (event) {
+            const button = event.target.closest ? event.target.closest('[data-rider-location]') : null;
+            if (!button) {
+                return;
+            }
+            const mapWindow = window.open('', '_blank');
+            fetch('?action=rider_location&delivery_id=' + encodeURIComponent(button.dataset.deliveryId), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (result) {
+                    if (!result.found) {
+                        if (mapWindow) { mapWindow.close(); }
+                        window.alert('目前沒有騎手的最新位置（騎手尚未開始運送，或超過 10 分鐘沒有更新）。');
+                        return;
+                    }
+                    const url = 'https://www.google.com/maps?q=' + result.lat + ',' + result.lon;
+                    if (mapWindow) { mapWindow.location = url; } else { window.location.href = url; }
+                })
+                .catch(function () { if (mapWindow) { mapWindow.close(); } });
+        });
+    }
+
     function initializeDriverTripCard() {
         const card = document.querySelector('[data-driver-trip]');
         if (!card) {
@@ -349,6 +373,72 @@
                     themeIcon.classList.toggle('fa-sun', nextTheme === 'light');
                 }
             });
+        }
+
+        // 用手機定位算出離目前目的地的剩餘距離與時間（地址換算與路線由後端處理）
+        const etaBox = card.querySelector('[data-trip-eta]');
+        const etaText = card.querySelector('[data-trip-eta-text]');
+        if (etaBox && etaText && navigator.geolocation) {
+            let lastRequestAt = 0;
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const routeBox = document.querySelector('[data-route-plan]');
+            let lastShareAt = 0;
+            let lastRouteAt = 0;
+            // 把位置回傳給後端（每 15 秒一次），食物銀行與商家才看得到騎手在哪
+            const shareLocation = function (position) {
+                if (Date.now() - lastShareAt < 15000 || !csrfMeta) {
+                    return;
+                }
+                lastShareAt = Date.now();
+                const body = new URLSearchParams({ csrf_token: csrfMeta.content, lat: position.coords.latitude, lon: position.coords.longitude });
+                fetch('?action=rider_location_update', { method: 'POST', body: body, credentials: 'same-origin' }).catch(function () {});
+            };
+            // 多站時依目前位置排出建議順序（每 2 分鐘更新一次）
+            const refreshRoute = function (position) {
+                if (!routeBox || Date.now() - lastRouteAt < 120000) {
+                    return;
+                }
+                lastRouteAt = Date.now();
+                const params = new URLSearchParams({ action: 'route_plan', lat: position.coords.latitude, lon: position.coords.longitude });
+                fetch('?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (result) {
+                        const list = routeBox.querySelector('[data-route-plan-list]');
+                        list.textContent = '';
+                        (result.route || []).forEach(function (stop) {
+                            const item = document.createElement('li');
+                            item.textContent = (stop.type === 'pickup' ? '取貨：' : '送達：') + stop.address + '（單 #' + stop.delivery_id + (stop.distance_km !== null ? '，約 ' + stop.distance_km + ' 公里' : '') + '）';
+                            list.appendChild(item);
+                        });
+                        routeBox.hidden = !(result.route || []).length;
+                    })
+                    .catch(function () {});
+            };
+            const updateEta = function (position) {
+                shareLocation(position);
+                refreshRoute(position);
+                const now = Date.now();
+                if (now - lastRequestAt < 60000) {
+                    return;
+                }
+                lastRequestAt = now;
+                const params = new URLSearchParams({
+                    action: 'calculate_distance',
+                    origin: position.coords.latitude + ',' + position.coords.longitude,
+                    destination: etaBox.dataset.destination
+                });
+                fetch('?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (result) {
+                        if (result.success) {
+                            etaText.textContent = '距離目的地約 ' + result.distance_text + '，預計 ' + result.duration_text + '（' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) + ' 更新）';
+                        }
+                    })
+                    .catch(function () { /* 失敗就維持原本文字 */ });
+            };
+            navigator.geolocation.watchPosition(updateEta, function () {
+                etaText.textContent = '未允許定位，無法顯示剩餘距離';
+            }, { enableHighAccuracy: false, maximumAge: 30000 });
         }
 
         const sheetToggle = card.querySelector('[data-sheet-toggle]');
@@ -522,7 +612,7 @@
                     box.textContent = '';
                     const lines = [];
                     if (result.category) {
-                        lines.push({ level: 'info', message: '系統判斷分類：' + result.category });
+                        lines.push({ level: 'info', message: (result.ai ? 'AI 判斷分類：' : '系統判斷分類：') + result.category });
                     }
                     (result.warnings || []).forEach(function (w) { lines.push(w); });
                     lines.forEach(function (line) {

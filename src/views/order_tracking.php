@@ -163,6 +163,7 @@ $subOrderStatusLabels = [
                                             </div>
                                         </div>
                                         <div class="customer-progress" role="group" aria-label="訂單配送進度">
+                                            <?php if ($authService->can('page.donation_materials') || $authService->can('page.deliveries')): ?><button type="button" class="btn btn-secondary btn-sm" data-rider-location data-delivery-id="<?php echo $deliveryId; ?>"><i class="fa-solid fa-location-crosshairs"></i> 查看騎手位置</button><?php endif; ?>
                                             <div class="customer-progress-title"><i class="fa-solid fa-box-open"></i><span class="order-live-tracking-status">正在取得配送狀態…</span></div>
                                             <div class="customer-progress-track"><span class="customer-progress-fill"></span></div>
                                             <div class="customer-progress-steps">

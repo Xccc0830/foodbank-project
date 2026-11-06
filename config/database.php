@@ -39,6 +39,14 @@ if (!defined('GOOGLE_MAPS_API_KEY')) {
     define('GOOGLE_MAPS_API_KEY', getenv('GOOGLE_MAPS_API_KEY') ?: '');
 }
 
+// AI 物資比對（Claude API）。沒有金鑰時自動只用規則比對。金鑰請放環境變數或 config/local.php，不要提交到 git。
+if (!defined('ANTHROPIC_API_KEY')) {
+    define('ANTHROPIC_API_KEY', getenv('ANTHROPIC_API_KEY') ?: '');
+}
+if (!defined('ANTHROPIC_MODEL')) {
+    define('ANTHROPIC_MODEL', getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-5-5');
+}
+
 if (!defined('DB_HOST')) {
     define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
 }

@@ -39,6 +39,9 @@ try {
     check('invalid vehicle type is rejected', !$riderModel->submit($userId, 'bicycle', 'rider_licenses/a.jpg')['success']);
     check('missing license is rejected', !$riderModel->submit($userId, 'motorcycle', '')['success']);
 
+    check('unverified identity cannot apply', !$riderModel->submit($userId, 'motorcycle', 'rider_licenses/a.jpg')['success']);
+    $connection->query("UPDATE users SET id_verify_status = 'approved' WHERE user_id = {$userId}");
+
     $first = $riderModel->submit($userId, 'motorcycle', 'rider_licenses/a.jpg');
     check('valid application is accepted', $first['success']);
     check('duplicate pending application is blocked', !$riderModel->submit($userId, 'car', 'rider_licenses/b.jpg')['success']);

@@ -24,6 +24,17 @@ class DonationModel extends BaseModel {
     ];
 
     /** 欄位的中文名稱（審核頁勾選、商家頁顯示用） */
+    /** 食物銀行婉拒時可勾選的快捷原因 */
+    const REJECTION_REASON_PRESETS = [
+        'expiry_short' => '保存期限太短，來不及分送',
+        'package_damaged' => '包裝破損或已開封',
+        'spec_unclear' => '物資名稱、規格或重量填寫不清楚',
+        'category_not_needed' => '目前不需要這類物資',
+        'stock_full' => '倉庫庫存已滿，暫時無法收',
+        'pickup_info_problem' => '取貨地址或時間有問題',
+        'photo_unclear' => '照片不清楚，無法確認物資狀況',
+    ];
+
     const RESUBMIT_FIELD_LABELS = [
         'item_name' => '物資名稱',
         'quantity' => '數量',
@@ -43,6 +54,15 @@ class DonationModel extends BaseModel {
         $result = $this->db->query("SELECT default_pickup_address FROM users WHERE user_id = {$userId} LIMIT 1");
         $row = $result ? $result->fetch_assoc() : null;
         return trim((string) ($row['default_pickup_address'] ?? ''));
+    }
+
+    const URGENT_MONTHLY_LIMIT = 5;
+
+    /** 商家本月已申請的緊急運送單數（每月上限 URGENT_MONTHLY_LIMIT，避免濫用加成） */
+    public function countUrgentThisMonth($donorId) {
+        $donorId = (int) $donorId;
+        $result = $this->db->query("SELECT COUNT(*) AS total FROM donations WHERE donor_id = {$donorId} AND is_urgent = 1 AND donation_date >= DATE_FORMAT(NOW(), '%Y-%m-01')");
+        return (int) ($result ? ($result->fetch_assoc()['total'] ?? 0) : 0);
     }
 
     public function setDefaultPickupAddress($userId, $address) {
@@ -70,6 +90,12 @@ class DonationModel extends BaseModel {
                 }
             }
         }
+        foreach (['multi_stop_bonus' => 'INT NOT NULL DEFAULT 0', 'is_cold_storage' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $column => $definition) {
+            $deliveryColumn = $this->db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
+            if ($deliveryColumn && $deliveryColumn->num_rows === 0) {
+                $this->db->query("ALTER TABLE deliveries ADD {$column} {$definition}");
+            }
+        }
         $userColumn = $this->db->query("SHOW COLUMNS FROM users LIKE 'default_pickup_address'");
         if ($userColumn && $userColumn->num_rows === 0) {
             $this->db->query("ALTER TABLE users ADD default_pickup_address VARCHAR(255) DEFAULT NULL");
@@ -77,6 +103,7 @@ class DonationModel extends BaseModel {
 
         $columns = [
             'revision_no' => "ALTER TABLE donations ADD revision_no INT NOT NULL DEFAULT 1",
+            'is_urgent' => "ALTER TABLE donations ADD is_urgent TINYINT(1) NOT NULL DEFAULT 0",
             'rejected_fields' => "ALTER TABLE donations ADD rejected_fields TEXT NULL",
         ];
         foreach ($columns as $column => $alterSql) {
@@ -475,7 +502,8 @@ class DonationModel extends BaseModel {
         }
         $splitCount = max(1, (int) ($publishData['split_count'] ?? 1));
         $needInspection = !empty($publishData['need_inspection']) ? 1 : 0;
-        $rewardOptions = $publishData['reward_options'] ?? [];
+        // 獎勵一律是心意幣，不接受表單自訂（無償／物資／服務時數已取消）。
+        $rewardOptions = ['points'];
         $rewardOptions = is_array($rewardOptions) ? array_values(array_intersect(
             ['points', 'goods', 'free', 'service_hours'],
             $rewardOptions
@@ -572,8 +600,12 @@ class DonationModel extends BaseModel {
             : 'motorcycle';
         $weight = ((float) ($publishData['weight_kg'] ?? $existingDonation['weight_kg'] ?? 0)) / $splitCount;
         $distance = max(0, (float) ($existingDonation['estimated_distance_km'] ?? 0));
+        // 緊急加成：商家勾選緊急運送，且食物銀行審核時同意（預設同意，可取消）
+        $urgency = (!empty($existingDonation['is_urgent']) && !empty($publishData['urgent_approved'])) ? 'urgent' : 'normal';
+        $coldResult = $this->db->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) $donation_id . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
+        $isCold = $coldResult && $coldResult->num_rows > 0;
         $points = $deliveryMethod === 'volunteer'
-            ? max(0, DeliveryModel::calculatePoints($vehicleType, $distance, $weight, 'normal'))
+            ? max(0, DeliveryModel::calculatePoints($vehicleType, $distance, $weight, $urgency, $isCold))
             : 0;
         $pickupAddress = trim((string) ($publishData['donor_address'] ?? $existingDonation['donor_address'] ?? ''));
         if ($pickupAddress === '') {
@@ -625,8 +657,8 @@ class DonationModel extends BaseModel {
             $allocationColumn = $allocationId !== null ? ", allocation_id" : '';
             $allocationValue = $allocationId !== null ? ", {$allocationId}" : '';
             $taskSql = "INSERT INTO deliveries
-                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
-                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, 'normal', {$points}, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, is_cold_storage, points, pickup_address, delivery_address, status, item_category, item_description)
+                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, '{$urgency}', " . ($isCold ? 1 : 0) . ", {$points}, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
                 $this->db->rollback();
                 return false;

@@ -1,6 +1,6 @@
 <?php
 /**
- * 配送任務與興毅幣模型
+ * 配送任務與心意幣模型
  */
 
 require_once __DIR__ . '/BaseModel.php';
@@ -28,6 +28,8 @@ class DeliveryModel extends BaseModel {
         $columns = [
             'arrived_pickup_at' => "ALTER TABLE deliveries ADD arrived_pickup_at DATETIME DEFAULT NULL",
             'received_confirmed_by' => "ALTER TABLE deliveries ADD received_confirmed_by INT DEFAULT NULL",
+            'multi_stop_bonus' => "ALTER TABLE deliveries ADD multi_stop_bonus INT NOT NULL DEFAULT 0",
+            'is_cold_storage' => "ALTER TABLE deliveries ADD is_cold_storage TINYINT(1) NOT NULL DEFAULT 0",
         ];
         foreach ($columns as $column => $alterSql) {
             $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
@@ -246,7 +248,8 @@ class DeliveryModel extends BaseModel {
             $data['vehicle_type'],
             (float) $data['total_distance_km'],
             (float) $data['weight_kg'],
-            $data['urgency']
+            $data['urgency'],
+            !empty($data['is_cold_storage'])
         ));
         $deliveryId = $this->insert($data);
         if (!$deliveryId) {
@@ -405,7 +408,8 @@ class DeliveryModel extends BaseModel {
             foreach ($this->query(
                 "SELECT ai.allocation_id, COUNT(*) AS item_count,
                         MAX(di.length_cm) AS max_length_cm, MAX(di.width_cm) AS max_width_cm, MAX(di.height_cm) AS max_height_cm,
-                        SUM(di.item_weight_kg) AS total_item_weight_kg
+                        SUM(di.item_weight_kg) AS total_item_weight_kg,
+                        MAX(FIELD(di.storage_condition, 'room', 'chilled', 'frozen')) AS storage_level
                  FROM donation_allocation_items ai
                  JOIN donation_items di ON di.item_id = ai.donation_item_id
                  WHERE ai.allocation_id IN ({$ids})
@@ -421,7 +425,8 @@ class DeliveryModel extends BaseModel {
             foreach ($this->query(
                 "SELECT donation_id, COUNT(*) AS item_count,
                         MAX(length_cm) AS max_length_cm, MAX(width_cm) AS max_width_cm, MAX(height_cm) AS max_height_cm,
-                        SUM(item_weight_kg) AS total_item_weight_kg
+                        SUM(item_weight_kg) AS total_item_weight_kg,
+                        MAX(FIELD(storage_condition, 'room', 'chilled', 'frozen')) AS storage_level
                  FROM donation_items
                  WHERE donation_id IN ({$ids})
                  GROUP BY donation_id"
@@ -439,6 +444,7 @@ class DeliveryModel extends BaseModel {
             $row['max_width_cm'] = $summary['max_width_cm'] ?? null;
             $row['max_height_cm'] = $summary['max_height_cm'] ?? null;
             $row['total_item_weight_kg'] = $summary['total_item_weight_kg'] ?? null;
+            $row['storage_level'] = (int) ($summary['storage_level'] ?? 1);
         }
         unset($row);
 
@@ -560,7 +566,10 @@ class DeliveryModel extends BaseModel {
     public function claimDelivery($deliveryId, $volunteerId) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;
-        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed' WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'open'");
+        // 順路加給：接單時手上已有幾張進行中的配送單，每多一站 +1 心意幣（最多 +3）
+        $activeResult = $this->db->query("SELECT COUNT(*) AS active_count FROM deliveries WHERE volunteer_id = {$volunteerId} AND delivery_method = 'volunteer' AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
+        $stopBonus = min(3, (int) ($activeResult ? ($activeResult->fetch_assoc()['active_count'] ?? 0) : 0));
+        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed', multi_stop_bonus = {$stopBonus} WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'open'");
         if ($updated && $this->db->affected_rows > 0) {
             $notifiedCount = $this->notifyUsersByRoles(
                 ['foodbank_staff'],
@@ -751,7 +760,7 @@ class DeliveryModel extends BaseModel {
         $deliveryId = (int) $deliveryId;
         $ownerCondition = " AND status IN ('claimed', 'arrived_pickup', 'picked_up', 'in_transit')";
 
-        $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
+        $result = $this->db->query("SELECT volunteer_id, points, multi_stop_bonus, delivery_method, estimated_arrival_end FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
 
         if (!$delivery) {
@@ -767,13 +776,31 @@ class DeliveryModel extends BaseModel {
             }
             $volunteerId = (int) $delivery['volunteer_id'];
             $points = (int) $delivery['points'];
+            $bonusNotes = [];
+            // 加給只發給 GO Rider（食物銀行自行配送的單 points 為 0，不發幣）
+            if ($volunteerId > 0 && $points > 0) {
+                if (!empty($delivery['estimated_arrival_end']) && strtotime($delivery['estimated_arrival_end']) >= time()) {
+                    $points += 1;
+                    $bonusNotes[] = '準時送達 +1';
+                }
+                if ((int) $delivery['multi_stop_bonus'] > 0) {
+                    $points += (int) $delivery['multi_stop_bonus'];
+                    $bonusNotes[] = '順路配送 +' . (int) $delivery['multi_stop_bonus'];
+                }
+                $earnedBefore = $this->db->query("SELECT 1 FROM point_transactions WHERE user_id = {$volunteerId} AND transaction_type = 'earned' AND delivery_id <> {$deliveryId} LIMIT 1");
+                if ($earnedBefore && $earnedBefore->num_rows === 0) {
+                    $points += 3;
+                    $bonusNotes[] = '首次配送 +3';
+                }
+            }
             if ($volunteerId > 0) {
-                $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
+                $description = $this->db->real_escape_string('完成惜食配送' . ($bonusNotes ? '（' . implode('、', $bonusNotes) . '）' : ''));
+                $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '{$description}')");
             }
             $this->db->commit();
             $this->notifyDonorDelivered($deliveryId);
             if ($volunteerId > 0) {
-                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚興毅幣。", 'success');
+                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚心意幣。", 'success');
             }
             return true;
         } catch (Throwable $exception) {
@@ -818,40 +845,27 @@ class DeliveryModel extends BaseModel {
         return $notifiedCount;
     }
 
-    public static function calculatePoints($vehicle, $distance, $weight, $urgency) {
-        $isCar = $vehicle === 'car';
-        $points = $isCar ? 10 : 5;
+    /**
+     * 心意幣 = 基本（車型）+ 重量 + 距離 + 緊急 + 冷藏冷凍。
+     * 準時、新手、順路加給在接單／完成配送時另外計算（見 finalizeDeliveryCompletion）。
+     */
+    public static function calculatePoints($vehicle, $distance, $weight, $urgency, $coldStorage = false) {
+        $points = $vehicle === 'car' ? 5 : 3;
 
-        if ($distance <= 2) {
-            $points += $isCar ? 5 : 3;
-        } elseif ($distance <= 4) {
-            $points += $isCar ? 8 : 5;
-        } elseif ($distance <= 6) {
-            $points += $isCar ? 11 : 7;
-        } elseif ($distance <= 8) {
-            $points += $isCar ? 14 : 10;
-        } elseif ($distance <= 10) {
-            $points += $isCar ? 17 : 13;
-        } else {
-            $points += $isCar ? 20 : 15;
+        // 重量：每 5 公斤一級，每級 +3，最多 +15
+        $points += $weight > 0 ? min(15, 3 * (int) ceil($weight / 5)) : 0;
+
+        if ($distance > 10) {
+            $points += 6;
+        } elseif ($distance > 5) {
+            $points += 4;
+        } elseif ($distance > 2) {
+            $points += 2;
         }
 
-        if ($weight <= 5) {
-            $points += $isCar ? 2 : 0;
-        } elseif ($weight <= 10) {
-            $points += $isCar ? 5 : 3;
-        } elseif ($weight <= 20) {
-            $points += $isCar ? 8 : 6;
-        } else {
-            $points += $isCar ? 12 : 10;
-        }
+        $points += ['urgent' => 4, 'priority' => 2][$urgency] ?? 0;
+        $points += $coldStorage ? 2 : 0;
 
-        $urgencyPoints = [
-            'normal' => $isCar ? 3 : 0,
-            'priority' => $isCar ? 6 : 3,
-            'urgent' => $isCar ? 10 : 6,
-        ];
-
-        return $points + ($urgencyPoints[$urgency] ?? 0);
+        return $points;
     }
 }

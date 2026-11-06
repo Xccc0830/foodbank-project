@@ -1,6 +1,6 @@
 <?php
 /**
- * 興毅幣兌換模型
+ * 心意幣兌換模型
  */
 
 require_once __DIR__ . '/BaseModel.php';
@@ -307,14 +307,14 @@ class RewardModel extends BaseModel {
 
     private function notifyRedemptionCreated($volunteerId, $sourceType, $sourceId, $title, $cost) {
         $title = $this->db->real_escape_string($title);
-        $message = $this->db->real_escape_string("GO Rider 已兌換「{$title}」，使用 {$cost} 枚興毅幣，請至興毅幣兌換頁面查看並核銷。");
+        $message = $this->db->real_escape_string("GO Rider 已兌換「{$title}」，使用 {$cost} 枚心意幣，請至心意幣兌換頁面查看並核銷。");
         $roles = $sourceType === 'foodbank' ? "('foodbank_staff')" : "('member')";
         $ownerCondition = $sourceType === 'donor'
             ? " AND u.member_type = 'enterprise' AND u.user_id = (SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $sourceId . " LIMIT 1)"
             : '';
         $this->db->query(
             "INSERT INTO notifications (user_id, title, message, type)
-             SELECT u.user_id, '新的興毅幣兌換', '{$message}', 'info'
+             SELECT u.user_id, '新的心意幣兌換', '{$message}', 'info'
              FROM users u
              WHERE u.role IN {$roles} AND u.status = 'active'{$ownerCondition}"
         );
@@ -324,7 +324,7 @@ class RewardModel extends BaseModel {
         $title = $this->db->real_escape_string($title);
         $this->db->query(
             "INSERT INTO notifications (user_id, title, message, type)
-             VALUES (" . (int) $volunteerId . ", '興毅幣兌換已核銷', '「{$title}」已由食物銀行完成核銷。', 'success')"
+             VALUES (" . (int) $volunteerId . ", '心意幣兌換已核銷', '「{$title}」已由食物銀行完成核銷。', 'success')"
         );
     }
 

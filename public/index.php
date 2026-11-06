@@ -17,12 +17,16 @@ error_reporting(E_ALL);
 ini_set('display_errors', APP_DEBUG ? '1' : '0');
 date_default_timezone_set('Asia/Taipei');
 
-// 啟用會話
-session_set_cookie_params([
-    'httponly' => true,
-    'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
-    'samesite' => 'Lax',
-]);
+// 啟用會話：每個分頁用自己的分頁代碼（_t）當登入憑證，所以同一個瀏覽器可同時登入不同帳號。
+ini_set('session.use_cookies', '0');
+ini_set('session.use_only_cookies', '0');
+ini_set('session.use_trans_sid', '0');
+ini_set('session.use_strict_mode', '1');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+$tabToken = (string) ($_GET['_t'] ?? $_POST['_t'] ?? $_SERVER['HTTP_X_TAB_TOKEN'] ?? '');
+if (preg_match('/^[A-Za-z0-9]{16,128}$/', $tabToken)) {
+    session_id($tabToken);
+}
 session_start();
 getCsrfToken();
 
@@ -63,16 +67,16 @@ if (!empty($_SESSION['user']['username'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !verifyCsrfToken($_POST['csrf_token'] ?? null)) {
+    // 頁面放太久、重開機或登入已失效：沒登入的直接帶回登入頁；已登入的帶回上一頁重新整理
+    if (empty($_SESSION['user'])) {
+        redirectTo('?action=login&session_expired=1');
+    }
     http_response_code(403);
-    exit('請重新整理頁面後再提交表單。');
+    exit('頁面已過期，請<a href="?page=dashboard&_t=' . htmlspecialchars(session_id(), ENT_QUOTES, 'UTF-8') . '">回到首頁</a>重新操作。');
 }
 
 if ($action === 'logout') {
     $_SESSION = [];
-    if (ini_get('session.use_cookies')) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
-    }
     session_destroy();
     header('Location: ?action=login');
     exit;
@@ -86,11 +90,7 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $result ? $result->fetch_assoc() : null;
     $passwordValid = $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
 
-    // 同一個瀏覽器共用同一份登入狀態：已登入其他帳號時，不允許直接被另一個分頁覆蓋。
-    $alreadyLoggedInUser = $_SESSION['user']['username'] ?? null;
-    if ($passwordValid && $user['status'] === 'active' && $alreadyLoggedInUser !== null && $alreadyLoggedInUser !== $user['username']) {
-        $loginError = '此瀏覽器已登入其他帳號（' . $alreadyLoggedInUser . '），請先登出，或改用無痕視窗 / 另一個瀏覽器登入。';
-    } elseif ($passwordValid && $user['status'] === 'active') {
+    if ($passwordValid && $user['status'] === 'active') {
         if (strlen($user['password']) === 64) {
             $secureHash = $connection->real_escape_string(password_hash($password, PASSWORD_DEFAULT));
             $connection->query("UPDATE users SET password = '{$secureHash}' WHERE user_id = " . (int) $user['user_id']);
@@ -99,7 +99,7 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         session_regenerate_id(true);
         unset($_SESSION['csrf_token']); // 換新的表單憑證，登入前開啟的舊分頁就不能再送出表單
         $_SESSION['user'] = $user;
-        header('Location: ?page=dashboard');
+        redirectTo('?page=dashboard');
         exit;
     }
 
@@ -115,14 +115,18 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $memberType = $_POST['member_type'] ?? '';
     $enterpriseName = trim($_POST['enterprise_name'] ?? '');
     $taxId = trim($_POST['tax_id'] ?? '');
+    $businessAddress = trim($_POST['business_address'] ?? '');
     $referralSource = trim($_POST['referral_source'] ?? '');
     $allowedMemberTypes = ['general', 'enterprise'];
     require_once BASE_PATH . '/src/helpers/ValidationHelper.php';
+    require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 
     if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && $enterpriseName === '')) {
         $registrationError = '請完整填寫資料；企業會員須填寫企業／組織名稱，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
     } elseif ($memberType === 'enterprise' && !isValidTaiwanTaxId($taxId)) {
         $registrationError = '請輸入正確的 8 碼統一編號，作為企業或商家身分認證。';
+    } elseif ($memberType === 'enterprise' && ($addressError = validateAddress($businessAddress, '商家地址')) !== null) {
+        $registrationError = $addressError;
     } elseif ($referralSource !== '' && !in_array($referralSource, registrationReferralSources(), true)) {
         $registrationError = '「從何得知此系統」的選項無效。';
     } else {
@@ -132,6 +136,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $phoneEscaped = $connection->real_escape_string($phone);
         $memberTypeEscaped = $connection->real_escape_string($memberType);
         $enterpriseNameEscaped = $connection->real_escape_string($enterpriseName);
+        $addressSql = $memberType === 'enterprise' ? "'" . $connection->real_escape_string($businessAddress) . "'" : 'NULL';
         $taxIdSql = $memberType === 'enterprise' ? "'" . $connection->real_escape_string($taxId) . "'" : 'NULL';
         $referralSql = ($memberType === 'enterprise' && $referralSource !== '') ? "'" . $connection->real_escape_string($referralSource) . "'" : 'NULL';
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
@@ -143,7 +148,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($exists && $exists->num_rows > 0) {
             $registrationError = '帳號或電子郵件已經被使用。';
         } else {
-            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, tax_id, referral_source, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", {$taxIdSql}, {$referralSql}, 'inactive')");
+            $connection->query("INSERT INTO users (username, password, email, full_name, phone, role, member_type, enterprise_name, tax_id, default_pickup_address, referral_source, status) VALUES ('{$usernameEscaped}', '{$passwordHash}', '{$emailEscaped}', '{$fullNameEscaped}', '{$phoneEscaped}', 'member', '{$memberTypeEscaped}', " . ($memberType === 'enterprise' ? "'{$enterpriseNameEscaped}'" : 'NULL') . ", {$taxIdSql}, {$addressSql}, {$referralSql}, 'inactive')");
             $newUserId = (int) $connection->insert_id;
 
             if ($newUserId > 0) {
@@ -151,7 +156,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $devOtpCode = generateOtpForUser($connection, $newUserId, $phone, 'phone_verification');
                 $_SESSION['pending_verification_user_id'] = $newUserId;
                 $_SESSION['dev_otp_code'] = APP_DEBUG ? $devOtpCode : null;
-                header('Location: ?action=verify_phone');
+                redirectTo('?action=verify_phone');
                 exit;
             }
             $registrationError = '註冊失敗，請稍後再試。';
@@ -162,7 +167,7 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if ($action === 'verify_phone') {
     $pendingUserId = (int) ($_SESSION['pending_verification_user_id'] ?? 0);
     if ($pendingUserId === 0) {
-        header('Location: ?action=login');
+        redirectTo('?action=login');
         exit;
     }
 
@@ -183,7 +188,7 @@ if ($action === 'verify_phone') {
                 $connection->query("UPDATE users SET status = 'active' WHERE user_id = {$pendingUserId} AND status = 'inactive'");
             }
 
-            header('Location: ?action=login&registered=1');
+            redirectTo('?action=login&registered=1');
             exit;
         }
         $verifyError = '驗證碼錯誤或已過期，請重新索取。';
@@ -208,7 +213,7 @@ if ($action === 'forgot_password') {
             $devOtpCode = generateOtpForUser($connection, (int) $user['user_id'], $user['phone'], 'password_reset');
             $_SESSION['password_reset_user_id'] = (int) $user['user_id'];
             $_SESSION['dev_otp_code'] = APP_DEBUG ? $devOtpCode : null;
-            header('Location: ?action=reset_password');
+            redirectTo('?action=reset_password');
             exit;
         }
         $resetRequestMessage = '若帳號存在且已驗證電話，驗證碼將發送至登記門號。';
@@ -221,7 +226,7 @@ if ($action === 'forgot_password') {
 if ($action === 'reset_password') {
     $resetUserId = (int) ($_SESSION['password_reset_user_id'] ?? 0);
     if ($resetUserId === 0) {
-        header('Location: ?action=forgot_password');
+        redirectTo('?action=forgot_password');
         exit;
     }
 
@@ -240,7 +245,7 @@ if ($action === 'reset_password') {
             $newPasswordHash = password_hash($newPassword, PASSWORD_DEFAULT);
             $connection->query("UPDATE users SET password = '{$newPasswordHash}' WHERE user_id = {$resetUserId}");
             unset($_SESSION['password_reset_user_id'], $_SESSION['dev_otp_code']);
-            header('Location: ?action=login&password_reset=1');
+            redirectTo('?action=login&password_reset=1');
             exit;
         }
     }
@@ -357,7 +362,7 @@ if ($action === 'spec_check' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');
     require_once BASE_PATH . '/src/helpers/SpecCheckHelper.php';
-    echo json_encode(SpecCheckHelper::check([
+    $specItem = [
         'item_name' => $_GET['item_name'] ?? '',
         'specification' => $_GET['specification'] ?? '',
         'quantity' => $_GET['quantity'] ?? null,
@@ -365,7 +370,33 @@ if ($action === 'spec_check' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         'weight_kg' => $_GET['weight_kg'] ?? null,
         'expiry_date' => $_GET['expiry_date'] ?? '',
         'storage_condition' => $_GET['storage_condition'] ?? '',
-    ]), JSON_UNESCAPED_UNICODE);
+    ];
+    $specResult = SpecCheckHelper::check($specItem);
+    $specResult['ai'] = false;
+
+    // AI 比對：同樣內容 10 分鐘內只問一次，每個登入分頁每小時最多 60 次，避免費用失控。
+    if (!empty($_SESSION['user']) && ANTHROPIC_API_KEY !== '') {
+        $aiKey = md5(json_encode($specItem));
+        $aiCache = $_SESSION['spec_ai_cache'][$aiKey] ?? null;
+        $aiQuota = array_filter($_SESSION['spec_ai_calls'] ?? [], function ($time) { return $time > time() - 3600; });
+        $aiResult = null;
+        if ($aiCache && $aiCache['at'] > time() - 600) {
+            $aiResult = $aiCache['result'];
+        } elseif (count($aiQuota) < 60) {
+            $aiResult = SpecCheckHelper::checkWithAi($specItem);
+            $aiQuota[] = time();
+            if ($aiResult !== null) {
+                $_SESSION['spec_ai_cache'][$aiKey] = ['at' => time(), 'result' => $aiResult];
+            }
+        }
+        $_SESSION['spec_ai_calls'] = array_values($aiQuota);
+        if ($aiResult !== null) {
+            $specResult['ai'] = true;
+            $specResult['category'] = $aiResult['category'] ?? $specResult['category'];
+            $specResult['warnings'] = array_merge($specResult['warnings'], $aiResult['warnings']);
+        }
+    }
+    echo json_encode($specResult, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -373,6 +404,27 @@ if ($action === 'whoami') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');
     echo json_encode(['user_id' => (int) ($currentUser['user_id'] ?? 0)]);
+    exit;
+}
+
+if (in_array($action, ['rider_location_update', 'rider_location', 'route_plan'], true)) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    require_once BASE_PATH . '/src/helpers/RiderLocationHelper.php';
+    $locationUserId = (int) ($currentUser['user_id'] ?? 0);
+    $locationRole = $currentUser['role'] ?? 'member';
+
+    if ($action === 'rider_location_update' && $_SERVER['REQUEST_METHOD'] === 'POST' && $authService->can('rider.accept_task')) {
+        echo json_encode(['saved' => RiderLocationHelper::save($connection, $locationUserId, $_POST['lat'] ?? null, $_POST['lon'] ?? null)]);
+    } elseif ($action === 'rider_location' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+        $location = RiderLocationHelper::forDelivery($connection, (int) ($_GET['delivery_id'] ?? 0), $locationUserId, $locationRole);
+        echo json_encode($location ? ['found' => true] + $location : ['found' => false], JSON_UNESCAPED_UNICODE);
+    } elseif ($action === 'route_plan' && $_SERVER['REQUEST_METHOD'] === 'GET' && $authService->can('rider.accept_task') && RiderLocationHelper::validCoordinate($_GET['lat'] ?? null, $_GET['lon'] ?? null)) {
+        echo json_encode(['route' => RiderLocationHelper::planRoute($connection, $locationUserId, $_GET['lat'], $_GET['lon'])], JSON_UNESCAPED_UNICODE);
+    } else {
+        http_response_code(403);
+        echo json_encode(['error' => '沒有權限或請求不正確。'], JSON_UNESCAPED_UNICODE);
+    }
     exit;
 }
 
@@ -489,7 +541,7 @@ $menu_items = [
     'rider_review' => ['label' => 'GO Rider 審核', 'icon' => 'fa-solid fa-user-shield', 'group' => '會員管理'],
     'rider_application' => ['label' => '申請 GO Rider', 'icon' => 'fa-solid fa-id-card', 'group' => '會員管理'],
     'id_verification' => ['label' => '身分驗證', 'icon' => 'fa-solid fa-fingerprint', 'group' => '會員管理'],
-    'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift', 'group' => '成效與回饋'],
+    'rewards' => ['label' => '心意幣兌換', 'icon' => 'fa-solid fa-gift', 'group' => '成效與回饋'],
     'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf', 'group' => '成效與回饋'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie', 'group' => '成效與回饋'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear', 'group' => ''],
@@ -514,6 +566,7 @@ ob_start();
     <meta name="session-user" content="<?php echo (int) ($currentUser['user_id'] ?? 0); ?>">
     <meta name="csrf-token" content="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="google-maps-api-key" content="<?php echo htmlspecialchars(GOOGLE_MAPS_API_KEY, ENT_QUOTES, 'UTF-8'); ?>">
+    <?php include BASE_PATH . '/src/views/partials/tab_session.php'; ?>
     <title><?php echo APP_NAME; ?></title>
     <link rel="icon" type="image/jpeg" href="assets/images/foundation-logo.jpg">
     <link rel="preconnect" href="https://fonts.googleapis.com">

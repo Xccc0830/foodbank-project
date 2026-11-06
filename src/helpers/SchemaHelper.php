@@ -12,6 +12,7 @@ function ensureUserColumns(mysqli $connection) {
     $columns = [
         'staff_type' => "ALTER TABLE users ADD COLUMN staff_type ENUM('admin','clerk') DEFAULT NULL AFTER member_type",
         'tax_id' => "ALTER TABLE users ADD COLUMN tax_id VARCHAR(8) DEFAULT NULL",
+        'default_pickup_address' => "ALTER TABLE users ADD COLUMN default_pickup_address VARCHAR(255) DEFAULT NULL",
         'referral_source' => "ALTER TABLE users ADD COLUMN referral_source VARCHAR(50) DEFAULT NULL",
         'blacklisted_at' => "ALTER TABLE users ADD COLUMN blacklisted_at DATETIME DEFAULT NULL",
         'blacklist_reason' => "ALTER TABLE users ADD COLUMN blacklist_reason VARCHAR(255) DEFAULT NULL",

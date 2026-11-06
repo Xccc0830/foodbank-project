@@ -8,6 +8,7 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php include __DIR__ . '/partials/tab_session.php'; ?>
     <title>登入 | <?php echo htmlspecialchars(APP_NAME); ?></title>
     <link rel="icon" type="image/jpeg" href="<?php echo htmlspecialchars(APP_URL . '/assets/images/foundation-logo.jpg'); ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,18 +24,19 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             <div class="showcase-copy">
                 <p class="eyebrow">FOODBANK PLATFORM / 2026</p>
                 <h1>把每一份惜食，<em>送到需要的地方。</em></h1>
-                <p>從企業捐贈、食物銀行評估，到會員配送與興毅幣，讓每一步都清楚、可靠、可追蹤。</p>
+                <p>從企業捐贈、食物銀行評估，到會員配送與心意幣，讓每一步都清楚、可靠、可追蹤。</p>
             </div>
             <div class="showcase-features">
                 <div><span><i class="fa-solid fa-box-open"></i></span><strong>物資媒合</strong><small>掌握每批物資的期限與狀態</small></div>
                 <div><span><i class="fa-solid fa-route"></i></span><strong>公益配送</strong><small>讓一般會員自由接取配送任務</small></div>
-                <div><span><i class="fa-solid fa-chart-line"></i></span><strong>社會成效</strong><small>累積興毅幣與可量化的影響力</small></div>
+                <div><span><i class="fa-solid fa-chart-line"></i></span><strong>社會成效</strong><small>累積心意幣與可量化的影響力</small></div>
             </div>
             <div class="showcase-orbit orbit-one"></div><div class="showcase-orbit orbit-two"></div>
         </section>
         <section class="login-panel">
             <div class="login-panel-heading"><p class="eyebrow">SECURE ACCESS</p><h2>登入工作平台</h2><p class="login-subtitle">使用你的帳號進入專屬工作頁面。</p></div>
             <?php if (!empty($registered)): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>電話驗證完成。一般會員可直接登入；企業會員請等待管理者審核開通。</span></div><?php endif; ?>
+            <?php if (!empty($_GET['session_expired'])): ?><div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><span>頁面已過期或登入已失效，請重新登入。</span></div><?php endif; ?>
             <?php if (!empty($_GET['password_reset'])): ?><div class="alert alert-success"><i class="fa-solid fa-circle-check"></i><span>密碼已重設完成，請使用新密碼登入。</span></div><?php endif; ?>
             <?php if ($error): ?><div class="alert alert-error"><i class="fa-solid fa-circle-exclamation"></i><span><?php echo htmlspecialchars($error); ?></span></div><?php endif; ?>
             <form method="post" action="?action=login">

@@ -143,7 +143,9 @@ CREATE TABLE `deliveries` (
   `item_description` text DEFAULT NULL,
   `received_location` varchar(100) DEFAULT NULL,
   `arrived_pickup_at` datetime DEFAULT NULL,
-  `received_confirmed_by` int(11) DEFAULT NULL
+  `received_confirmed_by` int(11) DEFAULT NULL,
+  `multi_stop_bonus` int(11) NOT NULL DEFAULT 0,
+  `is_cold_storage` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -224,6 +226,7 @@ CREATE TABLE `donations` (
   `dispatch_contact_phone` varchar(30) DEFAULT NULL,
   `dispatch_vehicle_info` varchar(150) DEFAULT NULL,
   `revision_no` int(11) NOT NULL DEFAULT 1,
+  `is_urgent` tinyint(1) NOT NULL DEFAULT 0,
   `rejected_fields` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -1203,7 +1206,7 @@ INSERT INTO `permissions` (`permission_key`, `label`, `category`) VALUES
   ('page.activities', '公益活動', 'page'),
   ('page.inventory', '物資盤點', 'page'),
   ('page.item_categories', '物資分類', 'page'),
-  ('page.rewards', '興毅幣兌換', 'page'),
+  ('page.rewards', '心意幣兌換', 'page'),
   ('page.carbon_report', '永續報告', 'page'),
   ('page.reports', '數據分析／榮譽榜', 'page'),
   ('page.notifications', '通知中心', 'page'),

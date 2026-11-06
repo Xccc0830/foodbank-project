@@ -17,6 +17,10 @@ function geocodeAddress($address) {
     if ($address === '') {
         return false;
     }
+    // 手機定位傳來的「緯度,經度」直接當座標用
+    if (preg_match('/^(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$/', $address, $coordinate)) {
+        return ['lat' => (float) $coordinate[1], 'lon' => (float) $coordinate[2], 'approximate' => false];
+    }
 
     $cached = geocodeCacheGet($address);
     if ($cached !== null) {

@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         error_log("企業認領後沒有通知 GO Rider 剩餘活動名額：activity_id={$activityId}");
                     }
                 }
-                $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業活動認領已送出，剩餘名額同步開放 GO Rider。' : '活動報名完成，預計可獲得 5 枚興毅幣。'];
+                $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業活動認領已送出，剩餘名額同步開放 GO Rider。' : '活動報名完成，預計可獲得 5 枚心意幣。'];
             } else {
                 $message = ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或剩餘名額不足。'];
             }

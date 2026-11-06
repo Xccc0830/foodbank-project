@@ -30,10 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $deliveryMethod = 'volunteer_assist';
     $deliveryDate = trim((string) ($_POST['delivery_date'] ?? '')) ?: null;
     $deliveryTime = trim((string) ($_POST['delivery_time'] ?? '')) ?: null;
-    $donorAddress = trim((string) ($_POST['donor_address'] ?? ''));
-    if ($donorAddress === '') {
-        $donorAddress = $defaultPickupAddress;
-    }
+    // 商家取貨地址在註冊時就已綁定：有預設地址時一律使用預設，不接受表單改值。
+    $donorAddress = $defaultPickupAddress !== '' ? $defaultPickupAddress : trim((string) ($_POST['donor_address'] ?? ''));
     $deliveryAddress = trim((string) ($_POST['delivery_address'] ?? ''));
     $estimatedDistanceKm = is_numeric($_POST['estimated_distance_km'] ?? null) ? round((float) $_POST['estimated_distance_km'], 2) : null;
     $estimatedDurationMinutes = is_numeric($_POST['estimated_duration_minutes'] ?? null) ? (int) round((float) $_POST['estimated_duration_minutes']) : null;
@@ -165,6 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         'delivery_address' => $deliveryAddress !== '' ? $deliveryAddress : null,
         'estimated_distance_km' => $estimatedDistanceKm,
         'estimated_duration_minutes' => $estimatedDurationMinutes,
+        'is_urgent' => !empty($_POST['is_urgent']) ? 1 : 0,
     ];
 
     $hasInvalidItem = empty($items);
@@ -174,8 +173,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
             break;
         }
     }
+    $urgentRequested = !empty($_POST['is_urgent']);
     $addressError = validateAddress($donorAddress, '取貨地址') ?? validateAddress($deliveryAddress, '送達地址');
-    if ($addressError !== null) {
+    if ($urgentRequested && $donationModel->countUrgentThisMonth($currentUserId) >= DonationModel::URGENT_MONTHLY_LIMIT) {
+        $formMessage = ['type' => 'error', 'text' => '本月緊急運送已達 ' . DonationModel::URGENT_MONTHLY_LIMIT . ' 單上限，請取消勾選「緊急運送」後再送出。'];
+    } elseif ($addressError !== null) {
         $formMessage = ['type' => 'error', 'text' => $addressError];
     } elseif ($donorName === '' || !$deliveryDate || !$deliveryTime || $hasInvalidItem) {
         $formMessage = ['type' => 'error', 'text' => '請完成企業資料、日期時間，以及至少一筆物資。'];
@@ -401,8 +403,12 @@ $formatDateTime = static function ($value) {
                 <div class="form-section-heading"><span>商家資料</span><h3>企業取貨資訊</h3><p>這是配送人員前往取物資的地點，不是物資送達地址。</p></div>
                 <div class="grid-2">
                     <div class="form-group"><label for="donorName">捐贈企業／組織</label><input id="donorName" type="text" value="<?php echo htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
-                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" value="<?php echo htmlspecialchars($defaultPickupAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
-                    <div class="form-group form-check-row"><label><input type="checkbox" name="save_default_address" value="1"<?php echo $defaultPickupAddress === '' ? ' checked' : ''; ?>> 儲存為預設取貨地址（下次自動帶入）</label></div>
+                    <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" value="<?php echo htmlspecialchars($defaultPickupAddress, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $defaultPickupAddress !== '' ? ' readonly' : ''; ?> placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
+                    <?php if ($defaultPickupAddress === ''): ?>
+                    <div class="form-group form-check-row"><label><input type="checkbox" name="save_default_address" value="1" checked> 儲存為固定取貨地址（之後自動帶入，無法再改）</label></div>
+                    <?php else: ?>
+                    <p class="form-hint">取貨地址已固定為註冊時登記的商家地址，如需變更請聯絡食物銀行。</p>
+                    <?php endif; ?>
                 </div>
                 <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點。</p></div>
                 <div class="grid-2">
@@ -410,6 +416,7 @@ $formatDateTime = static function ($value) {
                     <div class="form-group"><label for="deliveryTime">預計配送時間 <span class="required-mark">*</span></label><input id="deliveryTime" type="time" name="delivery_time" required></div>
                 </div>
                 <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
+                <div class="form-group form-check-row"><label><input type="checkbox" name="is_urgent" value="1"> 緊急運送（需要提前送出；食物銀行審核通過後，志工可多得心意幣。每月限 <?php echo (int) DonationModel::URGENT_MONTHLY_LIMIT; ?> 單）</label></div>
                 <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
                     <label>預計運送距離與時間</label>
                     <div class="distance-estimate-box">

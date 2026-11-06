@@ -24,6 +24,13 @@ class RiderApplicationModel extends BaseModel {
         return in_array('rider.accept_task', $permissions, true);
     }
 
+    /** 身分證驗證已通過（成為 GO Rider 的前提） */
+    public function isIdVerified($userId) {
+        $userId = (int) $userId;
+        $rows = $this->query("SELECT id_verify_status FROM users WHERE user_id = {$userId} LIMIT 1");
+        return ($rows[0]['id_verify_status'] ?? 'none') === 'approved';
+    }
+
     public function getLatestForUser($userId) {
         $userId = (int) $userId;
         $rows = $this->query("SELECT * FROM rider_applications WHERE user_id = {$userId} ORDER BY application_id DESC LIMIT 1");
@@ -69,6 +76,9 @@ class RiderApplicationModel extends BaseModel {
         }
         if ($this->isRider($userId)) {
             return ['success' => false, 'message' => '您已具備 GO Rider 資格。'];
+        }
+        if (!$this->isIdVerified($userId)) {
+            return ['success' => false, 'message' => '申請 GO Rider 前，請先到「身分驗證」完成身分證驗證並通過審核。'];
         }
         $latest = $this->getLatestForUser($userId);
         if ($latest && $latest['status'] === 'pending') {

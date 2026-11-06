@@ -55,7 +55,7 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
     header('Content-Disposition: attachment; filename="volunteer_ranking.csv"');
     $output = fopen('php://output', 'w');
     fwrite($output, "\xEF\xBB\xBF");
-    fputcsv($output, ['GO Rider 姓名', '完成配送次數', '累積興毅幣']);
+    fputcsv($output, ['GO Rider 姓名', '完成配送次數', '累積心意幣']);
     foreach ($volunteerRanking as $row) {
         fputcsv($output, [$row['full_name'], $row['delivery_count'], $row['total_points']]);
     }
@@ -67,7 +67,7 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="view-header">
     <div>
         <h1 class="view-title"><?php echo $isVolunteer ? '榮譽榜' : '數據分析'; ?></h1>
-        <p class="view-subtitle"><?php echo $isVolunteer ? '查看一般會員興毅幣與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與會員排行'; ?></p>
+        <p class="view-subtitle"><?php echo $isVolunteer ? '查看一般會員心意幣與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與會員排行'; ?></p>
     </div>
 </div>
 <?php if (!$isVolunteer): ?>
@@ -95,14 +95,14 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="card mt-32">
     <div class="card-header">
         <div class="toolbar-row">
-            <div><h2>GO Rider 派車排行</h2><p class="toolbar-meta">依累積興毅幣排序</p></div>
+            <div><h2>GO Rider 派車排行</h2><p class="toolbar-meta">依累積心意幣排序</p></div>
             <?php if (!$isVolunteer): ?><div class="toolbar-actions"><a class="btn btn-secondary btn-sm" href="?page=reports&amp;start_date=<?php echo urlencode($startDate); ?>&amp;end_date=<?php echo urlencode($endDate); ?>&amp;export=volunteers_csv"><i class="fas fa-download"></i> 匯出 CSV</a></div><?php endif; ?>
         </div>
     </div>
     <div class="card-body">
         <?php if ($volunteerRanking): ?>
             <table class="data-table ranking-table">
-                <thead><tr><th>排名</th><th>GO Rider</th><th>完成配送次數</th><th>累積興毅幣</th></tr></thead>
+                <thead><tr><th>排名</th><th>GO Rider</th><th>完成配送次數</th><th>累積心意幣</th></tr></thead>
                 <tbody>
                 <?php foreach ($volunteerRanking as $index => $row): ?>
                     <?php $pos = $index + 1; $rankClass = $pos <= 3 ? 'rank-' . $pos : ''; ?>

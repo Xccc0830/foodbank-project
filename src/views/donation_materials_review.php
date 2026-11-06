@@ -16,7 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'review_material_donation') {
         $decision = $_POST['decision'] ?? '';
-        $rejectionReason = trim((string) ($_POST['rejection_reason'] ?? ''));
+        $presetReasons = [];
+        foreach ((array) ($_POST['reason_presets'] ?? []) as $presetKey) {
+            if (isset(DonationModel::REJECTION_REASON_PRESETS[$presetKey])) {
+                $presetReasons[] = DonationModel::REJECTION_REASON_PRESETS[$presetKey];
+            }
+        }
+        $rejectionReason = trim(implode('；', array_filter(array_merge($presetReasons, [trim((string) ($_POST['rejection_reason'] ?? ''))]))));
         $foodbankDeliveryOption = $_POST['foodbank_delivery_option'] ?? '';
 
         if (in_array($decision, ['accepted', 'rejected'], true) && $donationId > 0) {
@@ -25,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($decision === 'accepted' && empty($_POST['publish_now'])) {
                 $reviewMessage = ['type' => 'error', 'text' => '接受物資後需要直接發布，請填寫發布資訊後按「發布」。'];
             } elseif ($decision === 'rejected' && $rejectionReason === '') {
-                $reviewMessage = ['type' => 'error', 'text' => '請填寫婉拒原因後再送出。'];
+                $reviewMessage = ['type' => 'error', 'text' => '請勾選或填寫婉拒原因後再送出。'];
             } else {
                 $flaggedFields = array_values(array_intersect(
                     array_keys(DonationModel::RESUBMIT_FIELD_LABELS),
@@ -62,6 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'view_publish_donation' && $donationId > 0) {
         $viewingDonation = $donationModel->getDonationById($donationId);
         $isPublishView = true;
+    }
+
+    $coldForView = false;
+    if ($viewingDonation) {
+        $coldQuery = $GLOBALS['connection']->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) $viewingDonation['donation_id'] . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
+        $coldForView = $coldQuery && $coldQuery->num_rows > 0;
     }
 
     if ($action === 'publish_material_donation' && $donationId > 0) {
@@ -178,7 +190,10 @@ $estimateRewardPoints = static function ($donation, $deliveryOption, $splitCount
         : 'motorcycle';
     $distance = max(0, (float) ($donation['estimated_distance_km'] ?? 0));
 
-    return DeliveryModel::calculatePoints($vehicleType, $distance, $weight, 'normal') * $splitCount;
+    $coldResult = $GLOBALS['connection']->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) ($donation['donation_id'] ?? 0) . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
+    $isCold = $coldResult && $coldResult->num_rows > 0;
+
+    return DeliveryModel::calculatePoints($vehicleType, $distance, $weight, !empty($donation['is_urgent']) ? 'urgent' : 'normal', $isCold) * $splitCount;
 };
 
 $getProcessTime = static function ($donation) {
@@ -497,8 +512,14 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <input type="hidden" name="donation_id" value="<?php echo (int) $viewingDonation['donation_id']; ?>">
                         <input type="hidden" name="publish_now" id="publishNowInput" value="0">
                         <div class="rejection-reason-panel" id="rejectionReasonPanel" hidden>
-                            <label for="rejectionReason"><strong>婉拒原因</strong></label>
-                            <textarea id="rejectionReason" name="rejection_reason" rows="3" placeholder="請填寫婉拒原因"></textarea>
+                            <strong>婉拒原因（可複選快捷原因，也可自行補充）</strong>
+                            <div class="rejected-fields-picker">
+                                <?php foreach (DonationModel::REJECTION_REASON_PRESETS as $presetKey => $presetLabel): ?>
+                                    <label><input type="checkbox" name="reason_presets[]" value="<?php echo htmlspecialchars($presetKey); ?>"> <?php echo htmlspecialchars($presetLabel); ?></label>
+                                <?php endforeach; ?>
+                            </div>
+                            <label for="rejectionReason">補充說明（選填）</label>
+                            <textarea id="rejectionReason" name="rejection_reason" rows="3" placeholder="其他原因或給商家的提醒"></textarea>
                             <div class="rejected-fields-picker">
                                 <strong>哪些欄位需要商家修改？（可複選；不勾選則商家可修改全部）</strong>
                                 <?php foreach (DonationModel::RESUBMIT_FIELD_LABELS as $fieldKey => $fieldLabel): ?>
@@ -527,8 +548,11 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                                 <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
                                 <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                             </div>
-                            <p class="form-hint" data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="">
-                                預估興毅幣：<span data-points-total>請先由食物銀行選擇配送方式</span>（依預估距離、重量與一般任務計算）
+                            <?php if (!empty($viewingDonation['is_urgent'])): ?>
+                            <p class="form-hint"><label><input type="checkbox" name="urgent_approved" value="1" checked> 商家申請緊急運送，同意給予緊急加成（取消勾選則依一般單發放）</label></p>
+                            <?php endif; ?>
+                            <p class="form-hint" data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="" data-urgent="<?php echo !empty($viewingDonation['is_urgent']) ? 1 : 0; ?>" data-cold="<?php echo !empty($coldForView) ? 1 : 0; ?>">
+                                預估心意幣：<span data-points-total>請先由食物銀行選擇配送方式</span>（依車型、重量、距離、緊急與冷藏冷凍計算；準時、順路、首次配送加給於完成後另計）
                             </p>
                             <div class="publish-options">
                                 <strong>是否需協助檢查物資</strong>
@@ -539,13 +563,8 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                                 <strong>是否要拆單</strong>
                                 <label><input type="number" name="split_count" min="1" value="1"> 拆成幾個運送單</label>
                             </div>
-                            <div class="publish-options">
-                                <strong>獎勵機制</strong>
-                                <label><input type="checkbox" name="reward_options[]" value="points" checked> 點數</label>
-                                <label><input type="checkbox" name="reward_options[]" value="goods" checked> 物資</label>
-                                <label><input type="checkbox" name="reward_options[]" value="free" checked> 無償</label>
-                                <label><input type="checkbox" name="reward_options[]" value="service_hours" checked> 服務時數</label>
-                            </div>
+                            <input type="hidden" name="reward_options[]" value="points">
+                            <p class="form-hint">志工完成這張配送單後，一律獲得心意幣（不再提供無償、物資、服務時數選項）。</p>
                             <div class="modal-actions"><button type="submit" name="decision" value="accepted" class="btn btn-primary">發布</button></div>
                         </div>
                     </form>
@@ -565,8 +584,11 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <label>照片路徑<input type="text" name="photo_path" value="<?php echo htmlspecialchars($viewingDonation['photo_path'] ?? '', ENT_QUOTES); ?>"></label>
                             <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                         </div>
-                        <p class="form-hint" data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="<?php echo htmlspecialchars((string) ($viewingDonation['delivery_option'] ?? ''), ENT_QUOTES); ?>">
-                            預估興毅幣：<span data-points-total><?php echo (int) $estimateRewardPoints($viewingDonation, $viewingDonation['delivery_option'] ?? ''); ?> 枚</span>（依預估距離、重量與一般任務計算）
+                        <?php if (!empty($viewingDonation['is_urgent'])): ?>
+                        <p class="form-hint"><label><input type="checkbox" name="urgent_approved" value="1" checked> 商家申請緊急運送，同意給予緊急加成（取消勾選則依一般單發放）</label></p>
+                        <?php endif; ?>
+                        <p class="form-hint" data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-urgent="<?php echo !empty($viewingDonation['is_urgent']) ? 1 : 0; ?>" data-cold="<?php echo !empty($coldForView) ? 1 : 0; ?>" data-default-option="<?php echo htmlspecialchars((string) ($viewingDonation['delivery_option'] ?? ''), ENT_QUOTES); ?>">
+                            預估心意幣：<span data-points-total><?php echo (int) $estimateRewardPoints($viewingDonation, $viewingDonation['delivery_option'] ?? ''); ?> 枚</span>（依車型、重量、距離、緊急與冷藏冷凍計算；準時、順路、首次配送加給於完成後另計）
                         </p>
                         <div class="publish-options">
                             <strong>是否需協助檢查物資</strong>
@@ -580,13 +602,8 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                             <label><input type="radio" name="split_enabled" value="1"> 是</label>
                             <label>拆成 <input type="number" name="split_count" min="2" value="2" disabled> 個運送單</label>
                         </div>
-                        <div class="publish-options">
-                            <strong>獎勵機制</strong>
-                            <label><input type="checkbox" name="reward_options[]" value="points" checked> 點數</label>
-                            <label><input type="checkbox" name="reward_options[]" value="goods" checked> 物資</label>
-                            <label><input type="checkbox" name="reward_options[]" value="free" checked> 無償</label>
-                            <label><input type="checkbox" name="reward_options[]" value="service_hours" checked> 服務時數</label>
-                        </div>
+                        <input type="hidden" name="reward_options[]" value="points">
+                        <p class="form-hint">志工完成這張配送單後，一律獲得心意幣（不再提供無償、物資、服務時數選項）。</p>
                         <div class="modal-actions"><button type="submit" class="btn btn-primary">發布</button></div>
                     </form>
                 <?php elseif (($viewingDonation['status'] ?? '') === 'assessed'): ?>
@@ -660,39 +677,24 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                 return;
             }
 
-            const calculateTaskPoints = function (vehicle, distance, weight) {
-                const isCar = vehicle === 'car';
-                let points = isCar ? 10 : 5;
-                if (distance <= 2) {
-                    points += isCar ? 5 : 3;
-                } else if (distance <= 4) {
-                    points += isCar ? 8 : 5;
-                } else if (distance <= 6) {
-                    points += isCar ? 11 : 7;
-                } else if (distance <= 8) {
-                    points += isCar ? 14 : 10;
-                } else if (distance <= 10) {
-                    points += isCar ? 17 : 13;
-                } else {
-                    points += isCar ? 20 : 15;
+            const calculateTaskPoints = function (vehicle, distance, weight, urgent, cold) {
+                let points = vehicle === 'car' ? 5 : 3;
+                points += weight > 0 ? Math.min(15, 3 * Math.ceil(weight / 5)) : 0;
+                if (distance > 10) {
+                    points += 6;
+                } else if (distance > 5) {
+                    points += 4;
+                } else if (distance > 2) {
+                    points += 2;
                 }
-                if (weight <= 5) {
-                    points += isCar ? 2 : 0;
-                } else if (weight <= 10) {
-                    points += isCar ? 5 : 3;
-                } else if (weight <= 20) {
-                    points += isCar ? 8 : 6;
-                } else {
-                    points += isCar ? 12 : 10;
-                }
-                return points + (isCar ? 3 : 0);
+                return points + (urgent ? 4 : 0) + (cold ? 2 : 0);
             };
             const updatePreview = function () {
                 const selectedOption = form.querySelector('input[name="foodbank_delivery_option"]:checked');
                 const deliveryOption = selectedOption ? selectedOption.value : preview.dataset.defaultOption;
                 if (deliveryOption !== 'volunteer_delivery') {
                     totalLabel.textContent = selectedOption
-                        ? '忠信派車不發放 Rider 興毅幣'
+                        ? '忠信派車不發放 Rider 心意幣'
                         : '請先由食物銀行選擇配送方式';
                     return;
                 }
@@ -712,13 +714,14 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                 const vehicle = vehicleInput && vehicleInput.value === 'car' ? 'car' : 'motorcycle';
                 const weightPerTask = Math.max(0, weightInput ? (Number.parseFloat(weightInput.value) || 0) : totalItemWeight) / splitCount;
                 const distance = Math.max(0, Number.parseFloat(preview.dataset.distanceKm || '0') || 0);
-                const perTask = calculateTaskPoints(vehicle, distance, weightPerTask);
+                const urgentApproved = form.querySelector('input[name="urgent_approved"]');
+                const perTask = calculateTaskPoints(vehicle, distance, weightPerTask, preview.dataset.urgent === '1' && (!urgentApproved || urgentApproved.checked), preview.dataset.cold === '1');
                 totalLabel.textContent = splitCount > 1
                     ? `每筆約 ${perTask} 枚，共 ${perTask * splitCount} 枚`
                     : `約 ${perTask} 枚`;
             };
 
-            form.querySelectorAll('input[name="foodbank_delivery_option"], input[name="weight_kg"], input[name$="[item_weight_kg]"], input[name="split_count"], input[name="split_enabled"], input[name="vehicle_type"]').forEach(function (input) {
+            form.querySelectorAll('input[name="urgent_approved"], input[name="foodbank_delivery_option"], input[name="weight_kg"], input[name$="[item_weight_kg]"], input[name="split_count"], input[name="split_enabled"], input[name="vehicle_type"]').forEach(function (input) {
                 input.addEventListener('input', updatePreview);
                 input.addEventListener('change', updatePreview);
             });

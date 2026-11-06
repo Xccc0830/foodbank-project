@@ -252,6 +252,9 @@ if ($isVolunteer) {
         }
     }
 ?>
+<?php if ($hasOtherStop): ?>
+<div class="driver-trip-note" data-route-plan hidden><strong><i class="fas fa-route"></i> 建議路線順序（由近到遠、先取貨再送達）</strong><ol data-route-plan-list></ol></div>
+<?php endif; ?>
 <div class="driver-trip-card" data-driver-trip data-status="<?php echo htmlspecialchars($activeDriverTrip['status']); ?>">
     <div class="driver-trip-map" data-theme="dark" data-map-theme>
         <div class="driver-trip-map-topbar">
@@ -304,6 +307,29 @@ if ($isVolunteer) {
                     </div>
                 </div>
             <?php endif; ?>
+            <?php
+                $tripWeight = (float) ($activeDriverTrip['total_item_weight_kg'] ?? 0) ?: (float) ($activeDriverTrip['weight_kg'] ?? 0);
+                $tripStorageLevel = (int) ($activeDriverTrip['storage_level'] ?? 1);
+                $tripStorageText = [2 => '含冷藏物資，請準備保冷袋或冰桶、盡快送達', 3 => '含冷凍物資，請準備保冷袋與冰塊、盡快送達'][$tripStorageLevel] ?? '';
+            ?>
+            <?php if ($tripWeight > 0 || $tripStorageText !== ''): ?>
+                <div class="driver-trip-stop">
+                    <i class="fas fa-weight-hanging"></i>
+                    <div>
+                        <strong>重量與保存</strong>
+                        <?php if ($tripWeight > 0): ?><span>總重約 <?php echo htmlspecialchars(rtrim(rtrim(number_format($tripWeight, 2, '.', ''), '0'), '.')); ?> 公斤</span><?php endif; ?>
+                        <?php if ($tripStorageText !== ''): ?><span><?php echo htmlspecialchars($tripStorageText); ?></span><?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+            <div class="driver-trip-stop" data-trip-eta data-destination="<?php echo htmlspecialchars($tripDestinationAddress, ENT_QUOTES, 'UTF-8'); ?>">
+                <i class="fas fa-gauge-high"></i>
+                <div>
+                    <strong>路程資訊</strong>
+                    <?php if (!empty($activeDriverTrip['total_distance_km'])): ?><span>全程約 <?php echo htmlspecialchars(rtrim(rtrim(number_format((float) $activeDriverTrip['total_distance_km'], 1, '.', ''), '0'), '.')); ?> 公里</span><?php endif; ?>
+                    <span data-trip-eta-text>允許定位後，會顯示距離目的地的剩餘距離與時間</span>
+                </div>
+            </div>
             <?php if (!empty($activeDriverTrip['donation_notes']) || !empty($activeDriverTrip['donor_phone'])): ?>
                 <div class="driver-trip-stop">
                     <i class="fas fa-circle-info"></i>
@@ -543,6 +569,9 @@ if ($isVolunteer) {
                         <?php if ($isOfficial && !empty($delivery['pickup_photo_path'])): ?>
                             <br><a href="<?php echo htmlspecialchars(storedPublicImageUrl($delivery['pickup_photo_path']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
                         <?php endif; ?>
+                        <?php if ($isOfficial && !empty($delivery['volunteer_id']) && in_array($delivery['status'], ['claimed', 'arrived_pickup', 'picked_up'], true)): ?>
+                            <br><button type="button" class="btn btn-secondary btn-sm" data-rider-location data-delivery-id="<?php echo (int) $delivery['delivery_id']; ?>"><i class="fas fa-location-crosshairs"></i> 騎手位置</button>
+                        <?php endif; ?>
                         <?php if ($isOfficial && !empty($delivery['volunteer_id'])): ?>
                             <br><small>GO Rider：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
                             <?php if (!empty($delivery['volunteer_phone'])): ?>
@@ -671,7 +700,7 @@ if ($isVolunteer) {
 <div class="map-modal-overlay" id="mapModal" role="dialog" aria-modal="true" aria-label="地圖" hidden>
     <div class="map-modal">
         <button type="button" class="icon-btn map-modal-close" id="mapModalClose" aria-label="關閉地圖"><i class="fas fa-times"></i></button>
-        <iframe id="mapModalFrame" title="地圖" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        <iframe id="mapModalFrame" title="地圖" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
 </div>
 <script>

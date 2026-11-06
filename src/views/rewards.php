@@ -1,6 +1,6 @@
 <?php
 /**
- * 興毅幣兌換
+ * 心意幣兌換
  */
 
 require_once BASE_PATH . '/src/models/RewardModel.php';
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'redeem_reward') {
         if (!$isVolunteer) {
-            $message = ['type' => 'error', 'text' => '只有 GO Rider 可以使用興毅幣兌換。'];
+            $message = ['type' => 'error', 'text' => '只有 GO Rider 可以使用心意幣兌換。'];
         } else {
             $claim = $rewardModel->redeem(
                 (int) $currentUser['user_id'],
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['reward_claim_id'] = $claim['claim_id'];
                 $message = ['type' => 'success', 'text' => '兌換成功，請在 10 分鐘內出示 QR Code。'];
             } else {
-                $message = ['type' => 'error', 'text' => '兌換失敗，可能興毅幣不足或庫存已用完。'];
+                $message = ['type' => 'error', 'text' => '兌換失敗，可能心意幣不足或庫存已用完。'];
             }
         }
     } elseif ($action === 'refresh_claim' && $isVolunteer) {
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         $message = ($data['title'] !== '' && $data['cost_points'] > 0 && ($data['stock'] === null || $data['stock'] >= 0) && $rewardModel->createReward($data))
             ? ['type' => 'success', 'text' => '兌換品項已新增。']
-            : ['type' => 'error', 'text' => '請填寫獎勵名稱與有效興毅幣門檻。'];
+            : ['type' => 'error', 'text' => '請填寫獎勵名稱與有效心意幣門檻。'];
     } elseif ($action === 'update_reward' && $canCreateCatalogReward) {
         $data = [
             'title' => trim($_POST['title'] ?? ''),
@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         $message = ($data['title'] !== '' && $data['cost_points'] > 0 && ($data['stock'] === null || $data['stock'] >= 0) && $rewardModel->updateReward((int) ($_POST['reward_id'] ?? 0), $data))
             ? ['type' => 'success', 'text' => '兌換品項已更新。']
-            : ['type' => 'error', 'text' => '請確認品項名稱、所需興毅幣與庫存格式。'];
+            : ['type' => 'error', 'text' => '請確認品項名稱、所需心意幣與庫存格式。'];
     } elseif ($action === 'delete_reward' && $canCreateCatalogReward) {
         $message = $rewardModel->deleteReward((int) ($_POST['reward_id'] ?? 0))
             ? ['type' => 'success', 'text' => '兌換品項已刪除。']
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $validCategories = ['discount', 'product', 'experience', 'other'];
         $message = ($data['title'] !== '' && $data['cost_points'] > 0 && ($data['stock'] === null || $data['stock'] >= 0) && in_array($data['category'], $validCategories, true) && $rewardModel->updateDonorReward((int) ($_POST['item_id'] ?? 0), (int) $currentUser['user_id'], $data, $currentRole === 'foodbank_staff'))
             ? ['type' => 'success', 'text' => '獎勵方案已更新。']
-            : ['type' => 'error', 'text' => '請確認方案名稱、分類、所需興毅幣與庫存格式。'];
+            : ['type' => 'error', 'text' => '請確認方案名稱、分類、所需心意幣與庫存格式。'];
     } elseif ($action === 'delete_donor_reward' && ($isDonor || $currentRole === 'foodbank_staff')) {
         $message = $rewardModel->deleteDonorReward((int) ($_POST['item_id'] ?? 0), (int) $currentUser['user_id'], $currentRole === 'foodbank_staff')
             ? ['type' => 'success', 'text' => '獎勵方案已刪除。']
@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'refresh_claim' && !empty($_POST['claim_id'])) {
         $redirectUrl .= '&claim_id=' . (int) $_POST['claim_id'];
     }
-    header('Location: ' . $redirectUrl);
+    redirectTo($redirectUrl);
     exit;
 }
 
@@ -156,8 +156,8 @@ if ($isDonor) {
 
 <div class="view-header">
     <div>
-        <h1 class="view-title">興毅幣兌換</h1>
-        <p class="view-subtitle">興毅幣僅作為公益貢獻紀錄，不具現金兌換功能</p>
+        <h1 class="view-title">心意幣兌換</h1>
+        <p class="view-subtitle">心意幣僅作為公益貢獻紀錄，不具現金兌換功能</p>
     </div>
 </div>
 
@@ -172,7 +172,7 @@ if ($isDonor) {
 <?php endif; ?>
 
 <div class="stats-grid">
-    <div class="stat-card"><h3>目前可用興毅幣</h3><div class="stat-number"><?php echo number_format($balance); ?></div><p class="stat-label">興毅幣</p></div>
+    <div class="stat-card"><h3>目前可用心意幣</h3><div class="stat-number"><?php echo number_format($balance); ?></div><p class="stat-label">心意幣</p></div>
 </div>
 
 <div class="card mt-32">
@@ -195,7 +195,7 @@ if ($isDonor) {
                                 <div class="form-group"><label>品項名稱</label><input name="title" value="<?php echo htmlspecialchars($reward['title'], ENT_QUOTES, 'UTF-8'); ?>" required></div>
                                 <div class="form-group"><label>說明</label><textarea name="description"><?php echo htmlspecialchars($reward['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea></div>
                                 <div class="grid-2">
-                                    <div class="form-group"><label>所需興毅幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
+                                    <div class="form-group"><label>所需心意幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
                                     <div class="form-group"><label>庫存</label><input type="number" name="stock" min="0" value="<?php echo $reward['stock'] !== null ? (int) $reward['stock'] : ''; ?>" placeholder="不限量"></div>
                                 </div>
                                 <button class="btn btn-primary btn-sm" type="submit">儲存修改</button>
@@ -223,7 +223,7 @@ if ($isDonor) {
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="form-group"><label>所需興毅幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
+                                    <div class="form-group"><label>所需心意幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
                                 </div>
                                 <div class="form-group"><label>庫存</label><input type="number" name="stock" min="0" value="<?php echo $reward['stock'] !== null ? (int) $reward['stock'] : ''; ?>" placeholder="不限量"></div>
                                 <button class="btn btn-primary btn-sm" type="submit">儲存修改</button>
@@ -323,7 +323,7 @@ if ($isDonor) {
         <?php if ($foodbankPendingClaims): ?>
             <div class="redemptions-table-body">
                 <table class="data-table redemptions-table redemptions-pending-table">
-                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>GO Rider</th><th>興毅幣</th><th>兌換時間</th></tr></thead>
+                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>GO Rider</th><th>心意幣</th><th>兌換時間</th></tr></thead>
                     <tbody>
                     <?php foreach ($foodbankPendingClaims as $claim): ?>
                         <tr>
@@ -349,7 +349,7 @@ if ($isDonor) {
         <?php if ($foodbankRedemptions): ?>
             <div class="redemptions-table-body">
                 <table class="data-table redemptions-table redemptions-history-table">
-                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>GO Rider</th><th>興毅幣</th><th>狀態</th><th>時間</th></tr></thead>
+                    <thead><tr><th>兌換編號</th><th>兌換品項</th><th>GO Rider</th><th>心意幣</th><th>狀態</th><th>時間</th></tr></thead>
                     <tbody>
                     <?php foreach ($foodbankRedemptions as $redemption): ?>
                         <tr>
@@ -376,7 +376,7 @@ if ($isDonor) {
     <div class="card-body">
         <?php if ($myRedemptions): ?>
             <div class="redemptions-table-body">
-                <table class="data-table redemptions-table redemptions-mine-table"><thead><tr><th>獎勵</th><th>花費興毅幣</th><th>狀態</th><th>時間</th></tr></thead><tbody>
+                <table class="data-table redemptions-table redemptions-mine-table"><thead><tr><th>獎勵</th><th>花費心意幣</th><th>狀態</th><th>時間</th></tr></thead><tbody>
                 <?php foreach ($myRedemptions as $redemption): ?>
                     <tr><td><strong><?php echo htmlspecialchars($redemption['title']); ?></strong></td><td><?php echo (int) $redemption['points_spent']; ?></td><td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '處理中', 'fulfilled' => '已兌換完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td><td><?php echo htmlspecialchars($redemption['created_at']); ?></td></tr>
                 <?php endforeach; ?>
@@ -392,7 +392,7 @@ if ($isDonor) {
             <?php if ($myFulfillments): ?>
                 <div class="redemptions-table-body">
                     <table class="data-table redemptions-table redemptions-fulfilled-table">
-                        <thead><tr><th>兌換品項</th><th>兌換者</th><th>花費興毅幣</th><th>核銷時間</th></tr></thead>
+                        <thead><tr><th>兌換品項</th><th>兌換者</th><th>花費心意幣</th><th>核銷時間</th></tr></thead>
                         <tbody>
                         <?php foreach ($myFulfillments as $fulfillment): ?>
                             <tr>
@@ -492,14 +492,14 @@ if ($isDonor) {
 
 <?php if ($canCreateCatalogReward): ?>
 <div class="card mt-32">
-    <div class="card-header"><h2>新增食物銀行兌換品項</h2><p>設定興毅幣可以兌換的物資或禮品</p></div>
+    <div class="card-header"><h2>新增食物銀行兌換品項</h2><p>設定心意幣可以兌換的物資或禮品</p></div>
     <div class="card-body">
         <form method="post">
             <?php echo csrfField(); ?>
             <input type="hidden" name="action" value="create_reward">
             <div class="grid-2">
                 <div class="form-group"><label>獎勵名稱*</label><input name="title" required></div>
-                <div class="form-group"><label>所需興毅幣*</label><input type="number" name="cost_points" min="1" required></div>
+                <div class="form-group"><label>所需心意幣*</label><input type="number" name="cost_points" min="1" required></div>
             </div>
             <div class="form-group"><label>說明</label><textarea name="description"></textarea></div>
             <div class="form-group"><label>庫存（留空為不限量）</label><input type="number" name="stock" min="0"></div>
@@ -514,7 +514,7 @@ if ($isDonor) {
     <div class="card-header"><h2>獎勵兌換紀錄</h2><p>查看 GO Rider 兌換你提供的獎勵方案</p></div>
     <div class="card-body">
         <?php if ($donorRedemptions): ?>
-            <table class="data-table donor-redemptions-table"><thead><tr><th>GO Rider</th><th>獎勵方案</th><th>兌換興毅幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <table class="data-table donor-redemptions-table"><thead><tr><th>GO Rider</th><th>獎勵方案</th><th>兌換心意幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($donorRedemptions as $redemption): ?>
                 <tr>
                     <td><?php echo htmlspecialchars($redemption['volunteer_name']); ?></td>
@@ -548,7 +548,7 @@ if ($isDonor) {
     <div class="card-body">
         <?php if ($donorRewards): ?>
             <div class="rewards-table-wrapper">
-            <table class="data-table donor-rewards-table"><thead><tr><th>方案名稱</th><th>所需興毅幣</th><th>分類</th><th>庫存</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <table class="data-table donor-rewards-table"><thead><tr><th>方案名稱</th><th>所需心意幣</th><th>分類</th><th>庫存</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($donorRewards as $reward): ?>
                 <tr>
                     <td><strong class="donor-reward-title"><?php echo htmlspecialchars($reward['title']); ?></strong><br><small><?php echo htmlspecialchars($reward['description'] ?? ''); ?></small></td>
@@ -574,7 +574,7 @@ if ($isDonor) {
                             <input type="hidden" name="item_id" value="<?php echo (int) $reward['item_id']; ?>">
                             <div class="grid-2">
                                 <div class="form-group"><label>方案名稱</label><input name="title" value="<?php echo htmlspecialchars($reward['title'], ENT_QUOTES, 'UTF-8'); ?>" required></div>
-                                <div class="form-group"><label>所需興毅幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
+                                <div class="form-group"><label>所需心意幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
                             </div>
                             <div class="grid-2">
                                 <div class="form-group"><label>分類</label>
@@ -609,7 +609,7 @@ if ($isDonor) {
             <input type="hidden" name="action" value="create_donor_reward">
             <div class="grid-2">
                 <div class="form-group"><label>方案名稱*</label><input name="title" placeholder="例：消費 9 折優惠券" required></div>
-                <div class="form-group"><label>所需興毅幣*</label><input type="number" name="cost_points" min="1" placeholder="例：30" required></div>
+                <div class="form-group"><label>所需心意幣*</label><input type="number" name="cost_points" min="1" placeholder="例：30" required></div>
             </div>
             <div class="grid-2">
                 <div class="form-group"><label>分類*</label>
