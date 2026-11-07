@@ -287,6 +287,8 @@ if ($action === 'login' || empty($_SESSION['user'])) {
 
 $currentUser = $_SESSION['user'];
 require_once BASE_PATH . '/src/services/AuthService.php';
+require_once BASE_PATH . '/src/models/MerchantDiscountModel.php';
+new MerchantDiscountModel();
 $authService = AuthService::forCurrentUser($currentUser);
 
 if ($action === 'notifications_poll') {
@@ -489,7 +491,9 @@ $menu_items = [
     'rider_review' => ['label' => 'GO Rider 審核', 'icon' => 'fa-solid fa-user-shield', 'group' => '會員管理'],
     'rider_application' => ['label' => '申請 GO Rider', 'icon' => 'fa-solid fa-id-card', 'group' => '會員管理'],
     'id_verification' => ['label' => '身分驗證', 'icon' => 'fa-solid fa-fingerprint', 'group' => '會員管理'],
-    'rewards' => ['label' => '興毅幣兌換', 'icon' => 'fa-solid fa-gift', 'group' => '成效與回饋'],
+    'rewards' => ['label' => '興毅幣折抵', 'icon' => 'fa-solid fa-gift', 'group' => '成效與回饋'],
+    'merchant_directory' => ['label' => '折扣商家一覽', 'icon' => 'fa-solid fa-store', 'group' => '成效與回饋'],
+    'merchant_rules' => ['label' => '店家折扣設定', 'icon' => 'fa-solid fa-percent', 'group' => '成效與回饋'],
     'carbon_report' => ['label' => '永續報告', 'icon' => 'fa-solid fa-leaf', 'group' => '成效與回饋'],
     'reports' => ['label' => '數據分析', 'icon' => 'fa-solid fa-chart-pie', 'group' => '成效與回饋'],
     'settings' => ['label' => '設置', 'icon' => 'fa-solid fa-gear', 'group' => ''],
