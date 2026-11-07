@@ -87,6 +87,11 @@ $myDiscounts = $isVolunteer ? $discountModel->getRedemptionsByUser($userId) : []
 $merchantRule = $isDonor ? $discountModel->getRule($userId) : null;
 $merchantRecords = $isDonor ? $discountModel->getRedemptionsByMerchant($userId) : [];
 $settlement = $isStaff ? $discountModel->getMonthlySettlement() : [];
+$merchantKeyword = trim((string) ($_GET['merchant_q'] ?? ''));
+$merchantCategory = (string) ($_GET['merchant_category'] ?? '');
+$availableMerchants = $isVolunteer
+    ? $discountModel->searchMerchants($merchantKeyword, $merchantCategory)
+    : [];
 
 // 舊制兌換券（已扣幣）仍須可使用與核銷
 $myLegacyClaims = $rewardModel->getRedemptionsByUser($userId);
@@ -130,6 +135,58 @@ $discountStatusLabels = ['completed' => '已完成', 'reversed' => '已沖銷'];
 <?php endif; ?>
 
 <?php if ($isVolunteer): ?>
+<div class="card mt-32">
+    <div class="card-header">
+        <h2>可使用興毅幣的合作商家</h2>
+        <p>以下為目前已啟用折抵方案的店家，並列出各店的滿額門檻與折抵上限。</p>
+    </div>
+    <div class="card-body">
+        <form method="get" class="toolbar-row">
+            <input type="hidden" name="page" value="rewards">
+            <input type="search" name="merchant_q" value="<?php echo $e($merchantKeyword); ?>" placeholder="搜尋店名、地址或說明">
+            <select name="merchant_category" class="filter-select" aria-label="店家類別">
+                <option value="">全部類別</option>
+                <?php foreach (MerchantDiscountModel::CATEGORIES as $key => $label): ?>
+                    <option value="<?php echo $e($key); ?>" <?php echo $merchantCategory === $key ? 'selected' : ''; ?>><?php echo $e($label); ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button class="btn btn-primary btn-sm" type="submit">查詢</button>
+            <?php if ($merchantKeyword !== '' || $merchantCategory !== ''): ?>
+                <a class="btn btn-secondary btn-sm" href="?page=rewards">清除</a>
+            <?php endif; ?>
+            <a class="btn btn-secondary btn-sm" href="?page=merchant_directory">完整商家一覽</a>
+        </form>
+
+        <?php if ($availableMerchants): ?>
+            <div class="reward-grid mt-20">
+                <?php foreach ($availableMerchants as $merchant): ?>
+                    <article class="reward-card merchant-card">
+                        <h3><?php echo $e($merchant['store_name']); ?></h3>
+                        <p class="text-muted"><?php echo $e(MerchantDiscountModel::CATEGORIES[$merchant['category']] ?? '其他'); ?></p>
+                        <div class="reward-cost">
+                            滿 <?php echo (int) $merchant['min_spend']; ?> 元・最多折 <?php echo (int) $merchant['max_discount_percent']; ?>%
+                        </div>
+                        <?php if (!empty($merchant['description'])): ?>
+                            <p><?php echo nl2br($e($merchant['description'])); ?></p>
+                        <?php endif; ?>
+                        <?php if (!empty($merchant['address'])): ?>
+                            <p><i class="fa-solid fa-location-dot"></i> <?php echo $e($merchant['address']); ?></p>
+                        <?php endif; ?>
+                        <?php if (!empty($merchant['contact_phone'])): ?>
+                            <p><i class="fa-solid fa-phone"></i> <?php echo $e($merchant['contact_phone']); ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <div class="empty-state">
+                <p><?php echo ($merchantKeyword !== '' || $merchantCategory !== '') ? '找不到符合條件的合作商家，請調整搜尋條件。' : '目前尚無啟用興毅幣折抵的合作商家。'; ?></p>
+                <p>商家完成折扣方案設定並啟用後，會顯示在此清單。</p>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
 <div class="card mt-32">
     <div class="card-header"><h2>出示折抵憑證</h2><p>結帳時向店家出示，店家輸入消費金額後系統自動計算折抵。憑證 <?php echo MerchantDiscountModel::TOKEN_TTL_MINUTES; ?> 分鐘內有效、僅能使用一次。</p></div>
     <div class="card-body">
