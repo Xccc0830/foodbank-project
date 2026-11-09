@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'complete_published_donation' && $donationId > 0) {
-        $completed = $deliveryModel->completeDonationDeliveries($donationId);
+        $completed = $deliveryModel->completeDonationDeliveries($donationId, ((int) ($currentUser['user_id'] ?? 0)) ?: null);
         $reviewMessage = $completed
             ? ['type' => 'success', 'text' => '運送任務已完成，物資已移至歷史紀錄。']
             : ['type' => 'error', 'text' => '目前沒有可完成的運送任務。'];
@@ -468,13 +468,16 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                         <td>
                             <?php if ($deliveryProgress['completed_tasks'] >= $deliveryProgress['total_tasks'] && $deliveryProgress['total_tasks'] > 0): ?>
                                 <span class="status status-success">運送完成</span>
+                            <?php elseif (!empty($deliveryProgress['is_food_bank'])): ?>
+                                <span class="status status-info">忠信派車配送中</span>
+                                <br><small>配送者：忠信食物銀行</small>
                             <?php elseif ($deliveryProgress['accepted_tasks'] > 0): ?>
                                 <span class="status status-info">運送中</span>
                             <?php else: ?>
                                 <span class="status status-pending">尚未有配送者</span>
                             <?php endif; ?>
                         </td>
-                        <td><?php echo htmlspecialchars($formatDateTime($donation['published_at'] ?? null)); ?></td>
+                        <td><?php echo !empty($donation['published_at']) ? htmlspecialchars(date('Y-m-d', strtotime($donation['published_at']))) . '<br><small>' . htmlspecialchars(date('H:i', strtotime($donation['published_at']))) . '</small>' : '未填寫'; ?></td>
                         <td>
                             <form method="post">
                                 <?php echo csrfField(); ?>
@@ -487,7 +490,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="complete_published_donation">
                                     <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
-                                    <button type="submit" class="btn btn-success btn-sm">任務完成</button>
+                                    <button type="submit" class="btn btn-success btn-sm"><?php echo !empty($deliveryProgress['is_food_bank']) ? '確認收到貨物' : '任務完成'; ?></button>
                                 </form>
                             <?php endif; ?>
                         </td>

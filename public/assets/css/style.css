@@ -3147,3 +3147,27 @@ body {
 
 .closed-days-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; }
 .closed-day-option { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
+
+/* ===== 按鈕間距：相鄰的小按鈕不再貼在一起 ===== */
+.btn-group,
+.inline-action-group,
+.toolbar-actions,
+.login-roles,
+.modal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.delivery-action-stack { gap: 12px; row-gap: 12px; }
+.inline-action-group { display: inline-flex; }
+.inline-form { display: inline-block; margin: 0; }
+
+/* 表格「操作」欄裡的多個按鈕／表單：右側與下方留間距（直向或橫向排列都適用） */
+.data-table td > .btn:not(:last-child),
+.data-table td > form:not(:last-child),
+.data-table td > a.btn:not(:last-child) { margin-right: 10px; margin-bottom: 10px; }
+
+/* 卡片、表單裡相鄰的按鈕 */
+.card-body > .btn + .btn,
+.card-header .btn + .btn { margin-left: 12px; }
+
+/* 騎手配送卡片：地圖小視窗與開始導航之間要有間距 */
+.driver-trip-map > .driver-navigate-btn + .driver-navigate-btn { margin-top: 14px; }
+.driver-trip-action-form + .delivery-action-form,
+.driver-trip-action-form + .driver-trip-action-form { margin-top: 14px; }

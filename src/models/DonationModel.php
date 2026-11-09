@@ -761,7 +761,7 @@ class DonationModel extends BaseModel {
             $allocationValue = $allocationId !== null ? ", {$allocationId}" : '';
             $taskSql = "INSERT INTO deliveries
                 (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, is_cold_storage, points, pickup_address, delivery_address, status, item_category, item_description)
-                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, '{$urgency}', " . ($isCold ? 1 : 0) . ", {$points}, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, '{$urgency}', " . ($isCold ? 1 : 0) . ", {$points}, '{$pickupAddress}', '忠信食物銀行', '" . ($deliveryMethod === 'food_bank' ? 'claimed' : 'open') . "', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
                 $this->db->rollback();
                 return false;

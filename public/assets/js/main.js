@@ -113,6 +113,7 @@
                 // 忠信派車：由忠信食物銀行自己載，不經 GO Rider 接單
                 if (result.delivery_method === 'food_bank') {
                     statusDetails.open = { title: '忠信食物銀行派車中', message: '忠信食物銀行已安排派車，將前往店家取貨。', step: 1, progress: 40 };
+                    statusDetails.claimed = statusDetails.open;
                     const riderButton = card.querySelector('[data-rider-location]');
                     if (riderButton) {
                         riderButton.hidden = true;

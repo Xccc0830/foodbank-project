@@ -567,9 +567,12 @@ $formatDateTime = static function ($value) {
                 <?php foreach ($transportTasks as $task): ?>
                     <?php
                     $transportStatus = $task['status'] ?? 'open';
-                    $transportStatusLabel = $transportStatus === 'open'
+                    $isFoodbankTask = ($task['delivery_method'] ?? '') === 'food_bank';
+                    $transportStatusLabel = $isFoodbankTask
+                        ? '忠信食物銀行派車中'
+                        : ($transportStatus === 'open'
                         ? '尚在等待運送人員'
-                        : (in_array($transportStatus, ['claimed', 'arrived_pickup'], true) ? ($transportStatus === 'arrived_pickup' ? 'GO Rider 已到店' : 'GO Rider 正在路上') : '物資已領取，運送中');
+                        : (in_array($transportStatus, ['claimed', 'arrived_pickup'], true) ? ($transportStatus === 'arrived_pickup' ? 'GO Rider 已到店' : 'GO Rider 正在路上') : '物資已領取，運送中'));
                     ?>
                     <tr>
                         <td><?php echo htmlspecialchars($task['donor_name'] ?? ''); ?></td>
@@ -578,10 +581,10 @@ $formatDateTime = static function ($value) {
                         <td><?php echo htmlspecialchars($task['quantity'] ?? ''); ?> <?php echo htmlspecialchars($task['unit'] ?? ''); ?></td>
                         <td>
                             <span class="status <?php echo $transportStatus === 'open' ? 'status-pending' : 'status-info'; ?>"><?php echo htmlspecialchars($transportStatusLabel); ?></span>
-                            <?php if (in_array($transportStatus, ['claimed', 'arrived_pickup', 'picked_up'], true)): ?>
+                            <?php if (in_array($transportStatus, ['open', 'claimed', 'arrived_pickup', 'picked_up'], true) && ($isFoodbankTask || $transportStatus !== 'open')): ?>
                                 <div class="assigned-delivery-details">
-                                    <strong>配送會員</strong><?php echo htmlspecialchars($task['volunteer_name'] ?? '尚未同步'); ?>
-                                    <strong>聯絡電話</strong><?php echo htmlspecialchars($task['volunteer_phone'] ?? '未提供'); ?>
+                                    <strong>配送者</strong><?php echo $isFoodbankTask ? '忠信食物銀行' : htmlspecialchars($task['volunteer_name'] ?? '尚未同步'); ?>
+                                    <?php if (!$isFoodbankTask): ?><strong>聯絡電話</strong><?php echo htmlspecialchars($task['volunteer_phone'] ?? '未提供'); ?><?php endif; ?>
                                     <strong>車輛類型</strong><?php echo ($task['vehicle_type'] ?? '') === 'car' ? '汽車' : '機車'; ?>
                                     <strong>配送日期</strong><?php echo htmlspecialchars($task['delivery_date'] ?? '未設定'); ?>
                                     <strong>配送時間</strong><?php echo htmlspecialchars($task['delivery_time'] ?? '未設定'); ?>
@@ -594,7 +597,7 @@ $formatDateTime = static function ($value) {
                             <?php endif; ?>
                         </td>
                         <td>
-                            <span class="text-muted">由 GO Rider 拍照確認取貨後會自動更新</span>
+                            <span class="text-muted"><?php echo $isFoodbankTask ? '忠信食物銀行確認收貨後會通知您' : '由 GO Rider 拍照確認取貨後會自動更新'; ?></span>
                         </td>
                     </tr>
                 <?php endforeach; ?>

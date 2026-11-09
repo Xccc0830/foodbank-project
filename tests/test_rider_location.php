@@ -16,7 +16,7 @@ function check($label, $ok) {
 }
 
 $donorId = 8;
-$riderId = 12;
+$riderId = 6; // 用沒有真實配送單的會員，避免被實際資料影響測試
 $staffId = 7;
 
 // 建表是 DDL，會讓 MySQL 自動提交，必須在開啟交易之前先做

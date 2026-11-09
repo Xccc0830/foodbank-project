@@ -4,6 +4,7 @@
  */
 
 require_once BASE_PATH . '/src/models/DeliveryModel.php';
+require_once BASE_PATH . '/src/models/DonationModel.php';
 require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 
 $deliveryModel = new DeliveryModel();
@@ -170,8 +171,14 @@ $completedDeliveries = array_filter($deliveries, static function ($delivery) use
     return $delivery['status'] === 'delivered'
         && ($isOfficial || (int) ($delivery['volunteer_id'] ?? 0) === $currentUserId);
 });
-$pendingDeliveries = array_filter($deliveries, static function ($delivery) {
-    return $delivery['status'] !== 'delivered';
+$pendingDeliveries = array_filter($deliveries, static function ($delivery) use ($isOfficial, $currentUserId) {
+    if ($delivery['status'] === 'delivered') {
+        return false;
+    }
+    // GO Rider 只看得到「還沒人接的 GO Rider 單」和「自己接的單」；忠信派車的單與別人接的單不顯示
+    return $isOfficial
+        || (($delivery['delivery_method'] ?? '') === 'volunteer'
+            && ($delivery['status'] === 'open' || (int) ($delivery['volunteer_id'] ?? 0) === $currentUserId));
 });
 
 $activeDriverTrip = null;
@@ -203,6 +210,7 @@ if ($isVolunteer) {
     .driver-trip-map[data-theme="light"] .driver-trip-route-line { background: repeating-linear-gradient(90deg, #203B8F 0, #203B8F 10px, transparent 10px, transparent 18px); }
     .driver-trip-route-line::after { content: "\f3c5"; font-family: "Font Awesome 5 Free"; font-weight: 900; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: 14px; color: #f8fafc; }
     .driver-trip-map[data-theme="light"] .driver-trip-route-line::after { color: #203B8F; }
+    .driver-trip-map > .driver-navigate-btn + .driver-navigate-btn { margin-top: 14px; }
     .driver-navigate-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: none; background: #203B8F; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; }
     .driver-navigate-btn:hover { background: #172F75; }
     .driver-trip-sheet { background: var(--bg-primary, #fff); color: var(--text-primary, #111827); padding: 18px 20px 20px; }
@@ -447,13 +455,14 @@ if ($isVolunteer) {
     <?php endif; ?>
 
     <div class="card">
-        <div class="card-header"><h2>點數規則</h2><p>公益點數不具現金兌換功能</p></div>
+        <div class="card-header"><h2>心意幣規則</h2><p>心意幣不具現金兌換功能</p></div>
         <div class="card-body">
             <ul class="feature-list">
-                <li>汽車基本 10 點，機車基本 5 點</li>
-                <li>距離、重量與急件程度會增加點數</li>
-                <li>總距離為接單位置至商家，加上商家至食物銀行</li>
-                <li>完成送達後才會記錄點數</li>
+                <li>基本：機車 3 枚、汽車 5 枚</li>
+                <li>重量每 5 公斤 +3（最多 +15），距離 2／5／10 公里以上依序 +2／+4／+6</li>
+                <li>商家申請並經食物銀行同意的緊急運送 +4，冷藏冷凍物資 +2</li>
+                <li>完成後另有準時 +1、順路每多一站 +1、首次配送 +3</li>
+                <li>食物銀行確認收貨後才會入帳</li>
             </ul>
         </div>
     </div>
@@ -578,7 +587,7 @@ if ($isVolunteer) {
                     <td><?php echo ['normal' => '一般', 'priority' => '優先', 'urgent' => '急件'][$delivery['urgency']] ?? '一般'; ?></td>
                     <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
                     <td>
-                        <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' ? '待忠信派車' : (['open' => '待接單', 'claimed' => '已接單', 'arrived_pickup' => '已到店', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']); ?></span>
+                        <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' && in_array($delivery['status'], ['open', 'claimed'], true) ? '忠信派車中' : (['open' => '待接單', 'claimed' => '已接單', 'arrived_pickup' => '已到店', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']); ?></span>
                         <?php if ($isOfficial && !empty($delivery['pickup_photo_path'])): ?>
                             <br><a href="<?php echo htmlspecialchars(storedPublicImageUrl($delivery['pickup_photo_path']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
                         <?php endif; ?>
