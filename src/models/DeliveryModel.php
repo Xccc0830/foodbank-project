@@ -84,7 +84,7 @@ class DeliveryModel extends BaseModel {
     }
 
     public function getAllDeliveries() {
-        $sql = "SELECT d.*, n.order_number, n.donor_name, n.notes AS donation_notes, donor.phone AS donor_phone,
+        $sql = "SELECT d.*, n.order_number, n.donor_name, n.notes AS donation_notes, donor.phone AS donor_phone, donor.business_hours AS donor_business_hours, donor.open_days AS donor_open_days, donor.closed_days AS donor_closed_days, donor.pickup_note AS donor_pickup_note,
                        u.full_name AS volunteer_name, u.phone AS volunteer_phone
                 FROM deliveries d
                 LEFT JOIN donations n ON n.donation_id = d.donation_id
@@ -164,7 +164,8 @@ class DeliveryModel extends BaseModel {
             : "(d.volunteer_id = {$userId} OR n.donor_id = {$userId})";
         $result = $this->db->query(
             "SELECT d.delivery_id, d.status, d.pickup_address, d.delivery_address,
-                    u.full_name AS courier_name,
+                    CASE WHEN d.delivery_method = 'food_bank' THEN '忠信食物銀行' ELSE u.full_name END AS courier_name,
+                    d.delivery_method,
                     d.vehicle_type, d.estimated_arrival_start, d.estimated_arrival_end,
                     n.delivery_date, n.delivery_time,
                     (

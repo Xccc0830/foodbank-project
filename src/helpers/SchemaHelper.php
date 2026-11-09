@@ -24,3 +24,26 @@ function ensureUserColumns(mysqli $connection) {
         }
     }
 }
+
+/** 企業會員可進入「設置」補填商家地址；舊資料庫沒有這筆預設權限時補上。 */
+function ensureEnterpriseSettingsPermission(mysqli $connection) {
+    $connection->query("INSERT IGNORE INTO role_permission_defaults (role, member_type, permission_key) VALUES ('member', 'enterprise', 'page.settings')");
+}
+
+/** 商家資料的新欄位：營業日（勾選）、營業時間、公休日（自由填寫）、取貨備註（給配送人員看）。 */
+function ensureBusinessProfileColumns(mysqli $connection) {
+    $columns = [
+        'open_days' => 'VARCHAR(20) DEFAULT NULL',
+        'business_hours' => 'VARCHAR(100) DEFAULT NULL',
+        'closed_days' => 'VARCHAR(100) DEFAULT NULL',
+        'pickup_note' => 'VARCHAR(255) DEFAULT NULL',
+    ];
+    foreach ($columns as $column => $definition) {
+        $exists = $connection->query("SHOW COLUMNS FROM users LIKE '{$column}'");
+        if ($exists && $exists->num_rows === 0) {
+            $connection->query("ALTER TABLE users ADD COLUMN {$column} {$definition}");
+        } elseif ($exists && $column === 'closed_days') {
+            $connection->query("ALTER TABLE users MODIFY closed_days VARCHAR(100) DEFAULT NULL");
+        }
+    }
+}

@@ -33,6 +33,8 @@ getCsrfToken();
 // 登入與登出流程
 $connection = $db->getConnection();
 ensureUserColumns($connection);
+ensureEnterpriseSettingsPermission($connection);
+ensureBusinessProfileColumns($connection);
 $action = $_GET['action'] ?? '';
 
 // 修復舊版初始化資料曾以錯誤編碼寫入的示範帳號資料。

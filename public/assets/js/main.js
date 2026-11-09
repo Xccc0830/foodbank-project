@@ -110,6 +110,18 @@
                     exception: { title: '配送狀況處理中', message: '配送遇到狀況，食物銀行人員正在協助處理。', step: 1, progress: 36 },
                     cancelled: { title: '配送任務已取消', message: '此配送任務已取消。', step: 0, progress: 0 }
                 };
+                // 忠信派車：由忠信食物銀行自己載，不經 GO Rider 接單
+                if (result.delivery_method === 'food_bank') {
+                    statusDetails.open = { title: '忠信食物銀行派車中', message: '忠信食物銀行已安排派車，將前往店家取貨。', step: 1, progress: 40 };
+                    const riderButton = card.querySelector('[data-rider-location]');
+                    if (riderButton) {
+                        riderButton.hidden = true;
+                    }
+                    const dispatchStep = card.querySelectorAll('.customer-progress-step')[1];
+                    if (dispatchStep) {
+                        dispatchStep.textContent = '忠信派車';
+                    }
+                }
                 const currentStatus = statusDetails[result.status] || statusDetails.open;
                 status.textContent = currentStatus.message;
                 if (statusTitle) {

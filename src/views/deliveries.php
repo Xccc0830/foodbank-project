@@ -330,6 +330,19 @@ if ($isVolunteer) {
                     <span data-trip-eta-text>允許定位後，會顯示距離目的地的剩餘距離與時間</span>
                 </div>
             </div>
+            <?php $tripOpenDays = DonationModel::formatOpenDays($activeDriverTrip['donor_open_days'] ?? ''); ?>
+            <?php if (!empty($activeDriverTrip['donor_business_hours']) || $tripOpenDays !== '' || !empty($activeDriverTrip['donor_closed_days']) || !empty($activeDriverTrip['donor_pickup_note'])): ?>
+                <div class="driver-trip-stop">
+                    <i class="fas fa-clock"></i>
+                    <div>
+                        <strong>店家取貨資訊</strong>
+                        <?php if ($tripOpenDays !== ''): ?><span>營業日：<?php echo htmlspecialchars($tripOpenDays); ?></span><?php endif; ?>
+                        <?php if (!empty($activeDriverTrip['donor_business_hours'])): ?><span>營業時間：<?php echo htmlspecialchars($activeDriverTrip['donor_business_hours']); ?></span><?php endif; ?>
+                        <?php if (!empty($activeDriverTrip['donor_closed_days'])): ?><span>公休日：<?php echo htmlspecialchars($activeDriverTrip['donor_closed_days']); ?></span><?php endif; ?>
+                        <?php if (!empty($activeDriverTrip['donor_pickup_note'])): ?><span>取貨備註：<?php echo htmlspecialchars($activeDriverTrip['donor_pickup_note']); ?></span><?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php if (!empty($activeDriverTrip['donation_notes']) || !empty($activeDriverTrip['donor_phone'])): ?>
                 <div class="driver-trip-stop">
                     <i class="fas fa-circle-info"></i>
@@ -572,7 +585,9 @@ if ($isVolunteer) {
                         <?php if ($isOfficial && !empty($delivery['volunteer_id']) && in_array($delivery['status'], ['claimed', 'arrived_pickup', 'picked_up'], true)): ?>
                             <br><button type="button" class="btn btn-secondary btn-sm" data-rider-location data-delivery-id="<?php echo (int) $delivery['delivery_id']; ?>"><i class="fas fa-location-crosshairs"></i> 騎手位置</button>
                         <?php endif; ?>
-                        <?php if ($isOfficial && !empty($delivery['volunteer_id'])): ?>
+                        <?php if (($delivery['delivery_method'] ?? '') === 'food_bank'): ?>
+                            <br><small>派送：忠信食物銀行</small>
+                        <?php elseif ($isOfficial && !empty($delivery['volunteer_id'])): ?>
                             <br><small>GO Rider：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
                             <?php if (!empty($delivery['volunteer_phone'])): ?>
                                 <a href="tel:<?php echo htmlspecialchars($delivery['volunteer_phone'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($delivery['volunteer_phone']); ?></a>

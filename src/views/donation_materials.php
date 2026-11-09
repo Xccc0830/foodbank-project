@@ -174,8 +174,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         }
     }
     $urgentRequested = !empty($_POST['is_urgent']);
+    $openDays = $donationModel->getBusinessProfile($currentUserId)['open_days'] ?? '';
+    $closedDayError = ($deliveryDate && !DonationModel::isOpenOn($openDays, $deliveryDate))
+        ? '您預約的取貨日（' . $deliveryDate . '）不是商家營業日（營業日：' . DonationModel::formatOpenDays($openDays) . '），請改選其他日期，或到「設置」更新營業日。'
+        : null;
     $addressError = validateAddress($donorAddress, '取貨地址') ?? validateAddress($deliveryAddress, '送達地址');
-    if ($urgentRequested && $donationModel->countUrgentThisMonth($currentUserId) >= DonationModel::URGENT_MONTHLY_LIMIT) {
+    if ($closedDayError !== null) {
+        $formMessage = ['type' => 'error', 'text' => $closedDayError];
+    } elseif ($urgentRequested && $donationModel->countUrgentThisMonth($currentUserId) >= DonationModel::URGENT_MONTHLY_LIMIT) {
         $formMessage = ['type' => 'error', 'text' => '本月緊急運送已達 ' . DonationModel::URGENT_MONTHLY_LIMIT . ' 單上限，請取消勾選「緊急運送」後再送出。'];
     } elseif ($addressError !== null) {
         $formMessage = ['type' => 'error', 'text' => $addressError];
@@ -405,9 +411,9 @@ $formatDateTime = static function ($value) {
                     <div class="form-group"><label for="donorName">捐贈企業／組織</label><input id="donorName" type="text" value="<?php echo htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
                     <div class="form-group"><label for="donorAddress">商家取貨地址 <span class="required-mark">*</span></label><input id="donorAddress" type="text" name="donor_address" value="<?php echo htmlspecialchars($defaultPickupAddress, ENT_QUOTES, 'UTF-8'); ?>"<?php echo $defaultPickupAddress !== '' ? ' readonly' : ''; ?> placeholder="配送人員要到哪裡取貨" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="取貨地址"></div>
                     <?php if ($defaultPickupAddress === ''): ?>
-                    <div class="form-group form-check-row"><label><input type="checkbox" name="save_default_address" value="1" checked> 儲存為固定取貨地址（之後自動帶入，無法再改）</label></div>
+                    <div class="form-group form-check-row"><label><input type="checkbox" name="save_default_address" value="1" checked> 儲存到商家資料（之後自動帶入，可在「設置」修改）</label></div>
                     <?php else: ?>
-                    <p class="form-hint">取貨地址已固定為註冊時登記的商家地址，如需變更請聯絡食物銀行。</p>
+                    <p class="form-hint">取貨地址使用商家資料中的地址；搬家或要更新請到「設置」修改。</p>
                     <?php endif; ?>
                 </div>
                 <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點。</p></div>

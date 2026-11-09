@@ -3,6 +3,30 @@
  * 系統設置視圖 - SaaS 風格迭代
  */
 
+require_once BASE_PATH . '/src/models/DonationModel.php';
+require_once BASE_PATH . '/src/helpers/AddressHelper.php';
+
+$settingsIsEnterprise = ($currentUser['role'] ?? '') === 'member' && ($currentUser['member_type'] ?? '') === 'enterprise';
+$settingsIsStaff = ($currentUser['role'] ?? '') === 'foodbank_staff';
+$businessProfile = [];
+$businessMessage = null;
+if ($settingsIsEnterprise) {
+    $settingsDonationModel = new DonationModel();
+    $settingsUserId = (int) ($currentUser['user_id'] ?? 0);
+
+    // 商家可隨時更新聯絡人、取貨地址、營業時間與取貨備註（例如搬家）
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_business_profile') {
+        $addressError = validateAddress($_POST['business_address'] ?? '', '商家地址');
+        if ($addressError !== null) {
+            $businessMessage = ['type' => 'error', 'text' => $addressError];
+        } else {
+            $saveResult = $settingsDonationModel->saveBusinessProfile($settingsUserId, $_POST);
+            $businessMessage = ['type' => $saveResult['success'] ? 'success' : 'error', 'text' => $saveResult['message']];
+        }
+    }
+    $businessProfile = $settingsDonationModel->getBusinessProfile($settingsUserId);
+}
+
 $mysqlVersion = 'N/A';
 if (isset($db) && $db instanceof Database) {
     $versionResult = $db->query('SELECT VERSION() AS version');
@@ -15,11 +39,76 @@ if (isset($db) && $db instanceof Database) {
 
 <div class="view-header">
     <div>
-        <h1 class="view-title">系統設置</h1>
-        <p class="view-subtitle">管理系統配置、安全策略與郵件服務</p>
+        <h1 class="view-title"><?php echo $settingsIsStaff ? '系統設置' : '設置'; ?></h1>
+        <p class="view-subtitle"><?php echo $settingsIsStaff ? '管理系統配置、安全策略與郵件服務' : '管理你的商家資料'; ?></p>
     </div>
 </div>
 
+<?php if ($settingsIsEnterprise):
+?>
+<div class="card mb-20">
+    <div class="card-header"><h2>商家資料</h2></div>
+    <div class="card-body">
+        <?php if ($businessMessage): ?>
+            <div class="alert alert-<?php echo $businessMessage['type'] === 'success' ? 'success' : 'error'; ?>">
+                <i class="fas fa-<?php echo $businessMessage['type'] === 'success' ? 'circle-check' : 'circle-exclamation'; ?>"></i>
+                <?php echo htmlspecialchars($businessMessage['text']); ?>
+            </div>
+        <?php endif; ?>
+
+        <h3 class="mb-10">基本資料（註冊時登記，無法自行修改）</h3>
+        <div class="grid-2">
+            <div class="form-group"><label>企業／組織名稱</label><input type="text" value="<?php echo htmlspecialchars($businessProfile['enterprise_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
+            <div class="form-group"><label>統一編號</label><input type="text" value="<?php echo htmlspecialchars($businessProfile['tax_id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
+            <div class="form-group"><label>登入帳號</label><input type="text" value="<?php echo htmlspecialchars($businessProfile['username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
+            <div class="form-group"><label>電子郵件</label><input type="text" value="<?php echo htmlspecialchars($businessProfile['email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
+            <div class="form-group"><label>手機號碼<?php echo ($businessProfile['phone_verified'] ?? '0') === '1' ? '（已驗證）' : ''; ?></label><input type="text" value="<?php echo htmlspecialchars($businessProfile['phone'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
+        </div>
+        <p class="form-hint">如需更改企業名稱、統一編號、Email 或手機，請聯絡食物銀行。</p>
+
+        <h3 class="mb-10 mt-20">取貨與聯絡資訊（可隨時更新）</h3>
+        <form method="post">
+            <?php echo csrfField(); ?>
+            <input type="hidden" name="action" value="save_business_profile">
+            <div class="form-group">
+                <label for="contactName">聯絡人姓名 <span class="required-mark">*</span></label>
+                <input id="contactName" type="text" name="contact_name" required maxlength="100" value="<?php echo htmlspecialchars($businessProfile['full_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="form-group">
+                <label for="businessAddress">商家取貨地址 <span class="required-mark">*</span></label>
+                <input id="businessAddress" type="text" name="business_address" required minlength="5" maxlength="255" autocomplete="off" placeholder="例：台北市信義區○○路 1 號" value="<?php echo htmlspecialchars($businessProfile['default_pickup_address'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                <p class="form-hint">新增物資時會自動帶入這個地址。搬家後請在這裡更新；已送出的物資單仍使用當時的地址，並會通知食物銀行。</p>
+            </div>
+            <div class="form-group">
+                <label>營業日（選填，勾選有營業的日子）</label>
+                <div class="closed-days-picker">
+                    <?php $selectedOpenDays = explode(',', (string) ($businessProfile['open_days'] ?? '')); ?>
+                    <?php foreach (DonationModel::WEEKDAY_LABELS as $dayNumber => $dayLabel): ?>
+                        <label class="closed-day-option"><input type="checkbox" name="open_days[]" value="<?php echo $dayNumber; ?>"<?php echo in_array((string) $dayNumber, $selectedOpenDays, true) ? ' checked' : ''; ?>> <?php echo $dayLabel; ?></label>
+                    <?php endforeach; ?>
+                </div>
+                <p class="form-hint">不勾選代表不限制。沒勾到的日子，不能預約取貨。</p>
+            </div>
+            <div class="form-group">
+                <label for="businessHours">營業時間（選填）</label>
+                <input id="businessHours" type="text" name="business_hours" maxlength="100" placeholder="例：09:00–21:00" value="<?php echo htmlspecialchars($businessProfile['business_hours'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="form-group">
+                <label for="closedDays">公休日（選填）</label>
+                <input id="closedDays" type="text" name="closed_days" maxlength="100" placeholder="例：國定假日、每月第一個週日" value="<?php echo htmlspecialchars($businessProfile['closed_days'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                <p class="form-hint">用文字說明不定期的公休，騎手到店前會看到。</p>
+            </div>
+            <div class="form-group">
+                <label for="pickupNote">取貨備註（選填，GO Rider 到店時會看到）</label>
+                <input id="pickupNote" type="text" name="pickup_note" maxlength="255" placeholder="例：請從後門進入，按鈴找店長" value="<?php echo htmlspecialchars($businessProfile['pickup_note'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <button type="submit" class="btn btn-primary">儲存</button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($settingsIsStaff): ?>
 <div class="card">
     <div class="card-header">
         <div class="settings-tabs" role="tablist" aria-label="系統設定分頁">
@@ -139,3 +228,4 @@ if (isset($db) && $db instanceof Database) {
         </div>
     </div>
 </div>
+<?php endif; ?>
