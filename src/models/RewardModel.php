@@ -49,10 +49,6 @@ class RewardModel extends BaseModel {
         return max(0, $row ? (int) $row['balance'] : 0);
     }
 
-    public function getActiveCatalog() {
-        return $this->query("SELECT * FROM reward_catalog WHERE status = 'active' ORDER BY cost_points ASC");
-    }
-
     public function getAvailableRewards() {
         return $this->query(
             "SELECT reward_id AS source_id, 'foodbank' AS source_type, NULL AS source_owner_id, title, description, cost_points, stock
@@ -63,32 +59,6 @@ class RewardModel extends BaseModel {
              FROM donor_reward_items
              WHERE status = 'active'
              ORDER BY cost_points ASC"
-        );
-    }
-
-    public function getRedemptionsByUser($userId) {
-        $userId = (int) $userId;
-        return $this->query(
-            "SELECT claim_id, source_type, title, points_spent, status, token_expires_at, redeemed_at, created_at
-             FROM reward_claims WHERE user_id = {$userId}
-             UNION ALL
-             SELECT rr.redemption_id, 'foodbank', rc.title, rr.points_spent, rr.status, NULL, NULL, rr.created_at
-             FROM reward_redemptions rr
-             JOIN reward_catalog rc ON rc.reward_id = rr.reward_id
-             WHERE rr.user_id = {$userId}
-             ORDER BY created_at DESC"
-        );
-    }
-
-    public function getFulfillmentsByUser($userId) {
-        $userId = (int) $userId;
-        return $this->query(
-            "SELECT rc.claim_id, rc.title, rc.source_type, rc.points_spent, rc.redeemed_at, rc.created_at,
-                    u.full_name AS volunteer_name
-             FROM reward_claims rc
-             LEFT JOIN users u ON u.user_id = rc.user_id
-             WHERE rc.redeemed_by = {$userId} AND rc.status = 'fulfilled'
-             ORDER BY rc.redeemed_at DESC, rc.created_at DESC"
         );
     }
 
@@ -210,16 +180,6 @@ class RewardModel extends BaseModel {
         return $claim;
     }
 
-    public function getLatestPendingClaim($userId) {
-        $userId = (int) $userId;
-        $result = $this->db->query(
-            "SELECT * FROM reward_claims
-             WHERE user_id = {$userId} AND status = 'pending'
-             ORDER BY created_at DESC LIMIT 1"
-        );
-        return $result ? $result->fetch_assoc() : null;
-    }
-
     public function refreshClaimToken($claimId, $userId, $force = false) {
         $claimId = (int) $claimId;
         $userId = (int) $userId;
@@ -244,15 +204,6 @@ class RewardModel extends BaseModel {
         return $this->db->affected_rows === 1
             ? array_merge($claim, ['token' => $token, 'token_value' => $token, 'token_expires_at' => $expiresAt])
             : false;
-    }
-
-    public function getClaimToken($claimId) {
-        $claimId = (int) $claimId;
-        $result = $this->db->query("SELECT * FROM reward_claims WHERE claim_id = {$claimId} LIMIT 1");
-        $claim = $result ? $result->fetch_assoc() : null;
-        return $claim && $claim['status'] === 'pending' && strtotime($claim['token_expires_at']) > time()
-            ? $claim
-            : null;
     }
 
     public function fulfillByToken($token, $verifierId, $verifierRole) {

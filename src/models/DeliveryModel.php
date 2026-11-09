@@ -331,57 +331,6 @@ class DeliveryModel extends BaseModel {
         }
     }
 
-        public function getMaterialTransportTasks() {
-                $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
-                                             n.quantity, n.unit, n.weight_kg AS published_weight_kg,
-                                             n.size_description, n.photo_path, n.pickup_deadline,
-                                             n.need_inspection, n.inspection_notes, n.reward_options,
-                                             n.split_count
-                                FROM deliveries d
-                                INNER JOIN donations n ON n.donation_id = d.donation_id
-                                WHERE n.status = 'published'
-                                    AND d.delivery_method = 'volunteer'
-                                    AND d.status IN ('open', 'claimed', 'arrived_pickup')
-                                ORDER BY n.published_at DESC, d.delivery_id ASC";
-                return $this->enrichTasksWithItemSummary($this->query($sql));
-        }
-
-        public function getMaterialTransportTask($deliveryId) {
-                $deliveryId = (int) $deliveryId;
-                $result = $this->db->query("SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
-                                                                                     n.quantity, n.unit, n.weight_kg AS published_weight_kg,
-                                                                                     n.size_description, n.photo_path, n.pickup_deadline,
-                                                                                     n.need_inspection, n.inspection_notes, n.reward_options,
-                                                                                     n.split_count, n.status AS donation_status
-                                                                        FROM deliveries d
-                                                                        INNER JOIN donations n ON n.donation_id = d.donation_id
-                                                                        WHERE d.delivery_id = {$deliveryId}
-                                                                            AND n.status = 'published'
-                                                                            AND d.delivery_method = 'volunteer'
-                                                                        LIMIT 1");
-                $row = $result ? $result->fetch_assoc() : null;
-                if (!$row) {
-                        return null;
-                }
-                $enriched = $this->enrichTasksWithItemSummary([$row]);
-                return $enriched[0] ?? $row;
-        }
-
-            public function getMaterialTransportHistoryTasks($volunteerId) {
-                $volunteerId = (int) $volunteerId;
-                $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
-                                 n.quantity, n.unit, n.weight_kg AS published_weight_kg,
-                                 n.size_description, n.photo_path, n.pickup_deadline
-                        FROM deliveries d
-                        INNER JOIN donations n ON n.donation_id = d.donation_id
-                        WHERE n.status = 'published'
-                            AND d.delivery_method = 'volunteer'
-                            AND d.volunteer_id = {$volunteerId}
-                            AND d.status = 'delivered'
-                        ORDER BY d.delivered_at DESC, d.delivery_id DESC";
-                return $this->enrichTasksWithItemSummary($this->query($sql));
-            }
-
     /**
      * 補上物資件數與長寬高摘要，供 Rider 任務卡片/詳情顯示。
      * 若配送任務已綁定特定子單 (allocation_id)，僅彙總該子單的物資；
@@ -585,13 +534,6 @@ class DeliveryModel extends BaseModel {
         return $updated && $this->db->affected_rows === 1;
     }
 
-    public function cancelClaimedDelivery($deliveryId, $volunteerId) {
-        $deliveryId = (int) $deliveryId;
-        $volunteerId = (int) $volunteerId;
-        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = NULL, status = 'open', updated_at = NOW() WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'claimed' AND volunteer_id = {$volunteerId}");
-        return $updated && $this->db->affected_rows === 1;
-    }
-
     /**
      * 騎手按「已到店取貨」：已接單 → 已到店。之後必須上傳取貨照片才能完成取件。
      */
@@ -725,31 +667,6 @@ class DeliveryModel extends BaseModel {
             );
         }
         return true;
-    }
-
-    public function updateDeliveryStatus($deliveryId, $status, $volunteerId = null) {
-        $deliveryId = (int) $deliveryId;
-        $validStatuses = ['waiting_pickup', 'collected', 'in_transit', 'delivered'];
-
-        if (!in_array($status, $validStatuses, true)) {
-            return false;
-        }
-
-        $statusUpdateFields = '';
-        switch ($status) {
-            case 'collected':
-                $statusUpdateFields = ", collected_at = NOW()";
-                break;
-            case 'in_transit':
-                $statusUpdateFields = ", transit_at = NOW()";
-                break;
-            case 'delivered':
-                $statusUpdateFields = ", delivered_at = NOW()";
-                break;
-        }
-
-        $sql = "UPDATE deliveries SET status = '{$status}'{$statusUpdateFields}, updated_at = NOW() WHERE delivery_id = {$deliveryId}";
-        return $this->db->query($sql);
     }
 
     public function completeDelivery($deliveryId, $confirmedBy = null) {

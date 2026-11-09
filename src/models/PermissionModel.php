@@ -99,10 +99,4 @@ class PermissionModel extends BaseModel {
         );
     }
 
-    /**
-     * 取得所有權限目錄（供設定頁面渲染用）。
-     */
-    public function getAllPermissions() {
-        return $this->query("SELECT permission_key, label, category FROM permissions ORDER BY category, permission_key");
-    }
 }

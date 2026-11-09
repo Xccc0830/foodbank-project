@@ -122,10 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $balance = $rewardModel->getBalance((int) $currentUser['user_id']);
 $catalog = $rewardModel->getAvailableRewards();
-$myRedemptions = $rewardModel->getRedemptionsByUser((int) $currentUser['user_id']);
-$myFulfillments = $canVerify
-    ? $rewardModel->getFulfillmentsByUser((int) $currentUser['user_id'])
-    : [];
 $foodbankPendingClaims = $currentRole === 'foodbank_staff'
     ? $rewardModel->getPendingFoodbankClaims()
     : [];
@@ -371,46 +367,6 @@ if ($isDonor) {
 </div>
 <?php endif; ?>
 
-<div class="card mt-32">
-    <div class="card-header"><h2>我的兌換紀錄</h2></div>
-    <div class="card-body">
-        <?php if ($myRedemptions): ?>
-            <div class="redemptions-table-body">
-                <table class="data-table redemptions-table redemptions-mine-table"><thead><tr><th>獎勵</th><th>花費心意幣</th><th>狀態</th><th>時間</th></tr></thead><tbody>
-                <?php foreach ($myRedemptions as $redemption): ?>
-                    <tr><td><strong><?php echo htmlspecialchars($redemption['title']); ?></strong></td><td><?php echo (int) $redemption['points_spent']; ?></td><td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '處理中', 'fulfilled' => '已兌換完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td><td><?php echo htmlspecialchars($redemption['created_at']); ?></td></tr>
-                <?php endforeach; ?>
-                </tbody></table>
-            </div>
-        <?php else: ?>
-            <div class="empty-state"><i class="fas fa-receipt"></i><p>尚未兌換過獎勵</p></div>
-        <?php endif; ?>
-
-        <?php if ($canVerify): ?>
-        <div class="mt-32">
-            <div class="card-header"><h2>我的核銷紀錄</h2><p>顯示由目前帳號完成核銷的兌換憑證</p></div>
-            <?php if ($myFulfillments): ?>
-                <div class="redemptions-table-body">
-                    <table class="data-table redemptions-table redemptions-fulfilled-table">
-                        <thead><tr><th>兌換品項</th><th>兌換者</th><th>花費心意幣</th><th>核銷時間</th></tr></thead>
-                        <tbody>
-                        <?php foreach ($myFulfillments as $fulfillment): ?>
-                            <tr>
-                                <td><?php echo htmlspecialchars($fulfillment['title']); ?></td>
-                                <td><?php echo htmlspecialchars($fulfillment['volunteer_name'] ?? '未知使用者'); ?></td>
-                                <td><?php echo (int) $fulfillment['points_spent']; ?> 點</td>
-                                <td><?php echo htmlspecialchars($fulfillment['redeemed_at'] ?? ''); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <div class="empty-state"><i class="fas fa-clipboard-check"></i><p>尚未完成任何核銷</p></div>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
-
         <?php if ($selectedClaim): ?>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
@@ -487,8 +443,6 @@ if ($isDonor) {
         });
         </script>
         <?php endif; ?>
-    </div>
-</div>
 
 <?php if ($canCreateCatalogReward): ?>
 <div class="card mt-32">

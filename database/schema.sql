@@ -156,24 +156,6 @@ CREATE TABLE `deliveries` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `departments`
---
-
-DROP TABLE IF EXISTS `departments`;
-CREATE TABLE `departments` (
-  `department_id` int(11) NOT NULL,
-  `department_code` varchar(50) NOT NULL,
-  `department_name` varchar(100) NOT NULL,
-  `description` text DEFAULT NULL,
-  `manager_id` int(11) DEFAULT NULL,
-  `budget` decimal(12,2) DEFAULT NULL,
-  `status` enum('active','inactive') DEFAULT 'active',
-  `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `donations`
 --
 
@@ -327,26 +309,6 @@ CREATE TABLE `donor_reward_redemptions` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `enterprise_verification_requests`
---
-
-DROP TABLE IF EXISTS `enterprise_verification_requests`;
-CREATE TABLE `enterprise_verification_requests` (
-  `request_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `enterprise_name` varchar(150) NOT NULL,
-  `business_registration_number` varchar(50) DEFAULT NULL,
-  `business_license_url` text DEFAULT NULL,
-  `submission_date` datetime DEFAULT current_timestamp(),
-  `status` enum('pending','approved','rejected') DEFAULT 'pending',
-  `reviewer_id` int(11) DEFAULT NULL,
-  `review_date` datetime DEFAULT NULL,
-  `review_notes` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `item_categories`
 --
 
@@ -425,22 +387,6 @@ CREATE TABLE `otp_codes` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `password_resets`
---
-
-DROP TABLE IF EXISTS `password_resets`;
-CREATE TABLE `password_resets` (
-  `reset_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `token_hash` varchar(64) NOT NULL,
-  `expires_at` datetime NOT NULL,
-  `used_at` datetime DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `point_transactions`
 --
 
@@ -461,27 +407,6 @@ CREATE TABLE `point_transactions` (
 
 INSERT INTO `point_transactions` (`transaction_id`, `user_id`, `delivery_id`, `points`, `transaction_type`, `description`, `created_at`) VALUES
 (3, 4, NULL, -30, 'redeemed', '兌換獎勵', '2026-08-23 06:50:40');
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `public_relations`
---
-
-DROP TABLE IF EXISTS `public_relations`;
-CREATE TABLE `public_relations` (
-  `pr_id` int(11) NOT NULL,
-  `event_name` varchar(150) NOT NULL,
-  `event_date` date NOT NULL,
-  `event_type` enum('fundraiser','awareness','community','partnership','media') NOT NULL,
-  `description` text DEFAULT NULL,
-  `location` varchar(200) DEFAULT NULL,
-  `organizer_id` int(11) DEFAULT NULL,
-  `participants_count` int(11) DEFAULT NULL,
-  `status` enum('planned','ongoing','completed','cancelled') DEFAULT 'planned',
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -550,43 +475,6 @@ CREATE TABLE `reward_redemptions` (
   `points_spent` int(11) NOT NULL,
   `status` enum('pending','fulfilled','cancelled') NOT NULL DEFAULT 'pending',
   `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `sales`
---
-
-DROP TABLE IF EXISTS `sales`;
-CREATE TABLE `sales` (
-  `sale_id` int(11) NOT NULL,
-  `sale_code` varchar(50) NOT NULL,
-  `sale_date` datetime NOT NULL,
-  `customer_name` varchar(100) DEFAULT NULL,
-  `customer_email` varchar(100) DEFAULT NULL,
-  `total_amount` decimal(12,2) DEFAULT NULL,
-  `payment_method` enum('cash','credit_card','check','transfer') NOT NULL,
-  `status` enum('completed','pending','cancelled') DEFAULT 'completed',
-  `notes` text DEFAULT NULL,
-  `processed_by` int(11) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `sale_items`
---
-
-DROP TABLE IF EXISTS `sale_items`;
-CREATE TABLE `sale_items` (
-  `sale_item_id` int(11) NOT NULL,
-  `sale_id` int(11) NOT NULL,
-  `inventory_id` int(11) NOT NULL,
-  `quantity` decimal(10,2) NOT NULL,
-  `unit_price` decimal(10,2) DEFAULT NULL,
-  `total_price` decimal(12,2) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -718,15 +606,6 @@ ALTER TABLE `deliveries`
   ADD KEY `donation_id` (`donation_id`);
 
 --
--- 資料表索引 `departments`
---
-ALTER TABLE `departments`
-  ADD PRIMARY KEY (`department_id`),
-  ADD UNIQUE KEY `department_code` (`department_code`),
-  ADD KEY `manager_id` (`manager_id`),
-  ADD KEY `status` (`status`);
-
---
 -- 資料表索引 `donations`
 --
 ALTER TABLE `donations`
@@ -766,14 +645,6 @@ ALTER TABLE `donor_reward_redemptions`
   ADD KEY `status` (`status`);
 
 --
--- 資料表索引 `enterprise_verification_requests`
---
-ALTER TABLE `enterprise_verification_requests`
-  ADD PRIMARY KEY (`request_id`),
-  ADD KEY `user_id` (`user_id`),
-  ADD KEY `status` (`status`);
-
---
 -- 資料表索引 `item_categories`
 --
 ALTER TABLE `item_categories`
@@ -798,29 +669,12 @@ ALTER TABLE `otp_codes`
   ADD KEY `purpose` (`purpose`);
 
 --
--- 資料表索引 `password_resets`
---
-ALTER TABLE `password_resets`
-  ADD PRIMARY KEY (`reset_id`),
-  ADD KEY `user_id` (`user_id`);
-
---
 -- 資料表索引 `point_transactions`
 --
 ALTER TABLE `point_transactions`
   ADD PRIMARY KEY (`transaction_id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `delivery_id` (`delivery_id`);
-
---
--- 資料表索引 `public_relations`
---
-ALTER TABLE `public_relations`
-  ADD PRIMARY KEY (`pr_id`),
-  ADD KEY `organizer_id` (`organizer_id`),
-  ADD KEY `event_date` (`event_date`),
-  ADD KEY `event_type` (`event_type`),
-  ADD KEY `status` (`status`);
 
 --
 -- 資料表索引 `reward_catalog`
@@ -844,25 +698,6 @@ ALTER TABLE `reward_redemptions`
   ADD PRIMARY KEY (`redemption_id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `reward_id` (`reward_id`);
-
---
--- 資料表索引 `sales`
---
-ALTER TABLE `sales`
-  ADD PRIMARY KEY (`sale_id`),
-  ADD UNIQUE KEY `sale_code` (`sale_code`),
-  ADD KEY `processed_by` (`processed_by`),
-  ADD KEY `sale_date` (`sale_date`),
-  ADD KEY `status` (`status`),
-  ADD KEY `idx_sales_date` (`sale_date`);
-
---
--- 資料表索引 `sale_items`
---
-ALTER TABLE `sale_items`
-  ADD PRIMARY KEY (`sale_item_id`),
-  ADD KEY `inventory_id` (`inventory_id`),
-  ADD KEY `sale_id` (`sale_id`);
 
 --
 -- 資料表索引 `users`
@@ -907,12 +742,6 @@ ALTER TABLE `deliveries`
   MODIFY `delivery_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `departments`
---
-ALTER TABLE `departments`
-  MODIFY `department_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donations`
 --
 ALTER TABLE `donations`
@@ -937,12 +766,6 @@ ALTER TABLE `donor_reward_redemptions`
   MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `enterprise_verification_requests`
---
-ALTER TABLE `enterprise_verification_requests`
-  MODIFY `request_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `item_categories`
 --
 ALTER TABLE `item_categories`
@@ -961,22 +784,10 @@ ALTER TABLE `otp_codes`
   MODIFY `otp_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `password_resets`
---
-ALTER TABLE `password_resets`
-  MODIFY `reset_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `point_transactions`
 --
 ALTER TABLE `point_transactions`
   MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
-
---
--- 使用資料表自動遞增(AUTO_INCREMENT) `public_relations`
---
-ALTER TABLE `public_relations`
-  MODIFY `pr_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `reward_catalog`
@@ -997,18 +808,6 @@ ALTER TABLE `reward_redemptions`
   MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `sales`
---
-ALTER TABLE `sales`
-  MODIFY `sale_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- 使用資料表自動遞增(AUTO_INCREMENT) `sale_items`
---
-ALTER TABLE `sale_items`
-  MODIFY `sale_item_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `users`
 --
 ALTER TABLE `users`
@@ -1019,12 +818,6 @@ ALTER TABLE `users`
 --
 ALTER TABLE `audit_logs`
   ADD CONSTRAINT `audit_logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
-
---
--- 資料表的限制式 `departments`
---
-ALTER TABLE `departments`
-  ADD CONSTRAINT `departments_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
 
 --
 -- 資料表的限制式 `donations`
@@ -1051,30 +844,6 @@ ALTER TABLE `donor_reward_redemptions`
   ADD CONSTRAINT `donor_reward_redemptions_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `donor_reward_items` (`item_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `donor_reward_redemptions_ibfk_2` FOREIGN KEY (`volunteer_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `donor_reward_redemptions_ibfk_3` FOREIGN KEY (`donor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
-
---
--- 資料表的限制式 `enterprise_verification_requests`
---
-ALTER TABLE `enterprise_verification_requests`
-  ADD CONSTRAINT `enterprise_verification_requests_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
-
---
--- 資料表的限制式 `public_relations`
---
-ALTER TABLE `public_relations`
-  ADD CONSTRAINT `public_relations_ibfk_1` FOREIGN KEY (`organizer_id`) REFERENCES `users` (`user_id`);
-
---
--- 資料表的限制式 `sales`
---
-ALTER TABLE `sales`
-  ADD CONSTRAINT `sales_ibfk_1` FOREIGN KEY (`processed_by`) REFERENCES `users` (`user_id`);
-
---
--- 資料表的限制式 `sale_items`
---
-ALTER TABLE `sale_items`
-  ADD CONSTRAINT `sale_items_ibfk_1` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`);
 
 --
 -- 資料表結構 `donation_items`

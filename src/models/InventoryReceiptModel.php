@@ -101,15 +101,6 @@ class InventoryReceiptModel extends BaseModel {
         return $this->hasError;
     }
 
-    public function getLastAvailableQuantity() {
-        return $this->lastAvailableQuantity;
-    }
-
-    public function addReceipt(array $data, $userId) {
-        $data['movement_type'] = 'in';
-        return $this->recordManualMovement($data, $userId)['status'] === 'success';
-    }
-
     public function recordManualMovement(array $data, $userId) {
         if (!$this->ready) {
             return ['status' => 'error'];
