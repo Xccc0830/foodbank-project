@@ -202,9 +202,20 @@ class ActivityModel extends BaseModel {
         return true;
     }
 
+    /** 會員已通過身分驗證時回傳其身分證字號（報名時可直接沿用，不必再輸入）；否則回傳 null */
+    public function getVerifiedIdNumber($userId) {
+        $userId = (int) $userId;
+        $rows = $this->query("SELECT id_verify_status, id_number_encrypted FROM users WHERE user_id = {$userId} LIMIT 1");
+        if (!$rows || ($rows[0]['id_verify_status'] ?? '') !== 'approved' || empty($rows[0]['id_number_encrypted'])) {
+            return null;
+        }
+        return IdNumberHelper::decrypt($rows[0]['id_number_encrypted']);
+    }
+
     /**
-     * 報名活動。企業會員須附上員工名單（姓名、電話、身分證字號），報名人數即名單人數；
-     * 一般會員以 1 人計。兩者可同時報名，不必等企業先認領，只受活動總名額限制。
+     * 報名活動。參加者都要附上姓名、電話、身分證字號（供活動保險使用）：
+     * 企業會員附員工名單，報名人數即名單人數；一般會員附本人 1 筆資料。
+     * 兩者可同時報名，不必等企業先認領，只受活動總名額限制。
      */
     public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null, $headcount = null, array $employees = []) {
         $activityId = (int) $activityId;
@@ -230,13 +241,18 @@ class ActivityModel extends BaseModel {
             $organizationName = trim((string) ($userInfo['enterprise_name'] ?: $organizationName ?: $userInfo['full_name']));
         }
 
-        // 企業會員：人數就是員工名單的人數，且名單必須完整有效；個人會員一律以 1 人計。
+        // 企業會員：人數就是員工名單的人數；個人會員只能登記本人 1 筆。名單都必須完整有效。
+        $employees = array_values($employees);
+        if (self::validateEmployees($employees) !== null) {
+            return false;
+        }
         if ($isEnterpriseMember) {
-            $employees = array_values($employees);
-            if (self::validateEmployees($employees) !== null || ($headcount !== null && (int) $headcount !== count($employees))) {
+            if ($headcount !== null && (int) $headcount !== count($employees)) {
                 return false;
             }
             $headcount = count($employees);
+        } elseif (count($employees) !== 1) {
+            return false;
         } else {
             $headcount = 1;
         }
@@ -319,7 +335,7 @@ class ActivityModel extends BaseModel {
             }
 
             // 重新報名時以新名單為準
-            if ($saved && $isEnterpriseMember) {
+            if ($saved) {
                 $saved = $this->db->query("DELETE FROM activity_participants WHERE assignment_id = {$assignmentId}");
                 $stmt = $saved ? $this->db->prepare("INSERT INTO activity_participants (assignment_id, full_name, phone, id_number_encrypted) VALUES (?, ?, ?, ?)") : false;
                 foreach ($employees as $employee) {

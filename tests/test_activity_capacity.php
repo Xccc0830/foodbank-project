@@ -1,6 +1,6 @@
 <?php
 /**
- * 活動人數回歸測試：一般會員不必等企業認領即可報名；企業依員工名單報名多人；
+ * 活動人數回歸測試：一般會員不必等企業認領即可報名，但要填本人資料；企業依員工名單報名多人；
  * 所有報名類型都受活動總人數上限限制；員工身分證字號加密保存、顯示時遮罩。
  */
 require __DIR__ . '/../config/database.php';
@@ -105,19 +105,24 @@ if (!$activityCreated || count($testUserIds) !== count($testUsers)) {
         $employees[] = ['full_name' => '員工' . $i, 'phone' => '091234567' . $i, 'id_number' => $makeId(1000 + $i)];
     }
 
-    $riderBeforeCompany = $activityModel->register($activityId, $riderOneId, 'individual');
+    $person = function ($serial, $name) use ($makeId) {
+        return [['full_name' => $name, 'phone' => '0922000' . str_pad((string) $serial, 3, '0', STR_PAD_LEFT), 'id_number' => $makeId(2000 + $serial)]];
+    };
+
+    $riderWithoutData = $activityModel->register($activityId, $riderOneId, 'individual');
+    $riderBeforeCompany = $activityModel->register($activityId, $riderOneId, 'individual', null, null, $person(1, 'Rider 1'));
     $badList = $employees;
     $badList[1]['id_number'] = 'A123456788';
     $companyBadId = $activityModel->register($activityId, $companyId, 'company', '容量測試商家', 3, $badList);
     $companyNoList = $activityModel->register($activityId, $companyId, 'company', '容量測試商家', 3);
     $companyRegistered = $activityModel->register($activityId, $companyId, 'company', '容量測試商家', 3, $employees);
-    $riderTwoRegistered = $activityModel->register($activityId, $riderTwoId, 'individual');
-    $riderThreeRegistered = $activityModel->register($activityId, $riderThreeId, 'individual');
+    $riderTwoRegistered = $activityModel->register($activityId, $riderTwoId, 'individual', null, null, $person(2, 'Rider 2'));
+    $riderThreeRegistered = $activityModel->register($activityId, $riderThreeId, 'individual', null, null, $person(3, 'Rider 3'));
 
-    if ($riderBeforeCompany && !$companyBadId && !$companyNoList && $companyRegistered && $riderTwoRegistered && !$riderThreeRegistered) {
-        echo "PASS rider-registers-without-waiting-and-capacity-limit (1 + 3 + 1 seats)\n";
+    if (!$riderWithoutData && $riderBeforeCompany && !$companyBadId && !$companyNoList && $companyRegistered && $riderTwoRegistered && !$riderThreeRegistered) {
+        echo "PASS registration-requires-personal-data-and-capacity-limit (1 + 3 + 1 seats)\n";
     } else {
-        echo "FAIL rider-registers-without-waiting-and-capacity-limit\n";
+        echo "FAIL registration-requires-personal-data-and-capacity-limit\n";
         $failures++;
     }
 

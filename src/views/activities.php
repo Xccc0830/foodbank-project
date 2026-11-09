@@ -28,13 +28,11 @@ if (!empty($_GET['export_roster']) && $currentRole === 'foodbank_staff') {
         echo "\xEF\xBB\xBF";
         $output = fopen('php://output', 'w');
         fputcsv($output, ['活動', $rosterActivity['title'], '開始時間', $rosterActivity['start_at']]);
-        fputcsv($output, ['企業／組織', '員工姓名', '手機', '身分證字號']);
+        fputcsv($output, ['企業／組織', '姓名', '手機', '身分證字號']);
         foreach ($activityModel->getParticipants((int) $rosterActivity['activity_id']) as $participant) {
-            if ($participant['assignment_type'] !== 'company') {
-                continue;
-            }
+            $group = $participant['assignment_type'] === 'company' ? $participant['organization_name'] : '一般會員';
             foreach ($activityModel->getEmployees((int) $participant['assignment_id'], true) as $employee) {
-                fputcsv($output, [$participant['organization_name'], $employee['full_name'], $employee['phone'], $employee['id_number']]);
+                fputcsv($output, [$group, $employee['full_name'], $employee['phone'], $employee['id_number']]);
             }
         }
         fclose($output);
@@ -84,13 +82,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $organizationName = $assignmentType === 'company'
             ? (string) ($currentUser['enterprise_name'] ?? '')
             : null;
-        $employees = $isEnterpriseMember && is_array($_POST['employees'] ?? null) ? array_values($_POST['employees']) : [];
+        if ($isEnterpriseMember) {
+            $employees = is_array($_POST['employees'] ?? null) ? array_values($_POST['employees']) : [];
+        } else {
+            // 一般會員填本人資料；已通過身分驗證的可直接沿用驗證過的身分證字號
+            $self = is_array($_POST['participant'] ?? null) ? $_POST['participant'] : [];
+            if (trim((string) ($self['id_number'] ?? '')) === '' && !empty($_POST['use_verified_id'])) {
+                $self['id_number'] = (string) $activityModel->getVerifiedIdNumber((int) $currentUser['user_id']);
+            }
+            $employees = [$self];
+        }
         $participantCount = $isEnterpriseMember ? count($employees) : 1;
-        $employeeError = $isEnterpriseMember ? ActivityModel::validateEmployees($employees) : null;
+        $employeeError = ActivityModel::validateEmployees($employees);
+        if ($employeeError !== null && !$isEnterpriseMember) {
+            $employeeError = str_replace('第 1 位員工的', '', $employeeError);
+        }
+        // 送出失敗時帶回使用者剛填的資料；系統從身分驗證補上的號碼不送回頁面
+        $usedVerifiedId = !$isEnterpriseMember && !empty($_POST['use_verified_id']) && trim((string) ($_POST['participant']['id_number'] ?? '')) === '';
+        $reopenData = ['activity_id' => (int) ($_POST['activity_id'] ?? 0), 'employees' => array_map(static function ($row) use ($usedVerifiedId) {
+            return [
+                'full_name' => (string) ($row['full_name'] ?? ''),
+                'phone' => (string) ($row['phone'] ?? ''),
+                'id_number' => $usedVerifiedId ? '' : (string) ($row['id_number'] ?? ''),
+            ];
+        }, $employees)];
 
         if ($employeeError !== null) {
             $message = ['type' => 'error', 'text' => $employeeError];
-            $reopenEnterpriseForm = ['activity_id' => (int) ($_POST['activity_id'] ?? 0), 'employees' => $employees];
+            $reopenEnterpriseForm = $reopenData;
         } elseif ($assignmentType === 'company' && trim($organizationName) === '') {
             $message = ['type' => 'error', 'text' => '請先補齊企業會員的企業／組織名稱。'];
         } else {
@@ -117,9 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? sprintf('企業報名完成，已登記 %d 位員工。', $participantCount) : '活動報名完成，預計可獲得 5 枚心意幣。'];
             } else {
                 $message = ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或剩餘名額不足。'];
-                if ($isEnterpriseMember) {
-                    $reopenEnterpriseForm = ['activity_id' => $activityId, 'employees' => $employees];
-                }
+                $reopenEnterpriseForm = $reopenData;
             }
         }
     }
@@ -213,8 +230,8 @@ foreach ($activities as $index => $activity) {
     if ($activities[$index]['can_view_participants']) {
         $participantList = $activityModel->getParticipants((int) $activity['activity_id']);
         foreach ($participantList as &$participantRow) {
-            // 員工名冊（電話、遮罩後的身分證）只給食物銀行人員看；活動發起人可能是其他企業，只看得到人數
-            $participantRow['employees'] = $participantRow['assignment_type'] === 'company' && $currentRole === 'foodbank_staff'
+            // 參加者資料（電話、遮罩後的身分證）只給食物銀行人員看；活動發起人可能是其他企業，只看得到人數
+            $participantRow['employees'] = $currentRole === 'foodbank_staff'
                 ? $activityModel->getEmployees((int) $participantRow['assignment_id'])
                 : [];
         }
@@ -333,7 +350,7 @@ $activityStatusLabels = [
             <?php if ($isEnterpriseMember): ?>
                 <button class="btn btn-primary btn-sm" type="button" data-modal-open="enterpriseRegisterModal" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>" data-remaining="<?php echo $activity['remaining_capacity'] === null ? '' : (int) $activity['remaining_capacity']; ?>">企業報名</button>
             <?php else: ?>
-                <button class="btn btn-primary btn-sm" type="submit">報名活動</button>
+                <button class="btn btn-primary btn-sm" type="button" data-modal-open="individualRegisterModal" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>">報名活動</button>
             <?php endif; ?>
         </form>
     <?php else: ?>
@@ -503,6 +520,87 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
     }
 })();
 </script>
+<?php elseif ($canRegisterActivities):
+    $verifiedId = $activityModel->getVerifiedIdNumber((int) $currentUser['user_id']);
+    $verifiedIdMasked = $verifiedId ? IdNumberHelper::mask($verifiedId) : '';
+?>
+<div class="app-modal-overlay" id="individualRegisterModal" role="dialog" aria-modal="true" aria-labelledby="individualRegisterTitle" hidden>
+    <div class="app-modal">
+        <div class="app-modal-header">
+            <div><h2 id="individualRegisterTitle">報名活動</h2><p data-individual-activity-title></p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
+            <form method="post" id="individualRegisterForm">
+                <?php echo csrfField(); ?>
+                <input type="hidden" name="action" value="register_activity">
+                <input type="hidden" name="assignment_type" value="individual">
+                <input type="hidden" name="activity_id" value="">
+                <p class="form-hint">請填寫參加者資料，供活動保險使用。身分證字號會加密保存，畫面上只顯示部分號碼。</p>
+                <div class="grid-2">
+                    <div class="form-group"><label for="participantName">姓名 <span class="required-mark">*</span></label><input id="participantName" type="text" name="participant[full_name]" maxlength="50" required value="<?php echo htmlspecialchars((string) ($currentUser['full_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"></div>
+                    <div class="form-group"><label for="participantPhone">手機 <span class="required-mark">*</span></label><input id="participantPhone" type="tel" name="participant[phone]" pattern="09\d{8}" maxlength="10" required placeholder="0912345678" value="<?php echo htmlspecialchars((string) ($currentUser['phone'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"></div>
+                </div>
+                <?php if ($verifiedIdMasked !== ''): ?>
+                    <div class="form-group">
+                        <label>身分證字號</label>
+                        <label class="form-check-row"><input type="checkbox" name="use_verified_id" value="1" checked data-use-verified-id> 使用已通過身分驗證的號碼（<?php echo htmlspecialchars($verifiedIdMasked); ?>）</label>
+                        <input type="text" name="participant[id_number]" pattern="[A-Za-z][1289A-Da-d]\d{8}" maxlength="10" placeholder="改填其他號碼，例如 A123456789" autocomplete="off" data-other-id hidden disabled>
+                    </div>
+                <?php else: ?>
+                    <div class="form-group"><label for="participantId">身分證字號 <span class="required-mark">*</span></label><input id="participantId" type="text" name="participant[id_number]" pattern="[A-Za-z][1289A-Da-d]\d{8}" maxlength="10" required placeholder="A123456789" autocomplete="off"></div>
+                <?php endif; ?>
+                <div class="modal-actions"><button type="submit" class="btn btn-primary"><i class="fas fa-user-check"></i> 確認報名</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    const modal = document.getElementById('individualRegisterModal');
+    const form = document.getElementById('individualRegisterForm');
+    const reopen = <?php echo json_encode($reopenEnterpriseForm, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    const useVerified = form.querySelector('[data-use-verified-id]');
+    const otherId = form.querySelector('[data-other-id]');
+
+    // 不勾「使用已驗證的號碼」時，改成自己輸入
+    if (useVerified && otherId) {
+        const sync = function () {
+            otherId.hidden = useVerified.checked;
+            otherId.disabled = useVerified.checked;
+            otherId.required = !useVerified.checked;
+        };
+        useVerified.addEventListener('change', sync);
+        sync();
+    }
+
+    function openFor(activityId, title) {
+        form.querySelector('input[name="activity_id"]').value = activityId;
+        modal.querySelector('[data-individual-activity-title]').textContent = title || '';
+    }
+    modal.addEventListener('app-modal-open', function (event) {
+        openFor(event.detail.opener.dataset.activityId, event.detail.opener.dataset.activityTitle);
+    });
+
+    // 送出失敗時重新打開並帶回剛填的資料
+    if (reopen && reopen.activity_id) {
+        const opener = document.querySelector('[data-modal-open="individualRegisterModal"][data-activity-id="' + reopen.activity_id + '"]');
+        openFor(reopen.activity_id, opener ? opener.dataset.activityTitle : '');
+        const values = (reopen.employees || [])[0] || {};
+        form.querySelector('input[name="participant[full_name]"]').value = values.full_name || '';
+        form.querySelector('input[name="participant[phone]"]').value = values.phone || '';
+        const idInput = form.querySelector('input[name="participant[id_number]"]');
+        if (idInput && values.id_number) {
+            idInput.value = values.id_number;
+            if (useVerified) {
+                useVerified.checked = false;
+                useVerified.dispatchEvent(new Event('change'));
+            }
+        }
+        modal.hidden = false;
+    }
+})();
+</script>
 <?php endif; ?>
 
 <div id="participants-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="participants-modal-title" style="display: none;">
@@ -560,7 +658,7 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
                     const headcount = participant.assignment_type === 'company' && participant.participant_count ? ' · 參與人數：' + escapeHtml(String(participant.participant_count)) : '';
                     const phone = participant.phone ? '<small>電話：' + escapeHtml(participant.phone) + '</small>' : '';
                     const employees = (participant.employees || []).length
-                        ? '<table class="data-table employee-roster-table"><thead><tr><th>員工</th><th>手機</th><th>身分證字號</th></tr></thead><tbody>'
+                        ? '<table class="data-table employee-roster-table"><thead><tr><th>' + (participant.assignment_type === 'company' ? '員工' : '參加者') + '</th><th>手機</th><th>身分證字號</th></tr></thead><tbody>'
                             + participant.employees.map(function (employee) {
                                 return '<tr><td>' + escapeHtml(employee.full_name) + '</td><td>' + escapeHtml(employee.phone) + '</td><td>' + escapeHtml(employee.id_number_masked) + '</td></tr>';
                             }).join('') + '</tbody></table>'
@@ -572,7 +670,7 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
                     ? '<section class="participant-group"><h4>' + titleText + '</h4><div class="participants-list">' + group.map(renderParticipant).join('') + '</div></section>'
                     : '';
             }
-            const exportLink = canExportRoster && companies.length
+            const exportLink = canExportRoster && participants.length
                 ? '<p><a class="btn btn-secondary btn-sm" href="?page=activities&export_roster=' + encodeURIComponent(button.dataset.activityId) + '"><i class="fas fa-file-shield"></i> 下載保險名冊（含完整身分證字號）</a></p>'
                 : '';
             body.innerHTML = participants.length
