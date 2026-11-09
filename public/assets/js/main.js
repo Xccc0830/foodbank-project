@@ -9,6 +9,8 @@
         initializeEventListeners();
         initializeSessionGuard();
         initializeSpecCheck();
+        initializeCategorySuggest();
+        initializeAppModals();
         initializeNoReloadForms();
         initializeSidebarToggle();
         initializeDeliveryStatusTracking();
@@ -590,6 +592,145 @@
                     }
                     form.submit();
                 });
+        });
+    }
+
+    // 通用小視窗：按鈕加 data-modal-open="視窗 id" 開啟；點關閉鈕、背景或按 Esc 關閉
+    function initializeAppModals() {
+        document.addEventListener('click', function (event) {
+            const opener = event.target.closest ? event.target.closest('[data-modal-open]') : null;
+            if (opener) {
+                const modal = document.getElementById(opener.dataset.modalOpen);
+                if (modal) {
+                    modal.hidden = false;
+                    modal.dispatchEvent(new CustomEvent('app-modal-open', { detail: { opener: opener } }));
+                    const firstField = modal.querySelector('input:not([type="hidden"]):not([disabled]), select, textarea');
+                    if (firstField) {
+                        firstField.focus();
+                    }
+                }
+                return;
+            }
+            const overlay = event.target.closest ? event.target.closest('.app-modal-overlay') : null;
+            if (overlay && (event.target === overlay || event.target.closest('[data-modal-close]'))) {
+                overlay.hidden = true;
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                document.querySelectorAll('.app-modal-overlay:not([hidden])').forEach(function (modal) { modal.hidden = true; });
+            }
+        });
+    }
+
+    // 物資分類自動判斷：輸入物資名稱後自動選分類（商家物資表單、食物銀行入庫都適用）。
+    // 只在分類還沒選、或目前是上次自動選的值時才改，使用者自己選過的不會被蓋掉。
+    function initializeCategorySuggest() {
+        const pairs = [
+            { name: 'input[name="item_name[]"]', select: function (input) { const row = input.closest('.material-item-row'); return row && row.querySelector('select[name="item_category[]"]'); } },
+            { name: '#stock-item-name', select: function () { return document.getElementById('stock-item-category'); } }
+        ];
+        const timers = new WeakMap();
+
+        function hintFor(select) {
+            let hint = select.parentElement.querySelector('.category-suggest-hint');
+            if (!hint) {
+                hint = document.createElement('small');
+                hint.className = 'category-suggest-hint';
+                select.insertAdjacentElement('afterend', hint);
+            }
+            return hint;
+        }
+
+        function suggest(input, select) {
+            const name = input.value.trim();
+            const autoValue = select.dataset.autoValue || '';
+            if (!name) {
+                const emptyHint = select.parentElement.querySelector('.category-suggest-hint');
+                if (emptyHint) {
+                    emptyHint.textContent = '';
+                }
+                return;
+            }
+            if (select.value !== '' && select.value !== autoValue) {
+                return;
+            }
+            fetch('?action=category_suggest&item_name=' + encodeURIComponent(name), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (result) {
+                    const currentAuto = select.dataset.autoValue || '';
+                    if (select.value !== '' && select.value !== currentAuto) {
+                        return;
+                    }
+                    if (!result.found) {
+                        // 判斷不出來：清掉上次自動選的分類，讓使用者自己選
+                        if (currentAuto !== '') {
+                            select.value = '';
+                            delete select.dataset.autoValue;
+                        }
+                        hintFor(select).textContent = '無法自動判斷分類，請手動選擇';
+                        return;
+                    }
+                    const option = Array.prototype.find.call(select.options, function (opt) {
+                        return !opt.disabled && (opt.value === String(result.category_id) || opt.textContent.trim() === result.category_name);
+                    });
+                    if (!option) {
+                        return;
+                    }
+                    select.value = option.value;
+                    select.dataset.autoValue = option.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    hintFor(select).textContent = (result.source === 'ai' ? 'AI 判斷' : '系統判斷') + '為「' + result.category_name + '」，可手動更改';
+                })
+                .catch(function () { /* 判斷失敗就讓使用者自己選 */ });
+        }
+
+        document.addEventListener('input', function (event) {
+            pairs.forEach(function (pair) {
+                if (!event.target.matches || !event.target.matches(pair.name)) {
+                    return;
+                }
+                const select = pair.select(event.target);
+                if (!select) {
+                    return;
+                }
+                window.clearTimeout(timers.get(event.target));
+                timers.set(event.target, window.setTimeout(function () { suggest(event.target, select); }, 500));
+            });
+        });
+        // 選到分類（自動或手動）時，保存方式跟著帶入分類的建議值；使用者自己改過保存方式就不再覆蓋
+        document.addEventListener('change', function (event) {
+            const target = event.target;
+            if (target.matches && target.matches('select[name="item_storage[]"]')) {
+                if (target.value !== (target.dataset.autoValue || '')) {
+                    target.dataset.manual = '1';
+                }
+                return;
+            }
+            if (!target.matches || !target.matches('select[name="item_category[]"]')) {
+                return;
+            }
+            const row = target.closest('.material-item-row');
+            const storage = row && row.querySelector('select[name="item_storage[]"]');
+            const option = target.options[target.selectedIndex];
+            const suggested = option ? option.dataset.storage : '';
+            if (!storage || !suggested || storage.dataset.manual === '1') {
+                return;
+            }
+            storage.value = suggested;
+            storage.dataset.autoValue = suggested;
+            storage.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        document.addEventListener('change', function (event) {
+            const select = event.target;
+            if (select.matches && select.matches('select[name="item_category[]"], #stock-item-category') && select.value !== (select.dataset.autoValue || '')) {
+                delete select.dataset.autoValue;
+                const hint = select.parentElement.querySelector('.category-suggest-hint');
+                if (hint) {
+                    hint.textContent = '';
+                }
+            }
         });
     }
 

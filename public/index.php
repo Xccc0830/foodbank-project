@@ -360,6 +360,24 @@ if ($action === 'rider_license') {
     exit;
 }
 
+if ($action === 'category_suggest' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    require_once BASE_PATH . '/src/helpers/CategorySuggestHelper.php';
+    $suggestName = mb_substr(trim((string) ($_GET['item_name'] ?? '')), 0, 100);
+    // 同一個名稱 10 分鐘內不重複判斷（避免 AI 費用）
+    $suggestKey = md5($suggestName);
+    $cached = $_SESSION['category_suggest_cache'][$suggestKey] ?? null;
+    if ($cached && $cached['at'] > time() - 600) {
+        $suggestion = $cached['result'];
+    } else {
+        $suggestion = CategorySuggestHelper::suggest($connection, $suggestName);
+        $_SESSION['category_suggest_cache'][$suggestKey] = ['at' => time(), 'result' => $suggestion];
+    }
+    echo json_encode($suggestion ? ['found' => true] + $suggestion : ['found' => false], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($action === 'spec_check' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');

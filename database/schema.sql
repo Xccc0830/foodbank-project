@@ -317,6 +317,10 @@ CREATE TABLE `item_categories` (
   `category_id` int(11) NOT NULL,
   `category_name` varchar(50) NOT NULL,
   `description` text DEFAULT NULL,
+  `keywords` text DEFAULT NULL,
+  `default_storage` enum('room','chilled','frozen') DEFAULT NULL,
+  `carbon_factor` decimal(6,2) DEFAULT NULL,
+  `expiry_alert_days` int(11) DEFAULT NULL,
   `icon` varchar(50) DEFAULT NULL,
   `display_order` int(11) DEFAULT 0,
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
@@ -1186,6 +1190,54 @@ ALTER TABLE `donation_allocation_items`
 --
 ALTER TABLE `deliveries`
   ADD KEY `idx_deliveries_allocation_id` (`allocation_id`);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `rider_locations`（GO Rider 最新位置，只保留每人一筆）
+--
+
+DROP TABLE IF EXISTS `rider_locations`;
+CREATE TABLE `rider_locations` (
+  `volunteer_id` int(11) NOT NULL,
+  `lat` decimal(10,7) NOT NULL,
+  `lon` decimal(10,7) NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`volunteer_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- 資料表結構 `category_corrections`（自動分類被手動改掉的紀錄）
+--
+
+DROP TABLE IF EXISTS `category_corrections`;
+CREATE TABLE `category_corrections` (
+  `correction_id` int(11) NOT NULL AUTO_INCREMENT,
+  `item_name` varchar(150) NOT NULL,
+  `suggested_category_id` int(11) DEFAULT NULL,
+  `chosen_category_id` int(11) NOT NULL,
+  `source` enum('donation','inventory') NOT NULL,
+  `resolved` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`correction_id`),
+  KEY `idx_category_corrections_open` (`resolved`,`chosen_category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- 資料表結構 `activity_participants`（企業報名的員工名冊，身分證字號加密保存）
+--
+
+DROP TABLE IF EXISTS `activity_participants`;
+CREATE TABLE `activity_participants` (
+  `participant_id` int(11) NOT NULL AUTO_INCREMENT,
+  `assignment_id` int(11) NOT NULL,
+  `full_name` varchar(50) NOT NULL,
+  `phone` varchar(20) NOT NULL,
+  `id_number_encrypted` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`participant_id`),
+  KEY `idx_activity_participants_assignment` (`assignment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 COMMIT;
 

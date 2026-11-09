@@ -16,7 +16,9 @@ $deliveryAddress = array_key_exists('delivery_address', $_POST)
     ? trim((string) $_POST['delivery_address'])
     : '臺北市文山區明義里興隆路四段42巷3號1樓';
 $itemCategoryOptions = [];
-$categoryResult = $connection->query("SELECT category_id, category_name FROM item_categories WHERE status = 'active' ORDER BY display_order, category_id");
+require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
+new ItemCategoryModel(); // 確保分類的建議保存方式等欄位存在
+$categoryResult = $connection->query("SELECT category_id, category_name, default_storage FROM item_categories WHERE status = 'active' ORDER BY display_order, category_id");
 while ($categoryResult && ($categoryRow = $categoryResult->fetch_assoc())) {
     $itemCategoryOptions[] = $categoryRow;
 }
@@ -223,6 +225,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
                 $insertedId = false;
             } else {
                 $connection->commit();
+                // 商家選的分類和系統判斷不同時記下來，讓食物銀行一鍵加入關鍵字
+                require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
+                $correctionModel = new ItemCategoryModel();
+                foreach ($items as $item) {
+                    $correctionModel->recordCorrectionIfNeeded($item['item_name'], $item['category_id'] ?? 0, 'donation');
+                }
             }
         }
         if ($insertedId && $donorAddress !== '' && ($defaultPickupAddress === '' || !empty($_POST['save_default_address']))) {
@@ -443,7 +451,7 @@ $formatDateTime = static function ($value) {
                 <div class="form-section-heading"><span>Step 2</span><h3>物資規格</h3><p>同一筆配送可以加入多種物資。</p></div>
                 <div id="materialItemRows">
                     <div class="material-item-row">
-                        <div class="grid-2"><div class="form-group"><label>物資名稱 <span class="required-mark">*</span></label><input type="text" name="item_name[]" placeholder="例如：白米 5kg 裝" required></div><div class="form-group"><label>物資類別</label><select name="item_category[]"><option value="">請選擇</option><?php foreach ($itemCategoryOptions as $categoryOption): ?><option value="<?php echo (int) $categoryOption['category_id']; ?>"><?php echo htmlspecialchars($categoryOption['category_name']); ?></option><?php endforeach; ?></select></div></div>
+                        <div class="grid-2"><div class="form-group"><label>物資名稱 <span class="required-mark">*</span></label><input type="text" name="item_name[]" placeholder="例如：白米 5kg 裝" required></div><div class="form-group"><label>物資類別</label><select name="item_category[]"><option value="">請選擇</option><?php foreach ($itemCategoryOptions as $categoryOption): ?><option value="<?php echo (int) $categoryOption['category_id']; ?>" data-storage="<?php echo htmlspecialchars((string) ($categoryOption['default_storage'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($categoryOption['category_name']); ?></option><?php endforeach; ?></select></div></div>
                         <div class="grid-3"><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="0.01" step="0.01" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>箱</option><option>瓶</option><option>盒</option><option>份</option><option>件</option></select></div><div class="form-group"><label>總重量 (kg)</label><input type="number" name="item_weight_kg[]" min="0" step="0.01" placeholder="例如：5"></div></div>
                         <div class="grid-3"><div class="form-group"><label>保存方式</label><select name="item_storage[]"><option value="room">常溫</option><option value="chilled">冷藏</option><option value="frozen">冷凍</option></select></div><div class="form-group"><label>包裝狀態</label><select name="item_package[]"><option value="sealed">原包裝未拆封</option><option value="opened">已拆封／已分裝</option></select></div><div class="form-group"><label>保存期限</label><input type="date" name="item_expiry_date[]"></div></div>
                         <div class="grid-3"><div class="form-group"><label>長 (cm)</label><input type="number" name="item_length_cm[]" min="0" step="0.1" placeholder="例如：30"></div><div class="form-group"><label>寬 (cm)</label><input type="number" name="item_width_cm[]" min="0" step="0.1" placeholder="例如：20"></div><div class="form-group"><label>高 (cm)</label><input type="number" name="item_height_cm[]" min="0" step="0.1" placeholder="例如：15"></div></div>
@@ -820,11 +828,13 @@ $formatDateTime = static function ($value) {
                 });
                 newRow.querySelectorAll('select').forEach(function (select) {
                     select.selectedIndex = 0;
+                    // 新的一筆物資重新開始自動判斷，不沿用上一筆的手動選擇紀錄
+                    delete select.dataset.autoValue;
+                    delete select.dataset.manual;
                 });
-                const checkBox = newRow.querySelector('.spec-check-box');
-                if (checkBox) {
-                    checkBox.remove();
-                }
+                newRow.querySelectorAll('.spec-check-box, .category-suggest-hint').forEach(function (leftover) {
+                    leftover.remove();
+                });
                 itemRows.appendChild(newRow);
                 refreshItemRows();
             });

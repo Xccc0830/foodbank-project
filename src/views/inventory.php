@@ -54,6 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         $_POST['movement_type'] = $movementType;
         $movementResult = $receiptModel->recordManualMovement($_POST, (int) ($currentUser['user_id'] ?? 0));
         if ($movementResult['status'] === 'success') {
+            if ($movementType === 'in') {
+                $chosenCategory = $itemCategoryModel->getCategoryByName((string) ($_POST['category'] ?? ''));
+                if ($chosenCategory) {
+                    $itemCategoryModel->recordCorrectionIfNeeded($_POST['item_name'] ?? '', (int) $chosenCategory['category_id'], 'inventory');
+                }
+            }
             $inventoryMessage = [
                 'type' => 'success',
                 'text' => $movementType === 'out' ? '物資已成功取出並更新庫存。' : '物資入庫紀錄已新增。',
@@ -193,6 +199,47 @@ foreach ($rows as $row) {
         <div class="stat-card"><h3><?php echo htmlspecialchars($inventoryStatusLabels[$summaryKey]); ?></h3><div class="stat-number"><?php echo (int) $summary[$summaryKey]; ?></div><p class="stat-label">品項</p></div>
     <?php endforeach; ?>
 </div>
+
+<?php
+    // 即期品提醒：依各分類設定的提醒天數（在「物資分類」頁可調整）
+    $alertDaysByCategory = [];
+    foreach ($receiptCategories as $receiptCategory) {
+        $alertDaysByCategory[$receiptCategory['category_name']] = (int) ($receiptCategory['expiry_alert_days'] ?? ItemCategoryModel::DEFAULT_EXPIRY_ALERT_DAYS);
+    }
+    $expiringStock = $receiptModel->getExpiringStock($alertDaysByCategory, ItemCategoryModel::DEFAULT_EXPIRY_ALERT_DAYS);
+?>
+<?php if ($expiringStock): ?>
+<section class="card mt-32 expiring-stock-card">
+    <div class="card-header">
+        <h2><i class="fas fa-hourglass-half"></i> 即期品提醒</h2>
+        <p>以下物資快到期或已過期，請優先分送或處理（依「先到期先出」推算目前剩下的批次）。</p>
+    </div>
+    <div class="card-body">
+        <div class="data-table-wrapper"><table class="data-table expiring-stock-table">
+            <thead><tr><th>物資名稱</th><th>分類</th><th>剩餘數量</th><th>有效期限</th><th>狀態</th></tr></thead>
+            <tbody>
+            <?php foreach ($expiringStock as $lot): ?>
+                <tr>
+                    <td><strong><?php echo htmlspecialchars($lot['item_name']); ?></strong></td>
+                    <td><?php echo htmlspecialchars($lot['category']); ?></td>
+                    <td><?php echo htmlspecialchars(rtrim(rtrim(number_format($lot['quantity'], 2, '.', ''), '0'), '.') . ' ' . $lot['unit']); ?></td>
+                    <td><?php echo htmlspecialchars($lot['expiry_date']); ?></td>
+                    <td>
+                        <?php if ($lot['days_left'] < 0): ?>
+                            <span class="status status-exception">已過期 <?php echo abs($lot['days_left']); ?> 天</span>
+                        <?php elseif ($lot['days_left'] === 0): ?>
+                            <span class="status status-exception">今天到期</span>
+                        <?php else: ?>
+                            <span class="status status-pending">剩 <?php echo $lot['days_left']; ?> 天</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table></div>
+    </div>
+</section>
+<?php endif; ?>
 
 <section class="card mt-32 stock-receipt-section">
     <div class="card-header stock-receipt-heading">

@@ -423,17 +423,26 @@ if ($isVolunteer) {
         <h1 class="view-title"><?php echo $page === 'material_transport' ? '物資運送' : ($isVolunteer ? '可接配送' : '配送任務'); ?></h1>
         <p class="view-subtitle"><?php echo $page === 'material_transport' ? '查看、接取與追蹤物資運送任務' : ($isVolunteer ? '查看、接取與追蹤自己的配送任務' : '發布、管理與追蹤惜食配送任務'); ?></p>
     </div>
+    <div class="btn-group">
+        <?php if ($canManageDeliveries): ?>
+            <button type="button" class="btn btn-primary" data-modal-open="createDeliveryModal"><i class="fas fa-bullhorn"></i> 發布配送任務</button>
+        <?php endif; ?>
+        <button type="button" class="btn btn-secondary" data-modal-open="rewardRulesModal"><i class="fas fa-gift"></i> 獎勵機制</button>
+    </div>
 </div>
 
 <?php if ($message): ?>
     <div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div>
 <?php endif; ?>
 
-<div class="grid-2">
-    <?php if ($canManageDeliveries): ?>
-    <div class="card">
-        <div class="card-header"><h2>發布配送任務</h2><p>依規劃書公式預先計算公益點數</p></div>
-        <div class="card-body">
+<?php if ($canManageDeliveries): ?>
+<div class="app-modal-overlay" id="createDeliveryModal" role="dialog" aria-modal="true" aria-labelledby="createDeliveryTitle" hidden>
+    <div class="app-modal">
+        <div class="app-modal-header">
+            <div><h2 id="createDeliveryTitle">發布配送任務</h2><p>依獎勵機制自動計算心意幣</p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
             <form method="post">
                 <input type="hidden" name="action" value="create_delivery">
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" max="2147483647" placeholder="可留白"></div>
@@ -452,11 +461,16 @@ if ($isVolunteer) {
             </form>
         </div>
     </div>
-    <?php endif; ?>
+</div>
+<?php endif; ?>
 
-    <div class="card">
-        <div class="card-header"><h2>心意幣規則</h2><p>心意幣不具現金兌換功能</p></div>
-        <div class="card-body">
+<div class="app-modal-overlay" id="rewardRulesModal" role="dialog" aria-modal="true" aria-labelledby="rewardRulesTitle" hidden>
+    <div class="app-modal">
+        <div class="app-modal-header">
+            <div><h2 id="rewardRulesTitle">獎勵機制</h2><p>GO Rider 完成配送可獲得心意幣，心意幣不具現金兌換功能</p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
             <ul class="feature-list">
                 <li>基本：機車 3 枚、汽車 5 枚</li>
                 <li>重量每 5 公斤 +3（最多 +15），距離 2／5／10 公里以上依序 +2／+4／+6</li>
@@ -517,34 +531,46 @@ if ($isVolunteer) {
 </div>
 <?php endif; ?>
 
-<div class="card mt-32">
-    <div class="card-header"><h2>物資配送流程</h2><p>從取貨到送達的完整狀態追蹤</p></div>
+<?php
+    // 配送進度總覽：依實際狀態統計目前看得到的任務數量（食物銀行看全部、GO Rider 看自己的與可接的）
+    $flowCounts = ['open' => 0, 'pickup' => 0, 'transit' => 0, 'delivered' => count($completedDeliveries), 'exception' => 0];
+    foreach ($pendingDeliveries as $flowDelivery) {
+        $flowStatus = $flowDelivery['status'];
+        if ($flowStatus === 'open' && ($flowDelivery['delivery_method'] ?? '') !== 'food_bank') {
+            $flowCounts['open']++;
+        } elseif (in_array($flowStatus, ['open', 'claimed', 'arrived_pickup'], true)) {
+            $flowCounts['pickup']++;
+        } elseif (in_array($flowStatus, ['picked_up', 'in_transit'], true)) {
+            $flowCounts['transit']++;
+        } elseif ($flowStatus === 'exception') {
+            $flowCounts['exception']++;
+        }
+    }
+    $flowSteps = [
+        ['key' => 'open', 'icon' => 'fa-clipboard-list', 'title' => '待接單', 'desc' => '等待 GO Rider 接單'],
+        ['key' => 'pickup', 'icon' => 'fa-motorcycle', 'title' => '前往取貨', 'desc' => '已接單、忠信派車或已到店'],
+        ['key' => 'transit', 'icon' => 'fa-truck-fast', 'title' => '運送中', 'desc' => '已拍照取貨，前往送達'],
+        ['key' => 'delivered', 'icon' => 'fa-circle-check', 'title' => '已送達', 'desc' => '食物銀行確認收貨'],
+    ];
+?>
+<div class="card mt-32 delivery-flow-card">
+    <div class="card-header delivery-flow-header">
+        <div><h2>配送進度總覽</h2><p>從接單、取貨到送達，各階段目前的任務數量</p></div>
+        <?php if ($flowCounts['exception'] > 0): ?>
+            <span class="status status-exception"><i class="fas fa-triangle-exclamation"></i> 異常待處理 <?php echo $flowCounts['exception']; ?> 筆</span>
+        <?php endif; ?>
+    </div>
     <div class="card-body">
-        <div style="display: flex; justify-content: space-around; align-items: center; text-align: center;">
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">📦</div>
-                <div style="font-weight: bold;">待收貨</div>
-                <div style="font-size: 12px; color: #666;">配送會員接單後</div>
-            </div>
-            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">✅</div>
-                <div style="font-weight: bold;">已收取</div>
-                <div style="font-size: 12px; color: #666;">驗收物資</div>
-            </div>
-            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">🚚</div>
-                <div style="font-weight: bold;">配送中</div>
-                <div style="font-size: 12px; color: #666;">運送中</div>
-            </div>
-            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">🏪</div>
-                <div style="font-weight: bold;">已送達</div>
-                <div style="font-size: 12px; color: #666;">配送完成</div>
-            </div>
-        </div>
+        <ol class="delivery-flow">
+            <?php foreach ($flowSteps as $flowStep): $flowCount = $flowCounts[$flowStep['key']]; ?>
+                <li class="delivery-flow-step<?php echo $flowCount > 0 ? ' has-items' : ''; ?><?php echo $flowStep['key'] === 'delivered' ? ' is-final' : ''; ?>">
+                    <span class="delivery-flow-icon"><i class="fas <?php echo $flowStep['icon']; ?>"></i></span>
+                    <strong><?php echo $flowStep['title']; ?></strong>
+                    <small><?php echo $flowStep['desc']; ?></small>
+                    <span class="delivery-flow-count"><?php echo $flowCount; ?> 筆</span>
+                </li>
+            <?php endforeach; ?>
+        </ol>
     </div>
 </div>
 

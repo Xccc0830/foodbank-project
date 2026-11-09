@@ -486,6 +486,75 @@ class InventoryReceiptModel extends BaseModel {
         return $rows;
     }
 
+    /**
+     * 即期品：依「先到期先出」推算每個品項目前剩下的批次，回傳在提醒天數內（含已過期）的批次。
+     *
+     * @param array<string,int> $alertDaysByCategory 分類名稱 => 提醒天數
+     * @return array<int,array{item_name:string,category:string,unit:string,quantity:float,expiry_date:string,days_left:int,alert_days:int}>
+     */
+    public function getExpiringStock(array $alertDaysByCategory, $defaultAlertDays = 7, $today = null) {
+        if (!$this->ready) {
+            return [];
+        }
+        $today = $today ?: date('Y-m-d');
+        $result = $this->db->query(
+            "SELECT item_name, category, unit, movement_type, quantity, expiry_date
+             FROM inventory_receipts
+             ORDER BY item_name, category, unit, (expiry_date IS NULL), expiry_date, receipt_id"
+        );
+        if (!$result) {
+            $this->hasError = true;
+            return [];
+        }
+
+        return self::computeExpiringLots($result->fetch_all(MYSQLI_ASSOC), $alertDaysByCategory, $defaultAlertDays, $today);
+    }
+
+    /** 純計算（方便測試）：$rows 需依品項、到期日排序，欄位同 inventory_receipts。 */
+    public static function computeExpiringLots(array $rows, array $alertDaysByCategory, $defaultAlertDays, $today) {
+        $groups = [];
+        foreach ($rows as $row) {
+            $key = $row['item_name'] . "\0" . $row['category'] . "\0" . $row['unit'];
+            if (!isset($groups[$key])) {
+                $groups[$key] = ['item_name' => $row['item_name'], 'category' => $row['category'], 'unit' => $row['unit'], 'lots' => [], 'out' => 0.0];
+            }
+            if ($row['movement_type'] === 'out') {
+                $groups[$key]['out'] += (float) $row['quantity'];
+            } else {
+                $groups[$key]['lots'][] = ['quantity' => (float) $row['quantity'], 'expiry_date' => $row['expiry_date']];
+            }
+        }
+
+        $expiring = [];
+        foreach ($groups as $group) {
+            $toConsume = $group['out'];
+            $alertDays = (int) ($alertDaysByCategory[$group['category']] ?? $defaultAlertDays);
+            foreach ($group['lots'] as $lot) {
+                $remaining = $lot['quantity'] - $toConsume;
+                $toConsume = max(0, $toConsume - $lot['quantity']);
+                if ($remaining <= 0 || empty($lot['expiry_date'])) {
+                    continue;
+                }
+                $daysLeft = (int) floor((strtotime($lot['expiry_date']) - strtotime($today)) / 86400);
+                if ($daysLeft <= $alertDays) {
+                    $expiring[] = [
+                        'item_name' => $group['item_name'],
+                        'category' => $group['category'],
+                        'unit' => $group['unit'],
+                        'quantity' => $remaining,
+                        'expiry_date' => $lot['expiry_date'],
+                        'days_left' => $daysLeft,
+                        'alert_days' => $alertDays,
+                    ];
+                }
+            }
+        }
+        usort($expiring, static function ($a, $b) {
+            return $a['days_left'] <=> $b['days_left'];
+        });
+        return $expiring;
+    }
+
     public function getSummaryCounts() {
         if (!$this->ready) {
             return ['receipt_count' => 0, 'item_count' => 0, 'today_count' => 0];

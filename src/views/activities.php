@@ -15,6 +15,32 @@ $canRegisterActivities = $currentRole === 'member';
 $message = null;
 $editingActivity = null;
 $participantLists = [];
+$reopenEnterpriseForm = null;
+
+// 食物銀行下載活動的企業員工保險名冊（含完整身分證字號，只限食物銀行人員）
+if (!empty($_GET['export_roster']) && $currentRole === 'foodbank_staff') {
+    $rosterActivity = $activityModel->getActivityById((int) $_GET['export_roster']);
+    if ($rosterActivity) {
+        ob_clean();
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="activity-' . (int) $rosterActivity['activity_id'] . '-insurance-roster.csv"');
+        header('Cache-Control: no-store, private');
+        echo "\xEF\xBB\xBF";
+        $output = fopen('php://output', 'w');
+        fputcsv($output, ['活動', $rosterActivity['title'], '開始時間', $rosterActivity['start_at']]);
+        fputcsv($output, ['企業／組織', '員工姓名', '手機', '身分證字號']);
+        foreach ($activityModel->getParticipants((int) $rosterActivity['activity_id']) as $participant) {
+            if ($participant['assignment_type'] !== 'company') {
+                continue;
+            }
+            foreach ($activityModel->getEmployees((int) $participant['assignment_id'], true) as $employee) {
+                fputcsv($output, [$participant['organization_name'], $employee['full_name'], $employee['phone'], $employee['id_number']]);
+            }
+        }
+        fclose($output);
+        exit;
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['action'] ?? '') === 'create_activity') {
@@ -40,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($activityId) {
             $notifiedCount = $notificationModel->notifyMembers(
                 '有新的公益活動',
-                sprintf('「%s」已開放報名，愛心商家可優先認領，剩餘名額同步開放 GO Rider。', $data['title']),
+                sprintf('「%s」已開放報名，愛心商家與 GO Rider 都可以直接報名。', $data['title']),
                 'info'
             );
             if ($notifiedCount === 0) {
@@ -58,15 +84,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $organizationName = $assignmentType === 'company'
             ? (string) ($currentUser['enterprise_name'] ?? '')
             : null;
-        $participantCount = $isEnterpriseMember ? (int) ($_POST['participant_count'] ?? 0) : 1;
+        $employees = $isEnterpriseMember && is_array($_POST['employees'] ?? null) ? array_values($_POST['employees']) : [];
+        $participantCount = $isEnterpriseMember ? count($employees) : 1;
+        $employeeError = $isEnterpriseMember ? ActivityModel::validateEmployees($employees) : null;
 
-        if ($assignmentType === 'company' && $participantCount < 1) {
-            $message = ['type' => 'error', 'text' => '請填寫至少 1 位企業參與人數。'];
+        if ($employeeError !== null) {
+            $message = ['type' => 'error', 'text' => $employeeError];
+            $reopenEnterpriseForm = ['activity_id' => (int) ($_POST['activity_id'] ?? 0), 'employees' => $employees];
         } elseif ($assignmentType === 'company' && trim($organizationName) === '') {
             $message = ['type' => 'error', 'text' => '請先補齊企業會員的企業／組織名稱。'];
         } else {
             $activityId = (int) ($_POST['activity_id'] ?? 0);
-            $registered = $activityModel->register($activityId, (int) $currentUser['user_id'], $assignmentType, $organizationName, $participantCount);
+            $registered = $activityModel->register($activityId, (int) $currentUser['user_id'], $assignmentType, $organizationName, $participantCount, $employees);
             $activity = $registered ? $activityModel->getActivityById($activityId) : null;
             if ($registered && $activity) {
                 $memberName = trim((string) ($currentUser['full_name'] ?? $currentUser['username'] ?? '會員'));
@@ -77,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (int) $currentUser['user_id'],
                     '活動報名已確認',
                     $assignmentType === 'company'
-                        ? sprintf('您已為「%s」報名 %d 人；剩餘名額已同步開放 GO Rider。', $activity['title'], $participantCount)
+                        ? sprintf('您已為「%s」登記 %d 位員工參加。', $activity['title'], $participantCount)
                         : sprintf('您已成功報名「%s」。', $activity['title']),
                     'success'
                 );
@@ -85,21 +114,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($notifiedCount === 0) {
                     error_log("活動報名後沒有通知到食物銀行人員：activity_id={$activityId}");
                 }
-                $remainingCapacity = $assignmentType === 'company' ? $activityModel->getRemainingCapacity($activityId) : null;
-                if ($assignmentType === 'company' && is_int($remainingCapacity) && $remainingCapacity > 0) {
-                    $riderNotifications = $notificationModel->notifyMembers(
-                        '公益活動名額已開放',
-                        sprintf('愛心商家已認領「%s」，目前尚有 %d 個名額，GO Rider 現可報名。', $activity['title'], $remainingCapacity),
-                        'info',
-                        'general'
-                    );
-                    if ($riderNotifications === 0) {
-                        error_log("企業認領後沒有通知 GO Rider 剩餘活動名額：activity_id={$activityId}");
-                    }
-                }
-                $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? '企業活動認領已送出，剩餘名額同步開放 GO Rider。' : '活動報名完成，預計可獲得 5 枚心意幣。'];
+                $message = ['type' => 'success', 'text' => $assignmentType === 'company' ? sprintf('企業報名完成，已登記 %d 位員工。', $participantCount) : '活動報名完成，預計可獲得 5 枚心意幣。'];
             } else {
                 $message = ['type' => 'error', 'text' => '報名失敗，可能已經報名過此活動，或剩餘名額不足。'];
+                if ($isEnterpriseMember) {
+                    $reopenEnterpriseForm = ['activity_id' => $activityId, 'employees' => $employees];
+                }
             }
         }
     }
@@ -185,14 +205,21 @@ foreach ($activities as $index => $activity) {
     $remainingCapacity = $capacity > 0 ? max(0, $capacity - (int) $activity['participant_count']) : null;
     $activities[$index]['remaining_capacity'] = $remainingCapacity;
     $activities[$index]['can_register'] = $canRegisterActivities
-        && ($isEnterpriseMember || $capacity <= 0 || !empty($activity['has_company_claim']))
         && ($remainingCapacity === null || $remainingCapacity > 0)
         && in_array($activity['status'], ['planned', 'ongoing'], true)
         && $activityModel->canUserRegisterActivity((int) $activity['activity_id'], (int) $currentUser['user_id']);
     $activities[$index]['can_manage'] = $activityModel->canManageActivity((int) $activity['activity_id'], (int) $currentUser['user_id'], $currentRole);
     $activities[$index]['can_view_participants'] = $activities[$index]['can_manage'] || $currentRole === 'foodbank_staff';
     if ($activities[$index]['can_view_participants']) {
-        $participantLists[(int) $activity['activity_id']] = $activityModel->getParticipants((int) $activity['activity_id']);
+        $participantList = $activityModel->getParticipants((int) $activity['activity_id']);
+        foreach ($participantList as &$participantRow) {
+            // 員工名冊（電話、遮罩後的身分證）只給食物銀行人員看；活動發起人可能是其他企業，只看得到人數
+            $participantRow['employees'] = $participantRow['assignment_type'] === 'company' && $currentRole === 'foodbank_staff'
+                ? $activityModel->getEmployees((int) $participantRow['assignment_id'])
+                : [];
+        }
+        unset($participantRow);
+        $participantLists[(int) $activity['activity_id']] = $participantList;
     }
     $activities[$index]['is_creator'] = ((int) ($activity['created_by'] ?? 0)) === (int) $currentUser['user_id'];
 }
@@ -219,27 +246,21 @@ $activityStatusLabels = [
 ];
 ?>
 
-<style>
-    .enterprise-participant-step {
-        display: inline-flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
-    }
-
-    .enterprise-claim-start[hidden],
-    .enterprise-participant-step[hidden] {
-        display: none !important;
-    }
-</style>
 <?php if (empty($activitiesEmbedded)): ?>
-<div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '愛心商家可優先認領並填寫企業參與人數；尚未認領的名額立即開放 GO Rider，雙方皆可同時報名' : '愛心商家認領後的剩餘名額會立即開放，GO Rider 可同步報名並參與在地行動') : '發布公益活動，邀請會員參與在地行動'; ?></p></div></div>
+<div class="view-header"><div><h1 class="view-title"><?php echo $canRegisterActivities ? '公益活動報名' : '活動管理'; ?></h1><p class="view-subtitle"><?php echo $canRegisterActivities ? ($isEnterpriseMember ? '愛心商家與 GO Rider 可同時報名；企業可一次登記多位員工參加' : '公益活動開放報名中，愛心商家與 GO Rider 都可以直接報名') : '發布公益活動，邀請會員參與在地行動'; ?></p></div>
+<?php if ($canCreateActivity): ?><div class="btn-group"><button type="button" class="btn btn-primary" data-modal-open="createActivityModal"><i class="fas fa-calendar-plus"></i> 發布活動</button></div><?php endif; ?>
+</div>
 <?php endif; ?>
 <?php if ($message): ?><div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div><?php endif; ?>
 
 <?php if ($canCreateActivity): ?>
-<div class="activity-publish-layout">
-    <div class="card"><div class="card-header"><h2>發布活動</h2><p>支援募資、說明會、淨灘與公益宣導</p></div><div class="card-body">
+<div class="app-modal-overlay" id="createActivityModal" role="dialog" aria-modal="true" aria-labelledby="createActivityTitle" hidden>
+    <div class="app-modal">
+        <div class="app-modal-header">
+            <div><h2 id="createActivityTitle">發布活動</h2><p>支援募資、說明會、淨灘與公益宣導</p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
         <form method="post"><?php echo csrfField(); ?><input type="hidden" name="action" value="create_activity">
             <div class="form-group"><label>活動名稱*</label><input name="title" required></div>
             <div class="form-group"><label>活動類型</label><select name="activity_type" class="activity-type-select"><option value="donation_drive">物資募集</option><option value="briefing">說明會</option><option value="cleanup">環境行動</option><option value="promotion">公益宣導</option><option value="other">其他</option></select></div>
@@ -248,7 +269,8 @@ $activityStatusLabels = [
             <div class="form-group"><label>活動說明</label><textarea name="description"></textarea></div>
             <button class="btn btn-primary" type="submit"><i class="fas fa-calendar-plus"></i> 發布活動</button>
         </form>
-    </div></div>
+        </div>
+    </div>
 </div>
 <?php endif; ?>
 
@@ -309,13 +331,7 @@ $activityStatusLabels = [
             <input type="hidden" name="activity_id" value="<?php echo (int) $activity['activity_id']; ?>">
             <input type="hidden" name="assignment_type" value="<?php echo $isEnterpriseMember ? 'company' : 'individual'; ?>">
             <?php if ($isEnterpriseMember): ?>
-                <button class="btn btn-primary btn-sm enterprise-claim-start" type="button">優先認領／企業報名</button>
-                <div class="enterprise-participant-step" hidden>
-                    <label for="activity-participant-count-<?php echo (int) $activity['activity_id']; ?>">選擇企業參與人數</label>
-                    <input id="activity-participant-count-<?php echo (int) $activity['activity_id']; ?>" type="number" name="participant_count" min="1" <?php echo $activity['remaining_capacity'] !== null ? 'max="' . (int) $activity['remaining_capacity'] . '"' : ''; ?> value="1" title="企業參與人數" required disabled>
-                    <button class="btn btn-primary btn-sm" type="submit">確認報名</button>
-                    <button class="btn btn-secondary btn-sm enterprise-claim-cancel" type="button">返回</button>
-                </div>
+                <button class="btn btn-primary btn-sm" type="button" data-modal-open="enterpriseRegisterModal" data-activity-id="<?php echo (int) $activity['activity_id']; ?>" data-activity-title="<?php echo htmlspecialchars($activity['title'], ENT_QUOTES, 'UTF-8'); ?>" data-remaining="<?php echo $activity['remaining_capacity'] === null ? '' : (int) $activity['remaining_capacity']; ?>">企業報名</button>
             <?php else: ?>
                 <button class="btn btn-primary btn-sm" type="submit">報名活動</button>
             <?php endif; ?>
@@ -324,8 +340,6 @@ $activityStatusLabels = [
         <span class="status status-warning"><?php
             if ($activity['remaining_capacity'] === 0) {
                 echo '名額已滿';
-            } elseif (!$isEnterpriseMember && (int) ($activity['capacity'] ?? 0) > 0 && empty($activity['has_company_claim'])) {
-                echo '等待愛心商家優先認領';
             } elseif (!in_array($activity['status'], ['planned', 'ongoing'], true)) {
                 echo '活動已結束或取消';
             } else {
@@ -396,27 +410,100 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
     updateActivityTypeField();
 });
 
-document.querySelectorAll('.enterprise-claim-start').forEach(function (button) {
-    const form = button.closest('form');
-    const step = form.querySelector('.enterprise-participant-step');
-    const input = step.querySelector('input[name="participant_count"]');
-    const cancelButton = step.querySelector('.enterprise-claim-cancel');
-
-    button.addEventListener('click', function () {
-        button.hidden = true;
-        step.hidden = false;
-        input.disabled = false;
-        input.focus();
-    });
-
-    cancelButton.addEventListener('click', function () {
-        input.disabled = true;
-        step.hidden = true;
-        button.hidden = false;
-        button.focus();
-    });
-});
 </script>
+
+
+<?php if ($isEnterpriseMember && $canRegisterActivities): ?>
+<div class="app-modal-overlay" id="enterpriseRegisterModal" role="dialog" aria-modal="true" aria-labelledby="enterpriseRegisterTitle" hidden>
+    <div class="app-modal app-modal-wide">
+        <div class="app-modal-header">
+            <div><h2 id="enterpriseRegisterTitle">企業報名</h2><p data-enterprise-activity-title></p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
+            <form method="post" id="enterpriseRegisterForm">
+                <?php echo csrfField(); ?>
+                <input type="hidden" name="action" value="register_activity">
+                <input type="hidden" name="assignment_type" value="company">
+                <input type="hidden" name="activity_id" value="">
+                <div class="form-group">
+                    <label for="enterpriseHeadcount">參加員工人數 <span class="required-mark">*</span></label>
+                    <input id="enterpriseHeadcount" type="number" min="1" max="<?php echo ActivityModel::MAX_EMPLOYEES_PER_REGISTRATION; ?>" value="1" required>
+                    <p class="form-hint" data-enterprise-remaining></p>
+                </div>
+                <p class="form-hint">請填寫每位參加員工的姓名、手機與身分證字號，供活動保險使用。身分證字號會加密保存，畫面上只顯示部分號碼。</p>
+                <div class="employee-roster" data-employee-roster></div>
+                <div class="modal-actions"><button type="submit" class="btn btn-primary"><i class="fas fa-user-check"></i> 確認報名</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+<template id="employeeRowTemplate">
+    <fieldset class="employee-row">
+        <legend>員工 <span data-employee-number></span></legend>
+        <div class="grid-3">
+            <div class="form-group"><label>姓名</label><input type="text" data-field="full_name" maxlength="50" required></div>
+            <div class="form-group"><label>手機</label><input type="tel" data-field="phone" pattern="09\d{8}" maxlength="10" placeholder="0912345678" required></div>
+            <div class="form-group"><label>身分證字號</label><input type="text" data-field="id_number" pattern="[A-Za-z][1289A-Da-d]\d{8}" maxlength="10" placeholder="A123456789" autocomplete="off" required></div>
+        </div>
+    </fieldset>
+</template>
+<script>
+(function () {
+    // 企業報名：依參加人數產生員工欄位，改人數時保留已填的資料
+    const modal = document.getElementById('enterpriseRegisterModal');
+    const form = document.getElementById('enterpriseRegisterForm');
+    const headcount = document.getElementById('enterpriseHeadcount');
+    const roster = form.querySelector('[data-employee-roster]');
+    const template = document.getElementById('employeeRowTemplate');
+    const reopen = <?php echo json_encode($reopenEnterpriseForm, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
+    function renderRows(prefill) {
+        const count = Math.max(1, Math.min(Number(headcount.max) || 200, parseInt(headcount.value, 10) || 1));
+        const current = Array.prototype.map.call(roster.querySelectorAll('.employee-row'), function (row) {
+            const values = {};
+            row.querySelectorAll('[data-field]').forEach(function (input) { values[input.dataset.field] = input.value; });
+            return values;
+        });
+        const values = prefill || current;
+        roster.textContent = '';
+        for (let i = 0; i < count; i++) {
+            const row = template.content.firstElementChild.cloneNode(true);
+            row.querySelector('[data-employee-number]').textContent = String(i + 1);
+            row.querySelectorAll('[data-field]').forEach(function (input) {
+                input.name = 'employees[' + i + '][' + input.dataset.field + ']';
+                input.value = (values[i] && values[i][input.dataset.field]) || '';
+            });
+            roster.appendChild(row);
+        }
+    }
+
+    function openFor(activityId, title, remaining, prefill) {
+        form.querySelector('input[name="activity_id"]').value = activityId;
+        modal.querySelector('[data-enterprise-activity-title]').textContent = title || '';
+        const limit = remaining !== '' && remaining !== undefined && remaining !== null ? Math.min(Number(remaining), <?php echo ActivityModel::MAX_EMPLOYEES_PER_REGISTRATION; ?>) : <?php echo ActivityModel::MAX_EMPLOYEES_PER_REGISTRATION; ?>;
+        headcount.max = String(limit);
+        modal.querySelector('[data-enterprise-remaining]').textContent = remaining !== '' && remaining !== undefined && remaining !== null ? '目前剩餘名額 ' + remaining + ' 人' : '此活動不限名額（單次最多 <?php echo ActivityModel::MAX_EMPLOYEES_PER_REGISTRATION; ?> 人）';
+        headcount.value = String(prefill && prefill.length ? prefill.length : 1);
+        roster.textContent = '';
+        renderRows(prefill);
+    }
+
+    modal.addEventListener('app-modal-open', function (event) {
+        const opener = event.detail.opener;
+        openFor(opener.dataset.activityId, opener.dataset.activityTitle, opener.dataset.remaining, null);
+    });
+    headcount.addEventListener('input', function () { renderRows(null); });
+
+    // 送出失敗時重新打開並帶回剛填的名單，不必重填
+    if (reopen && reopen.activity_id) {
+        const opener = document.querySelector('[data-modal-open="enterpriseRegisterModal"][data-activity-id="' + reopen.activity_id + '"]');
+        openFor(reopen.activity_id, opener ? opener.dataset.activityTitle : '', opener ? opener.dataset.remaining : '', reopen.employees || []);
+        modal.hidden = false;
+    }
+})();
+</script>
+<?php endif; ?>
 
 <div id="participants-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="participants-modal-title" style="display: none;">
     <div class="modal-content">
@@ -431,6 +518,7 @@ document.querySelectorAll('.enterprise-claim-start').forEach(function (button) {
 <script>
 (function () {
     const participantData = <?php echo json_encode($participantLists, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    const canExportRoster = <?php echo $currentRole === 'foodbank_staff' ? 'true' : 'false'; ?>;
     const modal = document.getElementById('participants-modal');
     const title = document.getElementById('participants-modal-title');
     const body = document.getElementById('participants-modal-body');
@@ -471,15 +559,24 @@ document.querySelectorAll('.enterprise-claim-start').forEach(function (button) {
                     const organization = participant.organization_name ? ' · ' + escapeHtml(participant.organization_name) : '';
                     const headcount = participant.assignment_type === 'company' && participant.participant_count ? ' · 參與人數：' + escapeHtml(String(participant.participant_count)) : '';
                     const phone = participant.phone ? '<small>電話：' + escapeHtml(participant.phone) + '</small>' : '';
-                    return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + headcount + '</span>' + phone + '</div>';
+                    const employees = (participant.employees || []).length
+                        ? '<table class="data-table employee-roster-table"><thead><tr><th>員工</th><th>手機</th><th>身分證字號</th></tr></thead><tbody>'
+                            + participant.employees.map(function (employee) {
+                                return '<tr><td>' + escapeHtml(employee.full_name) + '</td><td>' + escapeHtml(employee.phone) + '</td><td>' + escapeHtml(employee.id_number_masked) + '</td></tr>';
+                            }).join('') + '</tbody></table>'
+                        : '';
+                    return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + headcount + '</span>' + phone + employees + '</div>';
             }
             function renderGroup(titleText, group) {
                 return group.length
                     ? '<section class="participant-group"><h4>' + titleText + '</h4><div class="participants-list">' + group.map(renderParticipant).join('') + '</div></section>'
                     : '';
             }
+            const exportLink = canExportRoster && companies.length
+                ? '<p><a class="btn btn-secondary btn-sm" href="?page=activities&export_roster=' + encodeURIComponent(button.dataset.activityId) + '"><i class="fas fa-file-shield"></i> 下載保險名冊（含完整身分證字號）</a></p>'
+                : '';
             body.innerHTML = participants.length
-                ? renderGroup('企業會員', companies) + renderGroup('一般會員', volunteers)
+                ? exportLink + renderGroup('企業會員', companies) + renderGroup('一般會員', volunteers)
                 : '<div class="empty-state"><i class="fas fa-users-slash"></i><p>目前沒有活動報名</p></div>';
             modal.style.display = 'flex';
         });
