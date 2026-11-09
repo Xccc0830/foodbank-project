@@ -6,3 +6,7 @@ cookies.txt
 storage/keys/
 
 .DS_Store
+
+# 使用者上傳的照片（不進版本控制，保留 .htaccess）
+public/uploads/*
+!public/uploads/.htaccess
