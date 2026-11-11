@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../helpers/SpecCheckHelper.php';
 /**
  * 捐贈模型 (Donation Model)
  * 用於管理食物銀行的捐贈記錄
@@ -488,6 +489,10 @@ class DonationModel extends BaseModel {
         if (!$changes) {
             return '請修改被標記的欄位後再送審。';
         }
+        $numberProblems = SpecCheckHelper::numberProblems(array_intersect_key($changes, ['quantity' => 1, 'weight_kg' => 1]));
+        if ($numberProblems) {
+            return reset($numberProblems);
+        }
 
         $sets = [];
         foreach ($changes as $field => $value) {
@@ -647,14 +652,16 @@ class DonationModel extends BaseModel {
                     continue;
                 }
                 $name = trim((string) ($edit['item_name'] ?? ''));
-                $quantity = (float) ($edit['quantity'] ?? 0);
-                if ($name === '' || $quantity <= 0) {
+                $rawQuantity = trim((string) ($edit['quantity'] ?? ''));
+                $rawWeight = trim((string) ($edit['item_weight_kg'] ?? ''));
+                // 數量、重量只能是 1 以上的整數（與商家填寫時的規則相同）
+                if ($name === '' || !SpecCheckHelper::isWholeNumber($rawQuantity) || ($rawWeight !== '' && !SpecCheckHelper::isWholeNumber($rawWeight))) {
                     return false;
                 }
                 $itemEdits[(int) $itemId] = [
                     'name' => $name,
-                    'quantity' => $quantity,
-                    'weight' => is_numeric($edit['item_weight_kg'] ?? null) ? max(0, (float) $edit['item_weight_kg']) : null,
+                    'quantity' => (float) $rawQuantity,
+                    'weight' => $rawWeight !== '' ? (float) $rawWeight : null,
                 ];
             }
             if ($itemEdits) {

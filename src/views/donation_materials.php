@@ -51,13 +51,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $itemWeights = is_array($_POST['item_weight_kg'] ?? null) ? $_POST['item_weight_kg'] : [];
     $itemExpiryDates = is_array($_POST['item_expiry_date'] ?? null) ? $_POST['item_expiry_date'] : [];
     $itemNotes = is_array($_POST['item_notes'] ?? null) ? $_POST['item_notes'] : [];
+    require_once BASE_PATH . '/src/helpers/SpecCheckHelper.php';
     $items = [];
+    $numberError = null;
     foreach ($itemNames as $index => $rawName) {
         $itemName = trim((string) $rawName);
-        $quantity = (float) ($itemQuantities[$index] ?? 0);
-        if ($itemName === '' && $quantity <= 0) {
+        $rawQuantity = trim((string) ($itemQuantities[$index] ?? ''));
+        if ($itemName === '' && $rawQuantity === '') {
             continue;
         }
+        $problems = SpecCheckHelper::numberProblems([
+            'quantity' => $rawQuantity === '' ? '0' : $rawQuantity,
+            'weight_kg' => $itemWeights[$index] ?? '',
+            'length_cm' => $itemLengths[$index] ?? '',
+            'width_cm' => $itemWidths[$index] ?? '',
+            'height_cm' => $itemHeights[$index] ?? '',
+        ]);
+        if ($problems && $numberError === null) {
+            $numberError = '第 ' . (count($items) + 1) . ' 筆物資：' . reset($problems);
+        }
+        $quantity = $problems ? 0 : (float) $rawQuantity;
         $items[] = [
             'item_name' => $itemName,
             'category_id' => (int) ($itemCategories[$index] ?? 0) ?: null,
@@ -181,7 +194,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         ? '您預約的取貨日（' . $deliveryDate . '）不是商家營業日（營業日：' . DonationModel::formatOpenDays($openDays) . '），請改選其他日期，或到「設置」更新營業日。'
         : null;
     $addressError = validateAddress($donorAddress, '取貨地址') ?? validateAddress($deliveryAddress, '送達地址');
-    if ($closedDayError !== null) {
+    if ($numberError !== null) {
+        $formMessage = ['type' => 'error', 'text' => $numberError];
+    } elseif ($closedDayError !== null) {
         $formMessage = ['type' => 'error', 'text' => $closedDayError];
     } elseif ($urgentRequested && $donationModel->countUrgentThisMonth($currentUserId) >= DonationModel::URGENT_MONTHLY_LIMIT) {
         $formMessage = ['type' => 'error', 'text' => '本月緊急運送已達 ' . DonationModel::URGENT_MONTHLY_LIMIT . ' 單上限，請取消勾選「緊急運送」後再送出。'];
@@ -452,9 +467,9 @@ $formatDateTime = static function ($value) {
                 <div id="materialItemRows">
                     <div class="material-item-row">
                         <div class="grid-2"><div class="form-group"><label>物資名稱 <span class="required-mark">*</span></label><input type="text" name="item_name[]" placeholder="例如：白米 5kg 裝" required></div><div class="form-group"><label>物資類別</label><select name="item_category[]"><option value="">請選擇</option><?php foreach ($itemCategoryOptions as $categoryOption): ?><option value="<?php echo (int) $categoryOption['category_id']; ?>" data-storage="<?php echo htmlspecialchars((string) ($categoryOption['default_storage'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($categoryOption['category_name']); ?></option><?php endforeach; ?></select></div></div>
-                        <div class="grid-3"><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="0.01" step="0.01" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>箱</option><option>瓶</option><option>盒</option><option>份</option><option>件</option></select></div><div class="form-group"><label>總重量 (kg)</label><input type="number" name="item_weight_kg[]" min="0" step="0.01" placeholder="例如：5"></div></div>
+                        <div class="grid-3"><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="1" step="1" inputmode="numeric" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>箱</option><option>瓶</option><option>盒</option><option>份</option><option>件</option></select></div><div class="form-group"><label>總重量 (kg)</label><input type="number" name="item_weight_kg[]" min="1" step="1" inputmode="numeric" placeholder="例如：5"></div></div>
                         <div class="grid-3"><div class="form-group"><label>保存方式</label><select name="item_storage[]"><option value="room">常溫</option><option value="chilled">冷藏</option><option value="frozen">冷凍</option></select></div><div class="form-group"><label>包裝狀態</label><select name="item_package[]"><option value="sealed">原包裝未拆封</option><option value="opened">已拆封／已分裝</option></select></div><div class="form-group"><label>保存期限</label><input type="date" name="item_expiry_date[]"></div></div>
-                        <div class="grid-3"><div class="form-group"><label>長 (cm)</label><input type="number" name="item_length_cm[]" min="0" step="0.1" placeholder="例如：30"></div><div class="form-group"><label>寬 (cm)</label><input type="number" name="item_width_cm[]" min="0" step="0.1" placeholder="例如：20"></div><div class="form-group"><label>高 (cm)</label><input type="number" name="item_height_cm[]" min="0" step="0.1" placeholder="例如：15"></div></div>
+                        <div class="grid-3"><div class="form-group"><label>長 (cm)</label><input type="number" name="item_length_cm[]" min="0.1" step="0.1" inputmode="decimal" placeholder="例如：30"></div><div class="form-group"><label>寬 (cm)</label><input type="number" name="item_width_cm[]" min="0.1" step="0.1" inputmode="decimal" placeholder="例如：20"></div><div class="form-group"><label>高 (cm)</label><input type="number" name="item_height_cm[]" min="0.1" step="0.1" inputmode="decimal" placeholder="例如：15"></div></div>
                         <div class="material-item-footer"><button type="button" class="btn btn-danger btn-sm" data-remove-item><i class="fas fa-trash"></i> 刪除此物資</button></div>
                     </div>
                 </div>
@@ -618,6 +633,13 @@ $formatDateTime = static function ($value) {
 </div>
 
 <?php if ($viewingDonation): ?>
+    <?php
+    // 10.00 → 10、12.50 → 12.5
+    $trimNumber = static function ($value) {
+        $text = trim((string) $value);
+        return is_numeric($text) && strpos($text, '.') !== false ? rtrim(rtrim($text, '0'), '.') : $text;
+    };
+    ?>
     <div class="donation-detail-overlay" id="donationDetailModal" role="dialog" aria-modal="true" aria-labelledby="donationDetailTitle">
         <div class="donation-detail-modal">
             <div class="card-header">
@@ -630,6 +652,55 @@ $formatDateTime = static function ($value) {
                 </button>
             </div>
             <div class="card-body">
+                <?php $isViewingRejected = ($viewingDonation['evaluation_status'] ?? '') === 'rejected'; ?>
+                <?php
+                $viewingStatus = strtolower((string) ($viewingDonation['status'] ?? ''));
+                $viewingEvaluationStatus = strtolower((string) ($viewingDonation['evaluation_status'] ?? ''));
+                if ($viewingStatus === 'pending') {
+                    $viewingProcessTimeLabel = '送出時間';
+                    $viewingProcessTime = $viewingDonation['donation_date'] ?? null;
+                } elseif ($viewingStatus === 'assessed') {
+                    $viewingProcessTimeLabel = $isViewingRejected ? '婉拒時間' : '接受時間';
+                    $viewingProcessTime = $isViewingRejected ? ($viewingDonation['rejected_at'] ?? null) : ($viewingDonation['approved_at'] ?? null);
+                } elseif ($viewingStatus === 'published') {
+                    $viewingProcessTimeLabel = '發布時間';
+                    $viewingProcessTime = $viewingDonation['published_at'] ?? null;
+                } else {
+                    $viewingProcessTimeLabel = '更新時間';
+                    $viewingProcessTime = $viewingDonation['updated_at'] ?? null;
+                }
+                ?>
+                <?php
+                $pickupTimeText = !empty($viewingDonation['delivery_date'])
+                    ? $viewingDonation['delivery_date'] . (!empty($viewingDonation['delivery_time']) ? ' ' . substr((string) $viewingDonation['delivery_time'], 0, 5) : '')
+                    : (!empty($viewingDonation['pickup_deadline']) ? date('Y-m-d H:i', strtotime($viewingDonation['pickup_deadline'])) : '未填寫');
+                $photoPaths = array_filter(array_map('trim', preg_split('/\s*,\s*/', (string) ($viewingDonation['photo_path'] ?? ''))));
+                ?>
+                <div class="donation-detail-summary">
+                    <div class="donation-detail-info">
+                        <p><strong>預約取貨時間：</strong> <?php echo htmlspecialchars($pickupTimeText); ?></p>
+                        <?php if (!$isViewingRejected): // 被婉拒時下方修改表單已有取貨地址 ?>
+                        <p><strong>取貨地址：</strong> <?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '未填寫'); ?></p>
+                        <?php endif; ?>
+                        <p><strong>配送方式：</strong> <?php
+                            if (($viewingDonation['status'] ?? '') === 'pending') {
+                                echo '待食物銀行安排';
+                            } else {
+                                echo htmlspecialchars($deliveryOptionLabels[$viewingDonation['delivery_option'] ?? ''] ?? '未指定');
+                            }
+                        ?></p>
+                        <p><strong><?php echo htmlspecialchars($viewingProcessTimeLabel); ?>：</strong> <?php echo htmlspecialchars($formatDateTime($viewingProcessTime)); ?></p>
+                        <?php if (trim((string) ($viewingDonation['notes'] ?? '')) !== '' && !$isViewingRejected): ?>
+                            <p><strong>備註：</strong> <?php echo nl2br(htmlspecialchars($viewingDonation['notes'])); ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <button type="button" class="btn btn-secondary" data-modal-open="donationSpecModal"><i class="fas fa-box-open"></i> 物資規格</button>
+                </div>
+                <?php if (($viewingDonation['status'] ?? '') === 'assessed' && !$isViewingRejected): ?>
+                    <div class="donation-current-progress">
+                        <strong>目前進度：</strong> 已接受物資捐贈，正在派車前往領取。
+                    </div>
+                <?php endif; ?>
                 <?php if (($viewingDonation['status'] ?? '') === 'assessed' && ($viewingDonation['evaluation_status'] ?? '') === 'rejected'): ?>
                     <div class="donation-rejection-reason">
                         <strong>婉拒的原因：</strong>
@@ -653,86 +724,45 @@ $formatDateTime = static function ($value) {
                             $isEditable = !$flaggedFields || $isFlagged; ?>
                             <div class="form-group<?php echo $isFlagged ? ' field-flagged' : ''; ?>">
                                 <label><?php echo htmlspecialchars(DonationModel::RESUBMIT_FIELD_LABELS[$fieldKey]); ?><?php echo $isFlagged ? '（需修改）' : ''; ?></label>
-                                <input type="<?php echo $inputType; ?>"<?php echo $inputType === 'number' ? ' step="0.01" min="0"' : ''; ?> name="fields[<?php echo $fieldKey; ?>]" value="<?php echo htmlspecialchars((string) ($viewingDonation[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"<?php echo $isEditable ? '' : ' disabled'; ?>>
+                                <input type="<?php echo $inputType; ?>"<?php echo $inputType === 'number' ? ' step="1" min="1" inputmode="numeric"' : ''; ?> name="fields[<?php echo $fieldKey; ?>]" value="<?php echo htmlspecialchars($inputType === 'number' ? $trimNumber($viewingDonation[$fieldKey] ?? '') : (string) ($viewingDonation[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"<?php echo $isEditable ? '' : ' disabled'; ?>>
                             </div>
                         <?php endforeach; ?>
                         <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> 修改後重新送審</button>
                     </form>
                 <?php endif; ?>
-                <?php $isViewingRejected = ($viewingDonation['evaluation_status'] ?? '') === 'rejected'; ?>
-                <?php
-                $viewingStatus = strtolower((string) ($viewingDonation['status'] ?? ''));
-                $viewingEvaluationStatus = strtolower((string) ($viewingDonation['evaluation_status'] ?? ''));
-                if ($viewingStatus === 'pending') {
-                    $viewingProcessTimeLabel = '送出時間';
-                    $viewingProcessTime = $viewingDonation['donation_date'] ?? null;
-                } elseif ($viewingStatus === 'assessed') {
-                    $viewingProcessTimeLabel = $isViewingRejected ? '婉拒時間' : '接受時間';
-                    $viewingProcessTime = $isViewingRejected ? ($viewingDonation['rejected_at'] ?? null) : ($viewingDonation['approved_at'] ?? null);
-                } elseif ($viewingStatus === 'published') {
-                    $viewingProcessTimeLabel = '發布時間';
-                    $viewingProcessTime = $viewingDonation['published_at'] ?? null;
-                } else {
-                    $viewingProcessTimeLabel = '更新時間';
-                    $viewingProcessTime = $viewingDonation['updated_at'] ?? null;
-                }
-                ?>
-                <?php if (($viewingDonation['status'] ?? '') === 'assessed' && !$isViewingRejected): ?>
-                    <div class="donation-current-progress">
-                        <strong>目前進度：</strong> 已接受物資捐贈，正在派車前往領取。
-                    </div>
-                <?php endif; ?>
-                <div class="grid-2">
-                    <div>
-                        <p><strong>店家名稱：</strong> <?php echo htmlspecialchars($viewingDonation['donor_name'] ?? ''); ?></p>
-                        <p><strong>物資類型：</strong> <?php
-                            $viewingTypeLabel = $donationTypeLabels[$viewingDonation['donation_type'] ?? ''] ?? '其他';
-                            if (strpos((string) ($viewingDonation['notes'] ?? ''), '物資類型細項：生鮮食品') !== false) {
-                                $viewingTypeLabel .= '（生鮮食品）';
-                            }
-                            echo htmlspecialchars($viewingTypeLabel);
-                        ?></p>
-                        <p><strong>名稱：</strong> <?php echo htmlspecialchars($viewingDonation['item_name'] ?? ''); ?></p>
-                        <p><strong>數量：</strong> <?php echo htmlspecialchars($viewingDonation['quantity'] ?? ''); ?> <?php echo htmlspecialchars($viewingDonation['unit'] ?? ''); ?></p>
-                        <p><strong>重量：</strong> <?php echo htmlspecialchars($viewingDonation['weight_kg'] ?? ''); ?> 公斤</p>
-                        <p><strong>大小：</strong> <?php echo htmlspecialchars($viewingDonation['size_description'] ?? '未填寫'); ?></p>
-                        <p><strong>有效期限：</strong> <?php echo htmlspecialchars($viewingDonation['expiry_date'] ?? '未填寫'); ?></p>
-                    </div>
-                    <div>
-                        <p><strong>最後領取期限：</strong> <?php echo htmlspecialchars($viewingDonation['pickup_deadline'] ?? '未填寫'); ?></p>
-                        <p><strong>配送選擇：</strong> <?php
-                            if (($viewingDonation['status'] ?? '') === 'pending') {
-                                echo '待食物銀行安排';
-                            } else {
-                                echo htmlspecialchars($deliveryOptionLabels[$viewingDonation['delivery_option'] ?? ''] ?? '未指定');
-                            }
-                        ?></p>
-                        <p><strong>運送評估：</strong> <?php echo htmlspecialchars($formatVehicleTypes($viewingDonation)); ?></p>
-                        <p><strong><?php echo htmlspecialchars($viewingProcessTimeLabel); ?>：</strong> <?php echo htmlspecialchars($formatDateTime($viewingProcessTime)); ?></p>
-                        <?php if (($viewingDonation['status'] ?? '') === 'assessed'): ?>
-                            <p><strong>評估結果：</strong> <?php echo $isViewingRejected ? '未通過' : '接受'; ?></p>
-                        <?php endif; ?>
-                        <p><strong>照片上傳：</strong> <?php echo !empty($viewingDonation['photo_path']) ? '已上傳' : '未上傳'; ?></p>
-                        <?php if (!empty($viewingDonation['photo_path'])): ?>
-                            <?php $paths = array_filter(array_map('trim', preg_split('/\s*,\s*/', (string) $viewingDonation['photo_path']))); ?>
-                            <?php foreach ($paths as $path): ?>
-                                <img src="<?php echo htmlspecialchars(storedPublicImageUrl($path)); ?>" style="max-width: 220px; margin: 10px 10px 0 0; border-radius: 8px; border: 1px solid #dfe3ea;" alt="捐贈照片">
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
+            </div>
+        </div>
+    </div>
+    <div class="app-modal-overlay" id="donationSpecModal" role="dialog" aria-modal="true" aria-labelledby="donationSpecTitle" hidden>
+        <div class="app-modal app-modal-wide">
+            <div class="app-modal-header">
+                <div><h2 id="donationSpecTitle">物資規格</h2><p>商家填寫的物資明細與照片</p></div>
+                <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="app-modal-body">
                 <?php if (!empty($viewingItems)): ?>
-                    <div class="material-items-summary">
-                        <h3>物資規格</h3>
-                        <div class="data-table-wrapper"><table class="data-table donation-items-table"><thead><tr><th>物資名稱</th><th>保存方式</th><th>包裝</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th></tr></thead><tbody>
+                    <div class="data-table-wrapper"><table class="data-table donation-items-table"><thead><tr><th>物資名稱</th><th>保存方式</th><th>包裝</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th></tr></thead><tbody>
                             <?php foreach ($viewingItems as $item):
                                 $dimensionParts = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($value) {
                                     return $value !== null && $value !== '';
                                 });
-                                $dimensionText = count($dimensionParts) === 3 ? implode(' × ', $dimensionParts) : '未填寫';
-                            ?><tr><td><?php echo htmlspecialchars($item['item_name']); ?></td><td><?php echo htmlspecialchars(['room' => '常溫', 'chilled' => '冷藏', 'frozen' => '冷凍'][$item['storage_condition'] ?? 'room'] ?? '常溫'); ?></td><td><?php echo htmlspecialchars(($item['package_state'] ?? 'sealed') === 'opened' ? '已拆封／分裝' : '原包裝未拆封'); ?></td><td><?php echo htmlspecialchars($item['quantity'] . ' ' . $item['unit']); ?></td><td><?php echo htmlspecialchars($dimensionText); ?></td><td><?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? $item['item_weight_kg'] . ' kg' : '未填寫'); ?></td><td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td></tr><?php endforeach; ?>
+                                $dimensionText = count($dimensionParts) === 3 ? implode(' × ', array_map($trimNumber, $dimensionParts)) : '未填寫';
+                            ?><tr><td><?php echo htmlspecialchars($item['item_name']); ?></td><td><?php echo htmlspecialchars(['room' => '常溫', 'chilled' => '冷藏', 'frozen' => '冷凍'][$item['storage_condition'] ?? 'room'] ?? '常溫'); ?></td><td><?php echo htmlspecialchars(($item['package_state'] ?? 'sealed') === 'opened' ? '已拆封／分裝' : '原包裝未拆封'); ?></td><td><?php echo htmlspecialchars($trimNumber($item['quantity']) . ' ' . $item['unit']); ?></td><td><?php echo htmlspecialchars($dimensionText); ?></td><td><?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? $trimNumber($item['item_weight_kg']) . ' kg' : '未填寫'); ?></td><td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td></tr><?php endforeach; ?>
                         </tbody></table></div>
+                <?php else: ?>
+                    <p><strong>物資：</strong> <?php echo htmlspecialchars($viewingDonation['item_name'] ?? ''); ?>（<?php echo htmlspecialchars($trimNumber($viewingDonation['quantity'] ?? '') . ' ' . ($viewingDonation['unit'] ?? '')); ?>）</p>
+                    <?php if ((float) ($viewingDonation['weight_kg'] ?? 0) > 0): ?><p><strong>重量：</strong> <?php echo htmlspecialchars($trimNumber($viewingDonation['weight_kg'])); ?> 公斤</p><?php endif; ?>
+                    <p><strong>有效期限：</strong> <?php echo htmlspecialchars($viewingDonation['expiry_date'] ?? '未填寫'); ?></p>
+                <?php endif; ?>
+                <h3 class="donation-spec-photo-title">物資照片</h3>
+                <?php if ($photoPaths): ?>
+                    <div class="donation-spec-photos">
+                        <?php foreach ($photoPaths as $path): ?>
+                            <img src="<?php echo htmlspecialchars(storedPublicImageUrl($path)); ?>" alt="捐贈照片">
+                        <?php endforeach; ?>
                     </div>
+                <?php else: ?>
+                    <p class="text-muted">未上傳照片</p>
                 <?php endif; ?>
             </div>
         </div>
@@ -911,6 +941,12 @@ $formatDateTime = static function ($value) {
 
 <?php if ($viewingDonation): ?>
 <style>
+    .donation-detail-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .donation-detail-info p { margin: 0 0 6px; }
+    .donation-spec-photo-title { margin: 20px 0 10px; font-size: 16px; }
+    .donation-spec-photos { display: flex; flex-wrap: wrap; gap: 10px; }
+    .donation-spec-photos img { max-width: 220px; border-radius: 8px; border: 1px solid #dfe3ea; }
+    @media (max-width: 600px) { .donation-detail-summary { flex-direction: column; } }
     .donation-detail-overlay {
         position: fixed;
         inset: 0;

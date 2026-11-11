@@ -736,7 +736,8 @@
 
     // 物資規格防呆：欄位改完後向後端檢查，在該筆物資下方顯示黃色提醒（只提醒，不擋送出）。
     function initializeSpecCheck() {
-        const watched = ['item_name[]', 'item_quantity[]', 'item_unit[]', 'item_weight_kg[]', 'item_expiry_date[]', 'item_storage[]'];
+        const watched = ['item_name[]', 'item_quantity[]', 'item_unit[]', 'item_weight_kg[]', 'item_length_cm[]', 'item_width_cm[]', 'item_height_cm[]', 'item_expiry_date[]', 'item_storage[]'];
+        const numberLabels = { 'item_quantity[]': '數量', 'item_weight_kg[]': '總重量', 'item_length_cm[]': '長', 'item_width_cm[]': '寬', 'item_height_cm[]': '高' };
         const timers = new WeakMap();
 
         function valueOf(row, name) {
@@ -752,7 +753,18 @@
                 quantity: valueOf(row, 'item_quantity[]'),
                 unit: valueOf(row, 'item_unit[]'),
                 weight_kg: valueOf(row, 'item_weight_kg[]'),
+                length_cm: valueOf(row, 'item_length_cm[]'),
+                width_cm: valueOf(row, 'item_width_cm[]'),
+                height_cm: valueOf(row, 'item_height_cm[]'),
                 expiry_date: valueOf(row, 'item_expiry_date[]')
+            });
+            // 像「1/2」這種瀏覽器看不懂的數字，送到後端會變成空白，所以在這裡先提醒。
+            const unreadable = [];
+            Object.keys(numberLabels).forEach(function (name) {
+                const field = row.querySelector('[name="' + name + '"]');
+                if (field && field.validity && field.validity.badInput) {
+                    unreadable.push({ level: 'error', message: numberLabels[name] + '只能填數字（不能填分數或文字）。' });
+                }
             });
             fetch('?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                 .then(function (response) { return response.json(); })
@@ -764,10 +776,8 @@
                         row.appendChild(box);
                     }
                     box.textContent = '';
-                    const lines = [];
-                    if (result.category) {
-                        lines.push({ level: 'info', message: (result.ai ? 'AI 判斷分類：' : '系統判斷分類：') + result.category });
-                    }
+                    // 分類由「物資類別」欄位自動判斷並顯示，這裡只列數字、重量、期限等提醒，避免兩套分類名稱互相矛盾。
+                    const lines = unreadable.slice();
                     (result.warnings || []).forEach(function (w) { lines.push(w); });
                     lines.forEach(function (line) {
                         const p = document.createElement('p');

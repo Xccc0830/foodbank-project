@@ -306,9 +306,9 @@ $renderPublishItemFields = static function ($donation) use ($donationModel) {
                     <tr>
                         <td><?php echo $index + 1; ?></td>
                         <td><input type="text" name="items[<?php echo $itemId; ?>][item_name]" value="<?php echo htmlspecialchars($item['item_name'], ENT_QUOTES); ?>" required></td>
-                        <td><input type="number" step="0.01" min="0.01" name="items[<?php echo $itemId; ?>][quantity]" value="<?php echo htmlspecialchars((string) $item['quantity'], ENT_QUOTES); ?>" required></td>
+                        <td><input type="number" step="1" min="1" inputmode="numeric" name="items[<?php echo $itemId; ?>][quantity]" value="<?php echo htmlspecialchars((string) ($item['quantity'] + 0), ENT_QUOTES); ?>" required></td>
                         <td><?php echo htmlspecialchars($item['unit']); ?></td>
-                        <td><input type="number" step="0.01" min="0" name="items[<?php echo $itemId; ?>][item_weight_kg]" value="<?php echo htmlspecialchars((string) ($item['item_weight_kg'] ?? ''), ENT_QUOTES); ?>"></td>
+                        <td><input type="number" step="1" min="1" inputmode="numeric" name="items[<?php echo $itemId; ?>][item_weight_kg]" value="<?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? (string) ($item['item_weight_kg'] + 0) : '', ENT_QUOTES); ?>"></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -567,9 +567,12 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
                                     <label><input type="checkbox" name="rejected_fields[]" value="<?php echo htmlspecialchars($fieldKey); ?>"> <?php echo htmlspecialchars($fieldLabel); ?></label>
                                 <?php endforeach; ?>
                             </div>
-                            <button type="submit" name="decision" value="rejected" class="btn btn-danger">送出婉拒</button>
+                            <div class="modal-actions">
+                                <button type="button" id="cancelRejectionButton" class="btn btn-secondary">返回</button>
+                                <button type="submit" name="decision" value="rejected" class="btn btn-danger">送出婉拒</button>
+                            </div>
                         </div>
-                        <div class="foodbank-delivery-options">
+                        <div class="foodbank-delivery-options" id="foodbankDeliveryOptions">
                             <strong>配送方式</strong>
                             <label><input type="radio" name="foodbank_delivery_option" value="food_bank_pickup" required> 忠信派車</label>
                             <label><input type="radio" name="foodbank_delivery_option" value="volunteer_delivery"> GO Rider 派車</label>
@@ -689,14 +692,47 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
             closeButton.addEventListener('click', closeModal);
         }
 
+        // 婉拒時不需要配送方式與發布資訊：隱藏並停用，避免「必填」擋住送出；按「返回」恢復。
+        const deliveryOptions = document.getElementById('foodbankDeliveryOptions');
+        const cancelRejectionButton = document.getElementById('cancelRejectionButton');
+        let publishWasOpen = false;
+        const setRejectMode = function (rejecting) {
+            rejectionReasonPanel.hidden = !rejecting;
+            showRejectionReasonButton.hidden = rejecting;
+            if (rejecting) {
+                publishWasOpen = publishFields ? !publishFields.hidden : false;
+            }
+            [deliveryOptions, publishWasOpen ? publishFields : null].forEach(function (block) {
+                if (!block) {
+                    return;
+                }
+                block.hidden = rejecting;
+                block.querySelectorAll('input, select, textarea').forEach(function (field) {
+                    if (rejecting) {
+                        field.dataset.wasDisabled = field.disabled ? '1' : '';
+                        field.disabled = true;
+                    } else {
+                        field.disabled = field.dataset.wasDisabled === '1';
+                    }
+                });
+            });
+            if (showPublishChoiceButton) {
+                showPublishChoiceButton.hidden = rejecting || publishWasOpen;
+            }
+            if (publishNowInput) {
+                publishNowInput.value = !rejecting && publishWasOpen ? '1' : '0';
+            }
+        };
         if (showRejectionReasonButton && rejectionReasonPanel) {
             showRejectionReasonButton.addEventListener('click', function () {
-                rejectionReasonPanel.hidden = false;
-                showRejectionReasonButton.hidden = true;
+                setRejectMode(true);
                 if (rejectionReasonInput) {
                     rejectionReasonInput.focus();
                 }
             });
+        }
+        if (cancelRejectionButton && rejectionReasonPanel) {
+            cancelRejectionButton.addEventListener('click', function () { setRejectMode(false); });
         }
 
         // 接受＝直接發布：按下「接受」就展開發布欄位，按「發布」才會送出
@@ -911,6 +947,7 @@ $renderDetails = static function ($donation) use ($donationTypeLabels, $delivery
         gap: 6px;
     }
 
+    .review-decision-form [hidden] { display: none !important; }
     .rejection-reason-panel {
         margin-top: 14px;
         padding: 14px;

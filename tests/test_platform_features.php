@@ -24,7 +24,15 @@ check('期限超過 3 年會提醒', strpos(messages(SpecCheckHelper::check(['ex
 check('麵包期限太長會提醒', strpos(messages(SpecCheckHelper::check(['item_name' => '吐司', 'expiry_date' => '2026-12-30'], $today)), '通常保存不到') !== false);
 check('規格 5kg×3 與重量 2kg 差太多會提醒', strpos(messages(SpecCheckHelper::check(['item_name' => '白米', 'specification' => '5kg', 'quantity' => 3, 'weight_kg' => 2], $today)), '差異較大') !== false);
 check('規格 500g×4 與重量 2kg 吻合不提醒', SpecCheckHelper::check(['specification' => '500g', 'quantity' => 4, 'weight_kg' => 2], $today)['warnings'] === []);
-check('數量 0 會報錯', strpos(messages(SpecCheckHelper::check(['quantity' => 0], $today)), '大於 0') !== false);
+check('數量 0 會報錯', strpos(messages(SpecCheckHelper::check(['quantity' => 0], $today)), '1 以上的整數') !== false);
+foreach (['-1', '0.1', '1/2'] as $bad) {
+    check("數量 {$bad} 會報錯", isset(SpecCheckHelper::numberProblems(['quantity' => $bad])['quantity']));
+    check("重量 {$bad} 會報錯", isset(SpecCheckHelper::numberProblems(['weight_kg' => $bad])['weight_kg']));
+}
+check('長 0.05 會報錯', isset(SpecCheckHelper::numberProblems(['length_cm' => '0.05'])['length_cm']));
+check('長 12.5 可以', SpecCheckHelper::numberProblems(['length_cm' => '12.5', 'quantity' => '3', 'weight_kg' => '5']) === []);
+check('數量 101 會提醒', strpos(messages(SpecCheckHelper::check(['quantity' => '101'], $today)), '超過 100') !== false);
+check('數量 100 不提醒', SpecCheckHelper::check(['quantity' => '100'], $today)['warnings'] === []);
 
 $donationModel = new DonationModel();
 $deliveryModel = new DeliveryModel();
