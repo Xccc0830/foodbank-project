@@ -3233,3 +3233,20 @@ body {
 .employee-row legend { padding: 0 6px; font-size: 13px; font-weight: 700; color: #0f766e; }
 .employee-roster-table { margin-top: 8px; font-size: 13px; }
 .participant-item > span, .participant-item > small { display: block; margin-top: 2px; }
+
+/* Fancy home ads */
+.fancy-ad-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+.fancy-ad { position: relative; display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 16px; color: #fff; overflow: hidden; box-shadow: 0 8px 20px rgba(20, 40, 90, .18); transition: transform .25s ease, box-shadow .25s ease; animation: fancy-ad-in .6s ease both; }
+.fancy-ad::after { content: ""; position: absolute; top: -40%; left: -60%; width: 40%; height: 180%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); transform: rotate(20deg); animation: fancy-ad-shine 4s ease-in-out infinite; }
+.fancy-ad:hover { transform: translateY(-4px) scale(1.01); box-shadow: 0 14px 28px rgba(20, 40, 90, .28); }
+.fancy-ad-0 { background: linear-gradient(135deg, #ff9a44, #fc6076); animation-delay: .05s; }
+.fancy-ad-1 { background: linear-gradient(135deg, #36d1dc, #5b86e5); animation-delay: .2s; }
+.fancy-ad-2 { background: linear-gradient(135deg, #a18cd1, #fbc2eb 140%); animation-delay: .35s; }
+.fancy-ad-icon { flex: none; width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: rgba(255,255,255,.25); backdrop-filter: blur(4px); }
+.fancy-ad-text { position: relative; z-index: 1; min-width: 0; }
+.fancy-ad-text strong { display: block; font-size: 16px; margin-bottom: 4px; }
+.fancy-ad-text p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; opacity: .95; }
+.fancy-ad-text small { opacity: .85; }
+.fancy-ad-badge { float: right; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 1px; background: rgba(255,255,255,.3); }
+@keyframes fancy-ad-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes fancy-ad-shine { 0%, 60% { left: -60%; } 100% { left: 140%; } }

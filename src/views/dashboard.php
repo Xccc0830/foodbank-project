@@ -95,14 +95,31 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
     <div class="card">
         <div class="card-header"><h2>企業廣告</h2><p>最新刊登的廣告</p></div>
         <div class="card-body">
+            <?php
+            // Demo 廣告：僅供預覽效果，資料庫沒有廣告時顯示
+            if (!$homeAds) {
+                $homeAds = [
+                    ['title' => '愛心米糧大特惠', 'content' => '每購買一包白米，同步捐出一包給食物銀行，讓溫暖送進每個家庭。', 'advertiser_name' => '好鄰居超市（Demo）'],
+                    ['title' => '企業志工日招募', 'content' => '帶著同事一起參與物資分裝，打造有溫度的企業文化，歡迎團體報名。', 'advertiser_name' => '暖陽科技（Demo）'],
+                    ['title' => '冷鏈運輸合作夥伴', 'content' => '提供冷藏車隊支援生鮮物資配送，讓食材新鮮抵達。', 'advertiser_name' => '快捷物流（Demo）'],
+                ];
+            }
+            ?>
             <?php if ($homeAds): ?>
-                <?php foreach ($homeAds as $homeAd): ?>
-                    <div class="mb-20">
-                        <strong><?php echo htmlspecialchars($homeAd['title']); ?></strong>
-                        <p><?php echo htmlspecialchars(mb_strimwidth($homeAd['content'], 0, 80, '…')); ?></p>
-                        <small><?php echo htmlspecialchars($homeAd['advertiser_name'] ?? ''); ?></small>
+                <?php $adIcons = ['fa-bowl-rice', 'fa-hand-holding-heart', 'fa-truck-fast']; ?>
+                <div class="fancy-ad-list">
+                <?php foreach ($homeAds as $adIndex => $homeAd): ?>
+                    <div class="fancy-ad fancy-ad-<?php echo $adIndex % 3; ?>">
+                        <div class="fancy-ad-icon"><i class="fas <?php echo $adIcons[$adIndex % 3]; ?>"></i></div>
+                        <div class="fancy-ad-text">
+                            <span class="fancy-ad-badge">AD</span>
+                            <strong><?php echo htmlspecialchars($homeAd['title']); ?></strong>
+                            <p><?php echo htmlspecialchars(mb_strimwidth($homeAd['content'], 0, 80, '…')); ?></p>
+                            <small><i class="fas fa-building"></i> <?php echo htmlspecialchars($homeAd['advertiser_name'] ?? ''); ?></small>
+                        </div>
                     </div>
                 <?php endforeach; ?>
+                </div>
                 <a href="?page=news#ads" class="btn btn-secondary btn-sm">更多廣告</a>
             <?php else: ?>
                 <div class="empty-state"><i class="fas fa-rectangle-ad"></i><p>目前沒有刊登中的廣告</p></div>
