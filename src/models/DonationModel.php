@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../helpers/SpecCheckHelper.php';
 /**
  * 捐贈模型 (Donation Model)
  * 用於管理食物銀行的捐贈記錄
@@ -488,6 +489,10 @@ class DonationModel extends BaseModel {
         if (!$changes) {
             return '請修改被標記的欄位後再送審。';
         }
+        $numberProblems = SpecCheckHelper::numberProblems(array_intersect_key($changes, ['quantity' => 1, 'weight_kg' => 1]));
+        if ($numberProblems) {
+            return reset($numberProblems);
+        }
 
         $sets = [];
         foreach ($changes as $field => $value) {
@@ -647,14 +652,16 @@ class DonationModel extends BaseModel {
                     continue;
                 }
                 $name = trim((string) ($edit['item_name'] ?? ''));
-                $quantity = (float) ($edit['quantity'] ?? 0);
-                if ($name === '' || $quantity <= 0) {
+                $rawQuantity = trim((string) ($edit['quantity'] ?? ''));
+                $rawWeight = trim((string) ($edit['item_weight_kg'] ?? ''));
+                // 數量、重量只能是 1 以上的整數（與商家填寫時的規則相同）
+                if ($name === '' || !SpecCheckHelper::isWholeNumber($rawQuantity) || ($rawWeight !== '' && !SpecCheckHelper::isWholeNumber($rawWeight))) {
                     return false;
                 }
                 $itemEdits[(int) $itemId] = [
                     'name' => $name,
-                    'quantity' => $quantity,
-                    'weight' => is_numeric($edit['item_weight_kg'] ?? null) ? max(0, (float) $edit['item_weight_kg']) : null,
+                    'quantity' => (float) $rawQuantity,
+                    'weight' => $rawWeight !== '' ? (float) $rawWeight : null,
                 ];
             }
             if ($itemEdits) {
@@ -858,8 +865,12 @@ class DonationModel extends BaseModel {
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $sql = "SELECT n.donation_id, n.order_number, n.donor_name, n.item_name, n.quantity, n.unit,
                        n.donation_date, n.status AS donation_status, n.current_status,
+                       n.donor_address, n.delivery_address, n.pickup_deadline, n.delivery_date, n.delivery_time,
+                       MAX(ud.phone) AS donor_phone, MAX(ud.open_days) AS donor_open_days, MAX(ud.business_hours) AS donor_business_hours,
+                       MAX(ud.closed_days) AS donor_closed_days, MAX(ud.pickup_note) AS donor_pickup_note,
                        COUNT(d.delivery_id) AS delivery_count,
                        GROUP_CONCAT(d.delivery_id ORDER BY d.delivery_id) AS delivery_ids,
+                       GROUP_CONCAT(CONCAT(d.delivery_id, ':', d.delivery_method, ':', COALESCE(d.foodbank_vehicle, ''), ':', d.status) ORDER BY d.delivery_id) AS delivery_meta,
                        GROUP_CONCAT(DISTINCT CASE WHEN d.delivery_method = 'food_bank' THEN '忠信食物銀行（忠信派車）' ELSE CONCAT(uv.full_name, '：', COALESCE(NULLIF(uv.phone, ''), '未提供電話')) END SEPARATOR '；') AS volunteer_contacts,
                        SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) AS completed_delivery_count,
                        MAX(d.status) AS latest_delivery_status,
@@ -873,6 +884,7 @@ class DonationModel extends BaseModel {
                 FROM donations n
                 LEFT JOIN deliveries d ON d.donation_id = n.donation_id
                 LEFT JOIN users uv ON uv.user_id = d.volunteer_id AND d.delivery_method = 'volunteer'
+                LEFT JOIN users ud ON ud.user_id = n.donor_id
                 {$where}
                 GROUP BY n.donation_id
                 {$having}

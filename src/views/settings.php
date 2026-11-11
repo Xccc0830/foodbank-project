@@ -27,6 +27,24 @@ if ($settingsIsEnterprise) {
     $businessProfile = $settingsDonationModel->getBusinessProfile($settingsUserId);
 }
 
+$foodbankProfile = [];
+$foodbankMessage = null;
+if ($settingsIsStaff) {
+    require_once BASE_PATH . '/src/models/FoodbankProfileModel.php';
+    $foodbankProfileModel = new FoodbankProfileModel();
+    // 全食物銀行共用一份：任何人員修改後，大家看到的都一樣
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_foodbank_profile') {
+        $addressError = validateAddress($_POST['address'] ?? '', '食物銀行收貨地址');
+        if ($addressError !== null) {
+            $foodbankMessage = ['type' => 'error', 'text' => $addressError];
+        } else {
+            $saveResult = $foodbankProfileModel->save((int) ($currentUser['user_id'] ?? 0), $_POST);
+            $foodbankMessage = ['type' => $saveResult['success'] ? 'success' : 'error', 'text' => $saveResult['message']];
+        }
+    }
+    $foodbankProfile = $foodbankProfileModel->get();
+}
+
 $mysqlVersion = 'N/A';
 if (isset($db) && $db instanceof Database) {
     $versionResult = $db->query('SELECT VERSION() AS version');
@@ -40,7 +58,7 @@ if (isset($db) && $db instanceof Database) {
 <div class="view-header">
     <div>
         <h1 class="view-title"><?php echo $settingsIsStaff ? '系統設置' : '設置'; ?></h1>
-        <p class="view-subtitle"><?php echo $settingsIsStaff ? '管理系統配置、安全策略與郵件服務' : '管理你的商家資料'; ?></p>
+        <p class="view-subtitle"><?php echo $settingsIsStaff ? '管理食物銀行資料與系統配置' : '管理你的商家資料'; ?></p>
     </div>
 </div>
 
@@ -96,11 +114,68 @@ if (isset($db) && $db instanceof Database) {
             <div class="form-group">
                 <label for="closedDays">公休日（選填）</label>
                 <input id="closedDays" type="text" name="closed_days" maxlength="100" placeholder="例：國定假日、每月第一個週日" value="<?php echo htmlspecialchars($businessProfile['closed_days'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-                <p class="form-hint">用文字說明不定期的公休，騎手到店前會看到。</p>
+                <p class="form-hint">用文字說明不定期的公休，GO Rider 到店前會看到。</p>
             </div>
             <div class="form-group">
                 <label for="pickupNote">取貨備註（選填，GO Rider 到店時會看到）</label>
                 <input id="pickupNote" type="text" name="pickup_note" maxlength="255" placeholder="例：請從後門進入，按鈴找店長" value="<?php echo htmlspecialchars($businessProfile['pickup_note'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <button type="submit" class="btn btn-primary">儲存</button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($settingsIsStaff): ?>
+<div class="card mb-20">
+    <div class="card-header"><h2>食物銀行資料</h2></div>
+    <div class="card-body">
+        <?php if ($foodbankMessage): ?>
+            <div class="alert alert-<?php echo $foodbankMessage['type'] === 'success' ? 'success' : 'error'; ?>">
+                <i class="fas fa-<?php echo $foodbankMessage['type'] === 'success' ? 'circle-check' : 'circle-exclamation'; ?>"></i>
+                <?php echo htmlspecialchars($foodbankMessage['text']); ?>
+            </div>
+        <?php endif; ?>
+        <p class="form-hint mb-20">全食物銀行共用一份，任何人員修改後大家看到的都一樣。商家新增物資時，「送達地址」會自動帶入這裡的收貨地址，並顯示收貨時間。</p>
+        <form method="post">
+            <?php echo csrfField(); ?>
+            <input type="hidden" name="action" value="save_foodbank_profile">
+            <div class="form-group"><label>名稱</label><input type="text" value="<?php echo htmlspecialchars(FoodbankProfileModel::NAME, ENT_QUOTES, 'UTF-8'); ?>" readonly></div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="foodbankContactName">聯絡人（選填）</label>
+                    <input id="foodbankContactName" type="text" name="contact_name" maxlength="100" value="<?php echo htmlspecialchars($foodbankProfile['contact_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                </div>
+                <div class="form-group">
+                    <label for="foodbankPhone">聯絡電話（選填）</label>
+                    <input id="foodbankPhone" type="tel" name="contact_phone" maxlength="30" placeholder="例：02-2930-0000" value="<?php echo htmlspecialchars($foodbankProfile['contact_phone'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="foodbankAddress">收貨地址 <span class="required-mark">*</span></label>
+                <input id="foodbankAddress" type="text" name="address" required minlength="5" maxlength="255" autocomplete="off" value="<?php echo htmlspecialchars($foodbankProfile['address'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                <p class="form-hint">搬家後請在這裡更新；已送出的物資單仍使用當時的地址。</p>
+            </div>
+            <div class="form-group">
+                <label>收貨日（選填，勾選可以收貨的日子）</label>
+                <div class="closed-days-picker">
+                    <?php $foodbankOpenDays = explode(',', (string) ($foodbankProfile['open_days'] ?? '')); ?>
+                    <?php foreach (DonationModel::WEEKDAY_LABELS as $dayNumber => $dayLabel): ?>
+                        <label class="closed-day-option"><input type="checkbox" name="open_days[]" value="<?php echo $dayNumber; ?>"<?php echo in_array((string) $dayNumber, $foodbankOpenDays, true) ? ' checked' : ''; ?>> <?php echo $dayLabel; ?></label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="foodbankHours">收貨時間（選填）</label>
+                <input id="foodbankHours" type="text" name="business_hours" maxlength="100" placeholder="例：09:00–17:00" value="<?php echo htmlspecialchars($foodbankProfile['business_hours'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="form-group">
+                <label for="foodbankClosedDays">公休日（選填）</label>
+                <input id="foodbankClosedDays" type="text" name="closed_days" maxlength="100" placeholder="例：國定假日、每月最後一個週六" value="<?php echo htmlspecialchars($foodbankProfile['closed_days'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="form-group">
+                <label for="foodbankNote">收貨備註（選填，GO Rider 送達時會看到）</label>
+                <input id="foodbankNote" type="text" name="receiving_note" maxlength="255" placeholder="例：請從側門進入，按電鈴找值班人員" value="<?php echo htmlspecialchars($foodbankProfile['receiving_note'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <button type="submit" class="btn btn-primary">儲存</button>
         </form>

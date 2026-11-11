@@ -388,6 +388,9 @@ if ($action === 'spec_check' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         'quantity' => $_GET['quantity'] ?? null,
         'unit' => $_GET['unit'] ?? '',
         'weight_kg' => $_GET['weight_kg'] ?? null,
+        'length_cm' => $_GET['length_cm'] ?? null,
+        'width_cm' => $_GET['width_cm'] ?? null,
+        'height_cm' => $_GET['height_cm'] ?? null,
         'expiry_date' => $_GET['expiry_date'] ?? '',
         'storage_condition' => $_GET['storage_condition'] ?? '',
     ];

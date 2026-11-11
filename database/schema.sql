@@ -120,6 +120,7 @@ CREATE TABLE `deliveries` (
   `created_by` int(11) DEFAULT NULL,
   `volunteer_id` int(11) DEFAULT NULL,
   `vehicle_type` enum('car','motorcycle') NOT NULL,
+  `foodbank_vehicle` varchar(30) DEFAULT NULL COMMENT '忠信派車的車種：motorcycle/car/small_truck/refrigerated_truck/frozen_truck',
   `total_distance_km` decimal(8,2) NOT NULL DEFAULT 0.00,
   `weight_kg` decimal(8,2) NOT NULL DEFAULT 0.00,
   `urgency` enum('normal','priority','urgent') NOT NULL DEFAULT 'normal',
@@ -1154,6 +1155,8 @@ CREATE TABLE `advertisements` (
   `reviewed_by` int(11) DEFAULT NULL,
   `reviewed_at` datetime DEFAULT NULL,
   `fee_amount` decimal(10,2) DEFAULT NULL,
+  `policy_agreed_at` datetime DEFAULT NULL COMMENT '刊登者同意廣告刊登規範的時間',
+  `policy_flags` text DEFAULT NULL COMMENT '自動檢查出需審核人員注意的項目（JSON）',
   PRIMARY KEY (`ad_id`),
   KEY `idx_advertisements_status` (`status`, `created_at`),
   KEY `idx_advertisements_advertiser` (`advertiser_id`)
@@ -1244,3 +1247,17 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+-- 食物銀行資料（全食物銀行共用一份，profile_id 固定為 1）：在「設置」由食物銀行人員維護
+CREATE TABLE IF NOT EXISTS foodbank_profile (
+    profile_id TINYINT NOT NULL PRIMARY KEY,
+    contact_name VARCHAR(100) NULL,
+    contact_phone VARCHAR(30) NULL,
+    address VARCHAR(255) NULL,
+    open_days VARCHAR(20) NULL COMMENT '可收貨的星期，逗號分隔（1=週一…7=週日）',
+    business_hours VARCHAR(100) NULL,
+    closed_days VARCHAR(100) NULL,
+    receiving_note VARCHAR(255) NULL COMMENT 'GO Rider 送達時看到的備註',
+    updated_by INT NULL,
+    updated_at DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

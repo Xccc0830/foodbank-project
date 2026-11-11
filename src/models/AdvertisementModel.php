@@ -24,6 +24,8 @@ class AdvertisementModel extends BaseModel {
             'reviewed_by' => "ALTER TABLE advertisements ADD reviewed_by INT DEFAULT NULL",
             'reviewed_at' => "ALTER TABLE advertisements ADD reviewed_at DATETIME DEFAULT NULL",
             'fee_amount' => "ALTER TABLE advertisements ADD fee_amount DECIMAL(10,2) DEFAULT NULL",
+            'policy_agreed_at' => "ALTER TABLE advertisements ADD policy_agreed_at DATETIME DEFAULT NULL COMMENT '刊登者同意廣告刊登規範的時間'",
+            'policy_flags' => "ALTER TABLE advertisements ADD policy_flags TEXT DEFAULT NULL COMMENT '自動檢查出需審核人員注意的項目（JSON）'",
         ];
         foreach ($columns as $column => $alterSql) {
             $result = $this->db->query("SHOW COLUMNS FROM advertisements LIKE '{$column}'");
@@ -107,36 +109,45 @@ class AdvertisementModel extends BaseModel {
         );
     }
 
-    public function create($advertiserId, $title, $content, $linkUrl = null, $imagePath = null, $startDate = null, $endDate = null, $autoApprove = false) {
+    /**
+     * 刊登廣告：先依「廣告刊登規範」（AdPolicyHelper）檢查，違規直接擋下；需要注意的項目記在 policy_flags 給審核人員看。
+     * @return array{success: bool, message: string, ad_id?: int, warnings?: string[]}
+     */
+    public function create($advertiserId, $title, $content, $linkUrl = null, $imagePath = null, $startDate = null, $endDate = null, $autoApprove = false, $policyAgreed = false) {
+        require_once __DIR__ . '/../helpers/AdPolicyHelper.php';
+        if (!$policyAgreed) {
+            return ['success' => false, 'message' => '請先閱讀並勾選同意「廣告刊登規範」。'];
+        }
         $title = trim((string) $title);
         $content = trim((string) $content);
         $linkUrl = trim((string) $linkUrl);
-        if ($title === '' || $content === '') {
-            return false;
-        }
-        if ($linkUrl !== '' && !preg_match('#^https?://#i', $linkUrl)) {
-            return false;
-        }
-        $start = $this->dateOrNull($startDate);
-        $end = $this->dateOrNull($endDate);
-        if ($start !== null && $end !== null && $end < $start) {
-            return false;
+        $check = AdPolicyHelper::check($title, $content, $linkUrl, $startDate, $endDate);
+        if ($check['errors']) {
+            return ['success' => false, 'message' => '不符合廣告刊登規範：' . implode(' ', $check['errors'])];
         }
 
         $advertiserId = (int) $advertiserId;
-        $titleSql = $this->db->real_escape_string(mb_substr($title, 0, 150));
-        $contentSql = $this->db->real_escape_string($content);
-        $linkSql = $linkUrl === '' ? 'NULL' : "'" . $this->db->real_escape_string(mb_substr($linkUrl, 0, 255)) . "'";
-        $imageSql = $imagePath ? "'" . $this->db->real_escape_string($imagePath) . "'" : 'NULL';
-        $startSql = $start === null ? 'NULL' : "'{$start}'";
-        $endSql = $end === null ? 'NULL' : "'{$end}'";
+        if (!$autoApprove) {
+            $open = $this->query("SELECT COUNT(*) AS c FROM advertisements WHERE advertiser_id = {$advertiserId} AND status IN ('pending','active') AND (end_date IS NULL OR end_date >= CURDATE())");
+            if ((int) ($open[0]['c'] ?? 0) >= AdPolicyHelper::MAX_OPEN_PER_ADVERTISER) {
+                return ['success' => false, 'message' => '每個帳號同時最多 ' . AdPolicyHelper::MAX_OPEN_PER_ADVERTISER . ' 則審核中或刊登中的廣告，請等舊廣告到期或下架後再申請。'];
+            }
+        }
 
-        $statusSql = $autoApprove ? 'active' : 'pending';
-        $created = $this->db->query(
-            "INSERT INTO advertisements (advertiser_id, title, content, link_url, image_path, start_date, end_date, status)
-             VALUES ({$advertiserId}, '{$titleSql}', '{$contentSql}', {$linkSql}, {$imageSql}, {$startSql}, {$endSql}, '{$statusSql}')"
+        $start = $this->dateOrNull($startDate) ?? date('Y-m-d');
+        $end = $this->dateOrNull($endDate) ?? AdPolicyHelper::defaultEndDate($start);
+        $flags = $check['warnings'] ? json_encode($check['warnings'], JSON_UNESCAPED_UNICODE) : null;
+        $link = $linkUrl !== '' ? $linkUrl : null;
+        $status = $autoApprove ? 'active' : 'pending';
+        $stmt = $this->db->prepare(
+            "INSERT INTO advertisements (advertiser_id, title, content, link_url, image_path, start_date, end_date, status, policy_agreed_at, policy_flags)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)"
         );
-        return $created ? (int) $this->db->insert_id : false;
+        $stmt->bind_param('issssssss', $advertiserId, $title, $content, $link, $imagePath, $start, $end, $status, $flags);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => '刊登失敗，請稍後再試。'];
+        }
+        return ['success' => true, 'message' => '', 'ad_id' => (int) $this->db->insert_id, 'warnings' => $check['warnings']];
     }
 
     /**
