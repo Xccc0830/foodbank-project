@@ -41,10 +41,13 @@ $thanksModel = new ThanksModel();
 $db = $GLOBALS['db']->getConnection();
 $donorId = 8; $riderId = 12; $staffId = 7;
 
+// 建資料表欄位的指令（ALTER TABLE）會讓交易自動提交，rollback 不一定有效，所以結束時也明確刪除這次建立的資料
+$memberAd = $staffAd = $donationId = $deliveryId = 0;
+$notificationStart = (int) $db->query("SELECT COALESCE(MAX(notification_id), 0) AS m FROM notifications")->fetch_assoc()['m'];
 $db->begin_transaction();
 try {
-    $memberAd = $adModel->create($donorId, '測試廣告', '內容', '', null, '', '');
-    $staffAd = $adModel->create($staffId, '官方廣告', '內容', '', null, '', '', true);
+    $memberAd = $adModel->create($donorId, '測試廣告', '這是測試用的廣告內容', '', null, '', '', false, true)['ad_id'] ?? 0;
+    $staffAd = $adModel->create($staffId, '官方廣告', '這是測試用的官方廣告', '', null, '', '', true, true)['ad_id'] ?? 0;
     $statusOf = function ($id) use ($db) { return $db->query("SELECT status FROM advertisements WHERE ad_id = {$id}")->fetch_assoc()['status']; };
     check('會員送出的廣告先進入待審核', $statusOf($memberAd) === 'pending');
     check('食物銀行自己刊登的直接上架', $statusOf($staffAd) === 'active');
@@ -73,5 +76,20 @@ try {
     check('商家收到感謝通知', $notified >= 1);
 } finally {
     $db->rollback();
+    if ($deliveryId) {
+        $db->query("DELETE FROM thanks_messages WHERE delivery_id = " . (int) $deliveryId);
+        $db->query("DELETE FROM deliveries WHERE delivery_id = " . (int) $deliveryId);
+    }
+    if ($donationId) {
+        $db->query("DELETE FROM donation_allocation_items WHERE allocation_id IN (SELECT allocation_id FROM donation_allocations WHERE donation_id = " . (int) $donationId . ")");
+        $db->query("DELETE FROM donation_allocations WHERE donation_id = " . (int) $donationId);
+        $db->query("DELETE FROM donations WHERE donation_id = " . (int) $donationId);
+    }
+    foreach ([$memberAd, $staffAd] as $adId) {
+        if ($adId) {
+            $db->query("DELETE FROM advertisements WHERE ad_id = " . (int) $adId);
+        }
+    }
+    $db->query("DELETE FROM notifications WHERE notification_id > {$notificationStart} AND user_id IN ({$donorId}, {$riderId}, {$staffId})");
 }
 exit(empty($failed) ? 0 : 1);

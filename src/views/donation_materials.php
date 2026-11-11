@@ -2,6 +2,7 @@
 require_once BASE_PATH . '/src/models/DonationModel.php';
 require_once BASE_PATH . '/src/models/DeliveryModel.php';
 require_once BASE_PATH . '/src/helpers/UploadHelper.php';
+require_once BASE_PATH . '/src/views/partials/detail_blocks.php';
 require_once BASE_PATH . '/src/helpers/DistanceHelper.php';
 require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 require_once BASE_PATH . '/src/models/NotificationModel.php';
@@ -12,9 +13,11 @@ $notificationModel = new NotificationModel();
 $connection = $db->getConnection();
 $currentUserId = isset($currentUser['user_id']) ? (int) $currentUser['user_id'] : 0;
 $donorName = trim((string) ($currentUser['enterprise_name'] ?? $currentUser['full_name'] ?? ''));
+require_once BASE_PATH . '/src/models/FoodbankProfileModel.php';
+$foodbankProfile = (new FoodbankProfileModel())->get(); // 送達地址預設為食物銀行在「設置」填的收貨地址
 $deliveryAddress = array_key_exists('delivery_address', $_POST)
     ? trim((string) $_POST['delivery_address'])
-    : '臺北市文山區明義里興隆路四段42巷3號1樓';
+    : $foodbankProfile['address'];
 $itemCategoryOptions = [];
 require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
 new ItemCategoryModel(); // 確保分類的建議保存方式等欄位存在
@@ -193,11 +196,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $closedDayError = ($deliveryDate && !DonationModel::isOpenOn($openDays, $deliveryDate))
         ? '您預約的取貨日（' . $deliveryDate . '）不是商家營業日（營業日：' . DonationModel::formatOpenDays($openDays) . '），請改選其他日期，或到「設置」更新營業日。'
         : null;
+    // 送到食物銀行時，取貨日也必須是食物銀行的收貨日（當天送達），否則騎手會撲空
+    $foodbankClosedError = null;
+    if ($deliveryDate && trim($deliveryAddress) === trim($foodbankProfile['address'])
+        && !DonationModel::isOpenOn($foodbankProfile['open_days'], $deliveryDate)) {
+        $foodbankClosedError = '您預約的日期（' . $deliveryDate . '）' . FoodbankProfileModel::NAME . '不收貨（收貨日：'
+            . DonationModel::formatOpenDays($foodbankProfile['open_days']) . '），請改選其他日期。';
+    }
     $addressError = validateAddress($donorAddress, '取貨地址') ?? validateAddress($deliveryAddress, '送達地址');
     if ($numberError !== null) {
         $formMessage = ['type' => 'error', 'text' => $numberError];
     } elseif ($closedDayError !== null) {
         $formMessage = ['type' => 'error', 'text' => $closedDayError];
+    } elseif ($foodbankClosedError !== null) {
+        $formMessage = ['type' => 'error', 'text' => $foodbankClosedError];
     } elseif ($urgentRequested && $donationModel->countUrgentThisMonth($currentUserId) >= DonationModel::URGENT_MONTHLY_LIMIT) {
         $formMessage = ['type' => 'error', 'text' => '本月緊急運送已達 ' . DonationModel::URGENT_MONTHLY_LIMIT . ' 單上限，請取消勾選「緊急運送」後再送出。'];
     } elseif ($addressError !== null) {
@@ -295,14 +307,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'resub
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'view_material_details') {
     $viewingDonation = $donationModel->getDonationById((int) ($_POST['donation_id'] ?? 0));
+    // 只能查看自己捐贈的物資單，避免改編號看到其他商家的資料
+    if ($viewingDonation && (int) ($viewingDonation['donor_id'] ?? 0) !== (int) $currentUserId) {
+        $viewingDonation = null;
+    }
     if ($viewingDonation) {
         $viewingDonationId = (int) $viewingDonation['donation_id'];
-        $itemResult = $connection->query("SELECT * FROM donation_items WHERE donation_id = {$viewingDonationId} ORDER BY item_id ASC");
-        if ($itemResult) {
-            while ($item = $itemResult->fetch_assoc()) {
-                $viewingItems[] = $item;
-            }
-        }
+        $viewingItems = $donationModel->getDonationItems($viewingDonationId);
     }
 }
 
@@ -441,10 +452,12 @@ $formatDateTime = static function ($value) {
                 </div>
                 <div class="form-section-heading"><span>配送目的地</span><h3>送達資訊</h3><p>這是物資最後要送到的地點。</p></div>
                 <div class="grid-2">
-                    <div class="form-group"><label for="deliveryDate">預計配送日期 <span class="required-mark">*</span></label><input id="deliveryDate" type="date" name="delivery_date" required></div>
+                    <div class="form-group"><label for="deliveryDate">預計配送日期 <span class="required-mark">*</span></label><input id="deliveryDate" type="date" name="delivery_date" required data-foodbank-open-days="<?php echo htmlspecialchars($foodbankProfile['open_days'], ENT_QUOTES, 'UTF-8'); ?>" data-foodbank-address="<?php echo htmlspecialchars($foodbankProfile['address'], ENT_QUOTES, 'UTF-8'); ?>"><p class="form-hint foodbank-date-warning" id="foodbankDateWarning" hidden></p></div>
                     <div class="form-group"><label for="deliveryTime">預計配送時間 <span class="required-mark">*</span></label><input id="deliveryTime" type="time" name="delivery_time" required></div>
                 </div>
-                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址"></div>
+                <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址">
+                    <?php $foodbankReceiving = FoodbankProfileModel::receivingSummary($foodbankProfile); ?>
+                    <p class="form-hint">預設為<?php echo htmlspecialchars(FoodbankProfileModel::NAME); ?>的收貨地址<?php echo $foodbankReceiving !== '' ? '（' . htmlspecialchars($foodbankReceiving) . '）' : ''; ?>。</p></div>
                 <div class="form-group form-check-row"><label><input type="checkbox" name="is_urgent" value="1"> 緊急運送（需要提前送出；食物銀行審核通過後，志工可多得心意幣。每月限 <?php echo (int) DonationModel::URGENT_MONTHLY_LIMIT; ?> 單）</label></div>
                 <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
                     <label>預計運送距離與時間</label>
@@ -605,18 +618,20 @@ $formatDateTime = static function ($value) {
                         <td>
                             <span class="status <?php echo $transportStatus === 'open' ? 'status-pending' : 'status-info'; ?>"><?php echo htmlspecialchars($transportStatusLabel); ?></span>
                             <?php if (in_array($transportStatus, ['open', 'claimed', 'arrived_pickup', 'picked_up'], true) && ($isFoodbankTask || $transportStatus !== 'open')): ?>
-                                <div class="assigned-delivery-details">
-                                    <strong>配送者</strong><?php echo $isFoodbankTask ? '忠信食物銀行' : htmlspecialchars($task['volunteer_name'] ?? '尚未同步'); ?>
-                                    <?php if (!$isFoodbankTask): ?><strong>聯絡電話</strong><?php echo htmlspecialchars($task['volunteer_phone'] ?? '未提供'); ?><?php endif; ?>
-                                    <strong>車輛類型</strong><?php echo ($task['vehicle_type'] ?? '') === 'car' ? '汽車' : '機車'; ?>
-                                    <strong>配送日期</strong><?php echo htmlspecialchars($task['delivery_date'] ?? '未設定'); ?>
-                                    <strong>配送時間</strong><?php echo htmlspecialchars($task['delivery_time'] ?? '未設定'); ?>
-                                    <strong>配送地址</strong><?php echo htmlspecialchars($task['delivery_address'] ?? '未設定'); ?>
-                                    <?php if (!empty($task['estimated_distance_km'])): ?>
-                                        <strong>預計運送距離</strong><?php echo htmlspecialchars(formatDistanceText($task['estimated_distance_km'])); ?>
-                                        <strong>預計運送時間</strong><?php echo htmlspecialchars(formatDurationText($task['estimated_duration_minutes'] ?? 0)); ?>
-                                    <?php endif; ?>
-                                </div>
+                                <?php
+                                $assignedRows = [['label' => '配送者', 'value' => $isFoodbankTask ? '忠信食物銀行' : ($task['volunteer_name'] ?? '尚未同步')]];
+                                if (!$isFoodbankTask) {
+                                    $assignedRows[] = ['label' => '聯絡電話', 'value' => $task['volunteer_phone'] ?? '未提供'];
+                                }
+                                $assignedRows[] = ['label' => '車輛類型', 'value' => ($task['vehicle_type'] ?? '') === 'car' ? '汽車' : '機車'];
+                                $assignedRows[] = ['label' => '配送時間', 'value' => trim(($task['delivery_date'] ?? '未設定') . ' ' . substr((string) ($task['delivery_time'] ?? ''), 0, 5))];
+                                $assignedRows[] = ['label' => '配送地址', 'value' => $task['delivery_address'] ?? '未設定', 'wide' => true];
+                                if (!empty($task['estimated_distance_km'])) {
+                                    $assignedRows[] = ['label' => '預計距離', 'value' => formatDistanceText($task['estimated_distance_km'])];
+                                    $assignedRows[] = ['label' => '預計時間', 'value' => formatDurationText($task['estimated_duration_minutes'] ?? 0)];
+                                }
+                                renderDetailInfoGrid($assignedRows, 'detail-info-grid-compact');
+                                ?>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -674,26 +689,22 @@ $formatDateTime = static function ($value) {
                 $pickupTimeText = !empty($viewingDonation['delivery_date'])
                     ? $viewingDonation['delivery_date'] . (!empty($viewingDonation['delivery_time']) ? ' ' . substr((string) $viewingDonation['delivery_time'], 0, 5) : '')
                     : (!empty($viewingDonation['pickup_deadline']) ? date('Y-m-d H:i', strtotime($viewingDonation['pickup_deadline'])) : '未填寫');
-                $photoPaths = array_filter(array_map('trim', preg_split('/\s*,\s*/', (string) ($viewingDonation['photo_path'] ?? ''))));
                 ?>
                 <div class="donation-detail-summary">
-                    <div class="donation-detail-info">
-                        <p><strong>預約取貨時間：</strong> <?php echo htmlspecialchars($pickupTimeText); ?></p>
-                        <?php if (!$isViewingRejected): // 被婉拒時下方修改表單已有取貨地址 ?>
-                        <p><strong>取貨地址：</strong> <?php echo htmlspecialchars($viewingDonation['donor_address'] ?? '未填寫'); ?></p>
-                        <?php endif; ?>
-                        <p><strong>配送方式：</strong> <?php
-                            if (($viewingDonation['status'] ?? '') === 'pending') {
-                                echo '待食物銀行安排';
-                            } else {
-                                echo htmlspecialchars($deliveryOptionLabels[$viewingDonation['delivery_option'] ?? ''] ?? '未指定');
-                            }
-                        ?></p>
-                        <p><strong><?php echo htmlspecialchars($viewingProcessTimeLabel); ?>：</strong> <?php echo htmlspecialchars($formatDateTime($viewingProcessTime)); ?></p>
-                        <?php if (trim((string) ($viewingDonation['notes'] ?? '')) !== '' && !$isViewingRejected): ?>
-                            <p><strong>備註：</strong> <?php echo nl2br(htmlspecialchars($viewingDonation['notes'])); ?></p>
-                        <?php endif; ?>
-                    </div>
+                    <?php
+                    $detailRows = [
+                        ['label' => '預約取貨時間', 'value' => $pickupTimeText],
+                        ['label' => '配送方式', 'value' => ($viewingDonation['status'] ?? '') === 'pending' ? '待食物銀行安排' : ($deliveryOptionLabels[$viewingDonation['delivery_option'] ?? ''] ?? '未指定')],
+                        ['label' => $viewingProcessTimeLabel, 'value' => $formatDateTime($viewingProcessTime)],
+                    ];
+                    if (!$isViewingRejected) { // 被婉拒時下方修改表單已有取貨地址與備註
+                        $detailRows[] = ['label' => '取貨地址', 'value' => $viewingDonation['donor_address'] ?? '未填寫', 'wide' => true];
+                        if (trim((string) ($viewingDonation['notes'] ?? '')) !== '') {
+                            $detailRows[] = ['label' => '備註', 'value' => $viewingDonation['notes'], 'wide' => true];
+                        }
+                    }
+                    renderDetailInfoGrid($detailRows);
+                    ?>
                     <button type="button" class="btn btn-secondary" data-modal-open="donationSpecModal"><i class="fas fa-box-open"></i> 物資規格</button>
                 </div>
                 <?php if (($viewingDonation['status'] ?? '') === 'assessed' && !$isViewingRejected): ?>
@@ -741,35 +752,50 @@ $formatDateTime = static function ($value) {
             </div>
             <div class="app-modal-body">
                 <?php if (!empty($viewingItems)): ?>
-                    <div class="data-table-wrapper"><table class="data-table donation-items-table"><thead><tr><th>物資名稱</th><th>保存方式</th><th>包裝</th><th>數量</th><th>長寬高 (cm)</th><th>重量 (kg)</th><th>保存期限</th></tr></thead><tbody>
-                            <?php foreach ($viewingItems as $item):
-                                $dimensionParts = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($value) {
-                                    return $value !== null && $value !== '';
-                                });
-                                $dimensionText = count($dimensionParts) === 3 ? implode(' × ', array_map($trimNumber, $dimensionParts)) : '未填寫';
-                            ?><tr><td><?php echo htmlspecialchars($item['item_name']); ?></td><td><?php echo htmlspecialchars(['room' => '常溫', 'chilled' => '冷藏', 'frozen' => '冷凍'][$item['storage_condition'] ?? 'room'] ?? '常溫'); ?></td><td><?php echo htmlspecialchars(($item['package_state'] ?? 'sealed') === 'opened' ? '已拆封／分裝' : '原包裝未拆封'); ?></td><td><?php echo htmlspecialchars($trimNumber($item['quantity']) . ' ' . $item['unit']); ?></td><td><?php echo htmlspecialchars($dimensionText); ?></td><td><?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? $trimNumber($item['item_weight_kg']) . ' kg' : '未填寫'); ?></td><td><?php echo htmlspecialchars($item['expiry_date'] ?? '未填寫'); ?></td></tr><?php endforeach; ?>
-                        </tbody></table></div>
+                    <?php renderDonationItemCards($viewingItems); ?>
                 <?php else: ?>
-                    <p><strong>物資：</strong> <?php echo htmlspecialchars($viewingDonation['item_name'] ?? ''); ?>（<?php echo htmlspecialchars($trimNumber($viewingDonation['quantity'] ?? '') . ' ' . ($viewingDonation['unit'] ?? '')); ?>）</p>
-                    <?php if ((float) ($viewingDonation['weight_kg'] ?? 0) > 0): ?><p><strong>重量：</strong> <?php echo htmlspecialchars($trimNumber($viewingDonation['weight_kg'])); ?> 公斤</p><?php endif; ?>
-                    <p><strong>有效期限：</strong> <?php echo htmlspecialchars($viewingDonation['expiry_date'] ?? '未填寫'); ?></p>
+                    <?php renderDetailInfoGrid([
+                        ['label' => '物資', 'value' => ($viewingDonation['item_name'] ?? '') . '（' . detailNumber($viewingDonation['quantity'] ?? '') . ' ' . ($viewingDonation['unit'] ?? '') . '）'],
+                        ['label' => '重量', 'value' => (float) ($viewingDonation['weight_kg'] ?? 0) > 0 ? detailNumber($viewingDonation['weight_kg']) . ' 公斤' : '未填寫'],
+                        ['label' => '有效期限', 'value' => $viewingDonation['expiry_date'] ?? '未填寫'],
+                    ]); ?>
                 <?php endif; ?>
-                <h3 class="donation-spec-photo-title">物資照片</h3>
-                <?php if ($photoPaths): ?>
-                    <div class="donation-spec-photos">
-                        <?php foreach ($photoPaths as $path): ?>
-                            <img src="<?php echo htmlspecialchars(storedPublicImageUrl($path)); ?>" alt="捐贈照片">
-                        <?php endforeach; ?>
-                    </div>
-                <?php else: ?>
-                    <p class="text-muted">未上傳照片</p>
-                <?php endif; ?>
+                <?php renderDonationPhotos($viewingDonation['photo_path'] ?? ''); ?>
             </div>
         </div>
     </div>
 <?php endif; ?>
 
 <script>
+    // 送到食物銀行時，選到食物銀行不收貨的日子就立刻提醒並擋住送出（伺服器也會再檢查一次）
+    (function () {
+        const dateInput = document.getElementById('deliveryDate');
+        const addressInput = document.getElementById('deliveryAddress');
+        const warning = document.getElementById('foodbankDateWarning');
+        if (!dateInput || !addressInput || !warning) {
+            return;
+        }
+        const openDays = (dateInput.dataset.foodbankOpenDays || '').split(',').filter(Boolean);
+        const labels = ['', '週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+        const check = function () {
+            let message = '';
+            if (openDays.length && dateInput.value && addressInput.value.trim() === (dateInput.dataset.foodbankAddress || '').trim()) {
+                const day = new Date(dateInput.value + 'T00:00:00').getDay() || 7;
+                if (openDays.indexOf(String(day)) === -1) {
+                    message = '食物銀行' + labels[day] + '不收貨（收貨日：' + openDays.map(function (d) { return labels[d]; }).join('、') + '），請改選其他日期。';
+                }
+            }
+            dateInput.setCustomValidity(message);
+            warning.textContent = message;
+            warning.hidden = message === '';
+        };
+        dateInput.addEventListener('change', check);
+        dateInput.addEventListener('input', check);
+        addressInput.addEventListener('input', check);
+        addressInput.addEventListener('change', check);
+        check();
+    })();
+
     (function () {
         const toggleButton = document.getElementById('toggleDonationFormButton');
         const formSection = document.getElementById('donationFormSection');
@@ -941,11 +967,9 @@ $formatDateTime = static function ($value) {
 
 <?php if ($viewingDonation): ?>
 <style>
+    .form-hint.foodbank-date-warning { color: #b45309; font-weight: 600; }
     .donation-detail-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-    .donation-detail-info p { margin: 0 0 6px; }
-    .donation-spec-photo-title { margin: 20px 0 10px; font-size: 16px; }
-    .donation-spec-photos { display: flex; flex-wrap: wrap; gap: 10px; }
-    .donation-spec-photos img { max-width: 220px; border-radius: 8px; border: 1px solid #dfe3ea; }
+    .donation-detail-summary .detail-info-grid { flex: 1; margin: 0; }
     @media (max-width: 600px) { .donation-detail-summary { flex-direction: column; } }
     .donation-detail-overlay {
         position: fixed;

@@ -164,7 +164,12 @@
                     courierName.textContent = result.courier_name || (result.status === 'open' ? '等待配送員接單' : '配送夥伴');
                 }
                 if (courierVehicle) {
-                    courierVehicle.textContent = result.vehicle_type === 'car' ? '汽車配送' : (result.vehicle_type === 'motorcycle' ? '機車配送' : '配送夥伴');
+                    if (result.delivery_method === 'food_bank') {
+                        // 忠信派車：顯示食物銀行選的車種（冷凍車、小貨車…）
+                        courierVehicle.textContent = result.foodbank_vehicle_label ? result.foodbank_vehicle_label + '配送' : '車種待安排';
+                    } else {
+                        courierVehicle.textContent = result.vehicle_type === 'car' ? '汽車配送' : (result.vehicle_type === 'motorcycle' ? '機車配送' : '配送夥伴');
+                    }
                 }
                 if (courierAvatar) {
                     const initials = result.courier_name ? Array.from(result.courier_name.trim())[0] : '';
@@ -360,7 +365,7 @@
                 .then(function (result) {
                     if (!result.found) {
                         if (mapWindow) { mapWindow.close(); }
-                        window.alert('目前沒有騎手的最新位置（騎手尚未開始運送，或超過 10 分鐘沒有更新）。');
+                        window.alert('目前沒有 GO Rider 的最新位置（GO Rider 尚未開始運送，或超過 10 分鐘沒有更新）。');
                         return;
                     }
                     const url = 'https://www.google.com/maps?q=' + result.lat + ',' + result.lon;
@@ -1375,47 +1380,103 @@
         }
     }
 
-    function showNotification(message, type) {
-        const notificationType = type || 'info';
-        const notification = document.createElement('div');
-        notification.className = 'notification notification-' + notificationType;
-        notification.textContent = message;
+    // 右上角的提示訊息：多則時由上往下排成一疊，不會互相重疊；最多同時顯示 4 則，其餘合併成「還有 N 則」。
+    const TOAST_LIMIT = 4;
+    const TOAST_COLORS = {
+        success: ['#10B981', '#FFFFFF'],
+        error: ['#EF4444', '#FFFFFF'],
+        warning: ['#F59E0B', '#111827'],
+        info: ['#3B82F6', '#FFFFFF']
+    };
 
-        notification.style.cssText = [
-            'position:fixed',
-            'top:20px',
-            'right:20px',
-            'padding:12px 16px',
-            'border-radius:8px',
-            'z-index:3000',
-            'font-size:13px',
-            'font-weight:600',
-            'box-shadow:0 10px 24px rgba(0,0,0,0.15)',
-            'animation:slideInToast .2s ease-out'
-        ].join(';');
-
-        if (notificationType === 'success') {
-            notification.style.backgroundColor = '#10B981';
-            notification.style.color = '#FFFFFF';
-        } else if (notificationType === 'error') {
-            notification.style.backgroundColor = '#EF4444';
-            notification.style.color = '#FFFFFF';
-        } else if (notificationType === 'warning') {
-            notification.style.backgroundColor = '#F59E0B';
-            notification.style.color = '#111827';
-        } else {
-            notification.style.backgroundColor = '#3B82F6';
-            notification.style.color = '#FFFFFF';
+    function toastStack() {
+        let stack = document.getElementById('toastStack');
+        if (!stack) {
+            stack = document.createElement('div');
+            stack.id = 'toastStack';
+            stack.className = 'toast-stack';
+            stack.setAttribute('role', 'status');
+            stack.setAttribute('aria-live', 'polite');
+            document.body.appendChild(stack);
         }
+        return stack;
+    }
 
-        document.body.appendChild(notification);
-
+    function removeToast(toast) {
+        if (!toast.isConnected || toast.dataset.leaving) {
+            return;
+        }
+        toast.dataset.leaving = '1';
+        toast.style.animation = 'slideOutToast .2s ease-in forwards';
         setTimeout(function () {
-            notification.style.animation = 'slideOutToast .2s ease-in';
-            setTimeout(function () {
-                notification.remove();
-            }, 200);
-        }, 2500);
+            toast.remove();
+            updateToastOverflow();
+        }, 200);
+    }
+
+    function updateToastOverflow() {
+        const stack = document.getElementById('toastStack');
+        if (!stack) {
+            return;
+        }
+        const overflow = stack.querySelector('.toast-overflow');
+        // 前面的訊息關掉後，把排隊中的訊息補上來
+        const visible = stack.querySelectorAll('.toast:not([hidden]):not([data-leaving])').length;
+        Array.prototype.slice.call(stack.querySelectorAll('.toast[hidden]'), 0, Math.max(0, TOAST_LIMIT - visible)).forEach(function (toast) {
+            toast.hidden = false;
+            scheduleToastRemoval(toast);
+        });
+        const stillHidden = stack.querySelectorAll('.toast[hidden]').length;
+        if (overflow) {
+            overflow.hidden = stillHidden === 0;
+            overflow.textContent = '還有 ' + stillHidden + ' 則新通知';
+        }
+        if (!stack.querySelector('.toast')) {
+            stack.remove();
+        }
+    }
+
+    function scheduleToastRemoval(toast) {
+        setTimeout(function () { removeToast(toast); }, 4000);
+    }
+
+    function showNotification(message, type) {
+        const notificationType = TOAST_COLORS[type] ? type : 'info';
+        const stack = toastStack();
+        const toast = document.createElement('div');
+        toast.className = 'toast notification notification-' + notificationType;
+        toast.style.backgroundColor = TOAST_COLORS[notificationType][0];
+        toast.style.color = TOAST_COLORS[notificationType][1];
+
+        const text = document.createElement('span');
+        text.className = 'toast-text';
+        text.textContent = message;
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'toast-close';
+        close.setAttribute('aria-label', '關閉通知');
+        close.textContent = '×';
+        close.addEventListener('click', function () { removeToast(toast); });
+        toast.appendChild(text);
+        toast.appendChild(close);
+
+        let overflow = stack.querySelector('.toast-overflow');
+        if (!overflow) {
+            overflow = document.createElement('a');
+            overflow.className = 'toast-overflow';
+            overflow.href = '?page=notifications';
+            overflow.hidden = true;
+            stack.appendChild(overflow);
+        }
+        stack.insertBefore(toast, overflow);
+
+        const visible = stack.querySelectorAll('.toast:not([hidden]):not([data-leaving])').length;
+        if (visible > TOAST_LIMIT) {
+            toast.hidden = true;
+        } else {
+            scheduleToastRemoval(toast);
+        }
+        updateToastOverflow();
     }
 
     function exportToCSV(filename) {
@@ -1529,6 +1590,61 @@
                 margin-top: 12px;
             }
 
+            .toast-stack {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 3000;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 10px;
+                width: min(360px, calc(100vw - 32px));
+                pointer-events: none;
+            }
+            .toast-stack .toast {
+                display: flex;
+                align-items: flex-start;
+                gap: 10px;
+                width: 100%;
+                padding: 12px 14px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                line-height: 1.5;
+                box-shadow: 0 10px 24px rgba(0,0,0,0.15);
+                animation: slideInToast .2s ease-out;
+                pointer-events: auto;
+                overflow-wrap: anywhere;
+            }
+            .toast-stack .toast[hidden] { display: none; }
+            .toast-stack .toast-text { flex: 1; }
+            .toast-stack .toast-close {
+                flex: 0 0 auto;
+                padding: 0 2px;
+                border: 0;
+                background: transparent;
+                color: inherit;
+                font-size: 18px;
+                line-height: 1;
+                cursor: pointer;
+                opacity: .8;
+            }
+            .toast-stack .toast-close:hover { opacity: 1; }
+            .toast-stack .toast-overflow {
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: #1e293b;
+                color: #fff;
+                font-size: 12px;
+                font-weight: 600;
+                text-decoration: none;
+                pointer-events: auto;
+            }
+            .toast-stack .toast-overflow[hidden] { display: none; }
+            @media (max-width: 600px) {
+                .toast-stack { top: 12px; right: 16px; }
+            }
             @keyframes slideInToast {
                 from { transform: translateY(-8px); opacity: 0; }
                 to { transform: translateY(0); opacity: 1; }

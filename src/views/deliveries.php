@@ -293,7 +293,18 @@ if ($isVolunteer) {
             </div>
             <div class="driver-trip-stop">
                 <i class="fas fa-house-user"></i>
-                <div><strong>送達地址</strong><span><?php echo htmlspecialchars($activeDriverTrip['delivery_address']); ?></span></div>
+                <div><strong>送達地址</strong><span><?php echo htmlspecialchars($activeDriverTrip['delivery_address']); ?></span>
+                    <?php
+                    // 送到食物銀行時，附上食物銀行在「設置」填的收貨時間與備註
+                    require_once BASE_PATH . '/src/models/FoodbankProfileModel.php';
+                    $tripFoodbank = (new FoodbankProfileModel())->get();
+                    if (trim((string) $activeDriverTrip['delivery_address']) === trim($tripFoodbank['address'])):
+                        $tripReceiving = FoodbankProfileModel::receivingSummary($tripFoodbank); ?>
+                        <?php if ($tripReceiving !== ''): ?><span><?php echo htmlspecialchars($tripReceiving); ?></span><?php endif; ?>
+                        <?php if ($tripFoodbank['receiving_note'] !== ''): ?><span>收貨備註：<?php echo htmlspecialchars($tripFoodbank['receiving_note']); ?></span><?php endif; ?>
+                        <?php if ($tripFoodbank['contact_phone'] !== ''): ?><a class="btn btn-secondary btn-sm" href="tel:<?php echo htmlspecialchars(preg_replace('/[^0-9+]/', '', $tripFoodbank['contact_phone']), ENT_QUOTES, 'UTF-8'); ?>"><i class="fas fa-phone"></i> 聯絡食物銀行</a><?php endif; ?>
+                    <?php endif; ?>
+                </div>
             </div>
             <?php
                 $tripItemCount = (int) ($activeDriverTrip['item_count'] ?? 0);
@@ -617,8 +628,8 @@ if ($isVolunteer) {
                         <?php if ($isOfficial && !empty($delivery['pickup_photo_path'])): ?>
                             <br><a href="<?php echo htmlspecialchars(storedPublicImageUrl($delivery['pickup_photo_path']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
                         <?php endif; ?>
-                        <?php if ($isOfficial && !empty($delivery['volunteer_id']) && in_array($delivery['status'], ['claimed', 'arrived_pickup', 'picked_up'], true)): ?>
-                            <br><button type="button" class="btn btn-secondary btn-sm" data-rider-location data-delivery-id="<?php echo (int) $delivery['delivery_id']; ?>"><i class="fas fa-location-crosshairs"></i> 騎手位置</button>
+                        <?php if ($isOfficial && ($delivery['delivery_method'] ?? '') !== 'food_bank' && !empty($delivery['volunteer_id']) && in_array($delivery['status'], ['claimed', 'arrived_pickup', 'picked_up'], true)): ?>
+                            <br><button type="button" class="btn btn-secondary btn-sm" data-rider-location data-delivery-id="<?php echo (int) $delivery['delivery_id']; ?>"><i class="fas fa-location-crosshairs"></i> GO Rider 位置</button>
                         <?php endif; ?>
                         <?php if (($delivery['delivery_method'] ?? '') === 'food_bank'): ?>
                             <br><small>派送：忠信食物銀行</small>

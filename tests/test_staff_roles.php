@@ -93,11 +93,20 @@ try {
 
     // 廣告
     $adModel = new AdvertisementModel();
-    check('ad without content is rejected', $adModel->create($enterpriseId, '標題', '') === false);
-    check('ad with non-http link is rejected', $adModel->create($enterpriseId, '標題', '內容', 'javascript:alert(1)') === false);
-    check('ad with reversed dates is rejected', $adModel->create($enterpriseId, '標題', '內容', null, null, '2026-12-31', '2026-01-01') === false);
-    $createdAdId = $adModel->create($enterpriseId, 'T廣告', '測試內容', 'https://example.com', null, null, null, true);
-    check('valid ad is created', $createdAdId !== false);
+    $adOk = static function ($result) { return is_array($result) && !empty($result['success']); };
+    check('ad without agreeing to the policy is rejected', !$adOk($adModel->create($enterpriseId, '標題', '這是一則測試廣告內容', null, null, null, null, false, false)));
+    check('ad without content is rejected', !$adOk($adModel->create($enterpriseId, '標題', '', null, null, null, null, false, true)));
+    check('ad with non-https link is rejected', !$adOk($adModel->create($enterpriseId, '標題', '這是一則測試廣告內容', 'javascript:alert(1)', null, null, null, false, true)));
+    check('ad with reversed dates is rejected', !$adOk($adModel->create($enterpriseId, '標題', '這是一則測試廣告內容', null, null, '2099-12-31', '2099-01-01', false, true)));
+    check('ad longer than 90 days is rejected', !$adOk($adModel->create($enterpriseId, '標題', '這是一則測試廣告內容', null, null, '2099-01-01', '2099-12-31', false, true)));
+    check('food ad claiming medical effect is rejected', !$adOk($adModel->create($enterpriseId, '標題', '本店蔬菜汁可以降血壓，歡迎選購', null, null, null, null, false, true)));
+    check('alcohol ad without warnings is rejected', !$adOk($adModel->create($enterpriseId, '標題', '精釀啤酒買一送一，歡迎選購', null, null, null, null, false, true)));
+    check('e-cigarette ad is rejected', !$adOk($adModel->create($enterpriseId, '標題', '電子煙新品上市，歡迎選購', null, null, null, null, false, true)));
+    $created = $adModel->create($enterpriseId, 'T廣告', '測試內容，保證新鮮好吃', 'https://example.com', null, null, null, true, true);
+    check('valid ad is created', $adOk($created));
+    check('warning words are flagged for reviewers', $adOk($created) && count($created['warnings']) === 1);
+    $createdAdId = $adOk($created) ? $created['ad_id'] : 0;
+    check('ad without end date runs for 30 days', (string) $connection->query("SELECT DATEDIFF(end_date, start_date) AS d FROM advertisements WHERE ad_id = {$createdAdId}")->fetch_assoc()['d'] === '29');
     $activeTitles = array_column($adModel->getActiveAds(50), 'title');
     check('new ad is listed', in_array('T廣告', $activeTitles, true));
     check('other member cannot remove the ad', !$adModel->remove($createdAdId, $riderId, 'member'));

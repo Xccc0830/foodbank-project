@@ -15,6 +15,37 @@ class DeliveryModel extends BaseModel {
         $this->ensurePickupPhotoColumn();
         $this->ensureArrivalWindowColumns();
         $this->ensureArrivedPickupSupport();
+        $this->ensureFoodbankVehicleColumn();
+    }
+
+    /** 忠信派車可選的車種（GO Rider 派車仍用 vehicle_type 的機車／汽車） */
+    public const FOODBANK_VEHICLES = [
+        'motorcycle' => '機車',
+        'car' => '汽車',
+        'small_truck' => '小貨車',
+        'refrigerated_truck' => '冷藏車',
+        'frozen_truck' => '冷凍車',
+    ];
+
+    private function ensureFoodbankVehicleColumn() {
+        $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE 'foodbank_vehicle'");
+        if ($result && $result->num_rows === 0) {
+            $this->db->query("ALTER TABLE deliveries ADD foodbank_vehicle VARCHAR(30) DEFAULT NULL COMMENT '忠信派車的車種' AFTER vehicle_type");
+        }
+    }
+
+    /**
+     * 食物銀行為忠信派車的配送單指定車種；只能改還沒送達的忠信派車單。
+     * @param int|null $donationId 指定時改這張捐贈單底下所有忠信派車配送單
+     */
+    public function setFoodbankVehicle($deliveryId, $vehicle, $donationId = null) {
+        if (!isset(self::FOODBANK_VEHICLES[$vehicle])) {
+            return false;
+        }
+        $where = $donationId !== null ? 'donation_id = ' . (int) $donationId : 'delivery_id = ' . (int) $deliveryId;
+        $stmt = $this->db->prepare("UPDATE deliveries SET foodbank_vehicle = ? WHERE {$where} AND delivery_method = 'food_bank' AND status NOT IN ('delivered', 'cancelled')");
+        $stmt->bind_param('s', $vehicle);
+        return $stmt->execute();
     }
 
     private function ensureArrivedPickupSupport() {
@@ -166,7 +197,7 @@ class DeliveryModel extends BaseModel {
             "SELECT d.delivery_id, d.status, d.pickup_address, d.delivery_address,
                     CASE WHEN d.delivery_method = 'food_bank' THEN '忠信食物銀行' ELSE u.full_name END AS courier_name,
                     d.delivery_method,
-                    d.vehicle_type, d.estimated_arrival_start, d.estimated_arrival_end,
+                    d.vehicle_type, d.foodbank_vehicle, d.estimated_arrival_start, d.estimated_arrival_end,
                     n.delivery_date, n.delivery_time,
                     (
                         SELECT COUNT(*)
@@ -186,6 +217,9 @@ class DeliveryModel extends BaseModel {
             return false;
         }
         $tracking = $result->fetch_assoc();
+        if ($tracking) {
+            $tracking['foodbank_vehicle_label'] = self::FOODBANK_VEHICLES[$tracking['foodbank_vehicle'] ?? ''] ?? '';
+        }
         return $tracking ?: null;
     }
 
