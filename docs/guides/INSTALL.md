@@ -155,9 +155,21 @@ foodbank-project/
 
 ### 啟用調試模式
 
-編輯 `config/database.php`：
+在被 Git 忽略的 `config/local.php` 設定開發模式與快速登入帳號；快速登入僅在 `APP_DEBUG` 為 `true` 且帳號資料完整時顯示。請使用本機測試帳號，勿將 `config/local.php` 部署到正式環境或提交至 Git。
 ```php
-define('APP_DEBUG', true);  // 開發時設為 true
+define('APP_DEBUG', true);
+define('QUICK_LOGIN_ACCOUNTS', [
+    [
+        'label' => '食物銀行管理帳號',
+        'username' => '本機測試帳號',
+        'password' => '本機測試密碼',
+    ],
+    [
+        'label' => 'GO RIDER 測試帳號',
+        'username' => '本機測試帳號',
+        'password' => '本機測試密碼',
+    ],
+]);
 ```
 
 ### 啟用錯誤報告

@@ -2,6 +2,29 @@
 $error = $error ?? null;
 $loginCssPath = BASE_PATH . '/public/assets/css/style.css';
 $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time();
+$quickLoginAccounts = [];
+if (APP_DEBUG && defined('QUICK_LOGIN_ACCOUNTS') && is_array(QUICK_LOGIN_ACCOUNTS)) {
+    foreach (QUICK_LOGIN_ACCOUNTS as $account) {
+        if (!is_array($account)
+            || !isset($account['label'], $account['username'], $account['password'])
+            || !is_scalar($account['label'])
+            || !is_scalar($account['username'])
+            || !is_scalar($account['password'])) {
+            continue;
+        }
+
+        $label = trim((string) $account['label']);
+        $username = trim((string) $account['username']);
+        $password = (string) $account['password'];
+        if ($label !== '' && $username !== '' && $password !== '') {
+            $quickLoginAccounts[] = [
+                'label' => $label,
+                'username' => $username,
+                'password' => $password,
+            ];
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -43,9 +66,34 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
                 <div class="form-group"><label for="password">密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" autocomplete="current-password" placeholder="輸入你的密碼" required></div></div>
                 <button class="btn btn-primary login-submit" type="submit">登入系統 <i class="fa-solid fa-arrow-right"></i></button>
             </form>
+            <?php if ($quickLoginAccounts): ?>
+                <div class="login-divider"><span>快速登入（僅開發環境）</span></div>
+                <div class="login-roles" aria-label="開發環境快速登入">
+                    <?php foreach ($quickLoginAccounts as $account): ?>
+                        <button
+                            type="button"
+                            class="login-role-button"
+                            data-username="<?php echo htmlspecialchars($account['username'], ENT_QUOTES, 'UTF-8'); ?>"
+                            data-password="<?php echo htmlspecialchars($account['password'], ENT_QUOTES, 'UTF-8'); ?>"
+                        ><?php echo htmlspecialchars($account['label'], ENT_QUOTES, 'UTF-8'); ?></button>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
             <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>
         </section>
     </main>
+    <?php if ($quickLoginAccounts): ?>
+        <script>
+            document.querySelectorAll('.login-role-button').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var form = document.querySelector('.login-panel form');
+                    document.getElementById('username').value = button.dataset.username;
+                    document.getElementById('password').value = button.dataset.password;
+                    form.requestSubmit();
+                });
+            });
+        </script>
+    <?php endif; ?>
 </body>
 </html>
