@@ -246,6 +246,7 @@ class DonationModel extends BaseModel {
             return false;
         }
 
+        DeliveryModel::ensureDeliveryRewardColumns($this->db);
         $this->db->begin_transaction();
         if (!$this->db->query("UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE donation_id = {$donation_id} AND status = 'assessed'")) {
             $this->db->rollback();
@@ -310,9 +311,11 @@ class DonationModel extends BaseModel {
 
             $allocationColumn = $allocationId !== null ? ", allocation_id" : '';
             $allocationValue = $allocationId !== null ? ", {$allocationId}" : '';
+            $estimatedDuration = max(0, (int) ($existingDonation['estimated_duration_minutes'] ?? 0));
+            $estimatedDurationValue = $estimatedDuration > 0 ? (string) $estimatedDuration : 'NULL';
             $taskSql = "INSERT INTO deliveries
-                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
-                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, 'normal', {$points}, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, estimated_duration_minutes, weight_kg, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
+                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$estimatedDurationValue}, {$weight}, 'normal', {$points}, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
                 $this->db->rollback();
                 return false;

@@ -14,6 +14,20 @@ class DeliveryModel extends BaseModel {
         $this->ensureExceptionResponseColumns();
         $this->ensurePickupPhotoColumn();
         $this->ensureArrivalWindowColumns();
+        self::ensureDeliveryRewardColumns($this->db);
+    }
+
+    public static function ensureDeliveryRewardColumns($db) {
+        $columns = [
+            'estimated_duration_minutes' => "ALTER TABLE deliveries ADD estimated_duration_minutes SMALLINT UNSIGNED DEFAULT NULL AFTER total_distance_km",
+            'picked_up_at' => "ALTER TABLE deliveries ADD picked_up_at DATETIME DEFAULT NULL AFTER pickup_confirmed_at",
+        ];
+        foreach ($columns as $column => $alterSql) {
+            $result = $db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
+            if ($result && $result->num_rows === 0) {
+                $db->query($alterSql);
+            }
+        }
     }
 
     private function ensureArrivalWindowColumns() {
@@ -75,7 +89,8 @@ class DeliveryModel extends BaseModel {
     private function setArrivalWindow($deliveryId) {
         $deliveryId = (int) $deliveryId;
         $result = $this->db->query(
-            "SELECT n.estimated_duration_minutes FROM deliveries d
+            "SELECT COALESCE(NULLIF(d.estimated_duration_minutes, 0), n.estimated_duration_minutes, 0) AS estimated_duration_minutes
+             FROM deliveries d
              LEFT JOIN donations n ON n.donation_id = d.donation_id
              WHERE d.delivery_id = {$deliveryId} LIMIT 1"
         );
@@ -192,6 +207,13 @@ class DeliveryModel extends BaseModel {
         if ($deliveryMethod === 'food_bank') {
             $data['volunteer_id'] = (int) ($data['created_by'] ?? 0);
         }
+        if (!isset($data['estimated_duration_minutes']) && $donationId !== null) {
+            $durationResult = $this->db->query(
+                "SELECT estimated_duration_minutes FROM donations WHERE donation_id = {$donationId} LIMIT 1"
+            );
+            $duration = $durationResult ? $durationResult->fetch_assoc() : null;
+            $data['estimated_duration_minutes'] = $duration['estimated_duration_minutes'] ?? null;
+        }
         $data['points'] = max(0, $this->calculatePoints(
             $data['vehicle_type'],
             (float) $data['total_distance_km'],
@@ -257,7 +279,7 @@ class DeliveryModel extends BaseModel {
         $donorId = (int) $donorId;
         return $this->db->query("UPDATE deliveries d
             INNER JOIN donations n ON n.donation_id = d.donation_id
-            SET d.status = 'picked_up', d.pickup_confirmed_at = NOW(), d.updated_at = NOW()
+            SET d.status = 'picked_up', d.pickup_confirmed_at = NOW(), d.picked_up_at = NOW(), d.updated_at = NOW()
             WHERE d.delivery_id = {$deliveryId}
               AND n.donor_id = {$donorId}
               AND d.delivery_method = 'volunteer'
@@ -266,7 +288,14 @@ class DeliveryModel extends BaseModel {
 
     public function completeDonationDeliveries($donationId) {
         $donationId = (int) $donationId;
-        $result = $this->db->query("SELECT delivery_id, volunteer_id, points FROM deliveries WHERE donation_id = {$donationId} AND status IN ('claimed', 'picked_up')");
+        $result = $this->db->query(
+            "SELECT d.delivery_id, d.volunteer_id, d.vehicle_type, d.total_distance_km, d.weight_kg, d.urgency,
+                    d.estimated_duration_minutes, d.picked_up_at, d.pickup_confirmed_at,
+                    COALESCE(NULLIF(d.estimated_duration_minutes, 0), n.estimated_duration_minutes, 0) AS reward_estimated_minutes
+             FROM deliveries d
+             LEFT JOIN donations n ON n.donation_id = d.donation_id
+             WHERE d.donation_id = {$donationId} AND d.status IN ('claimed', 'picked_up')"
+        );
         if (!$result || $result->num_rows === 0) {
             return false;
         }
@@ -275,11 +304,23 @@ class DeliveryModel extends BaseModel {
         try {
             while ($delivery = $result->fetch_assoc()) {
                 $deliveryId = (int) $delivery['delivery_id'];
-                $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up')");
+                $updated = $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'picked_up')");
+                if (!$updated || $this->db->affected_rows !== 1) {
+                    throw new RuntimeException('配送任務狀態已變更，無法完成行程。');
+                }
+                $deliveredAt = $this->getDeliveredAt($deliveryId);
+                if ($deliveredAt === null) {
+                    throw new RuntimeException('無法取得配送完成時間。');
+                }
                 $volunteerId = (int) ($delivery['volunteer_id'] ?? 0);
+                $points = $this->calculateCompletedDeliveryPoints($delivery, $deliveredAt);
+                if (!$this->db->query("UPDATE deliveries SET points = {$points} WHERE delivery_id = {$deliveryId}")) {
+                    throw new RuntimeException('無法更新配送點數。');
+                }
                 if ($volunteerId > 0) {
-                    $points = (int) ($delivery['points'] ?? 0);
-                    $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
+                    if (!$this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')")) {
+                        throw new RuntimeException('無法記錄配送點數交易。');
+                    }
                 }
             }
             $this->db->commit();
@@ -452,12 +493,23 @@ class DeliveryModel extends BaseModel {
             return false;
         }
         $donationValue = $donationId === null ? 'NULL' : (string) $donationId;
+        $estimatedDuration = null;
+        if ($donationId !== null) {
+            $durationResult = $this->db->query(
+                "SELECT estimated_duration_minutes FROM donations WHERE donation_id = {$donationId} LIMIT 1"
+            );
+            $duration = $durationResult ? $durationResult->fetch_assoc() : null;
+            $estimatedDuration = isset($duration['estimated_duration_minutes']) && (int) $duration['estimated_duration_minutes'] > 0
+                ? (int) $duration['estimated_duration_minutes']
+                : null;
+        }
+        $estimatedDurationValue = $estimatedDuration === null ? 'NULL' : (string) $estimatedDuration;
         $points = max(0, $this->calculatePoints($vehicleType, $distance, $weight, $urgency));
         if ($pickupAddress === '' || $deliveryAddress === '') {
             return false;
         }
 
-        $sql = "UPDATE deliveries SET donation_id = {$donationValue}, delivery_method = '{$deliveryMethod}', vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, weight_kg = {$weight}, urgency = '{$urgency}', status = '{$status}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
+        $sql = "UPDATE deliveries SET donation_id = {$donationValue}, delivery_method = '{$deliveryMethod}', vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, estimated_duration_minutes = {$estimatedDurationValue}, weight_kg = {$weight}, urgency = '{$urgency}', status = '{$status}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
         $this->db->begin_transaction();
         $updated = $this->db->query($sql);
         if (!$updated) {
@@ -555,7 +607,7 @@ class DeliveryModel extends BaseModel {
         }
 
         $photoValue = $this->db->real_escape_string($pickupPhotoPath);
-        $updated = $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), pickup_photo_path = '{$photoValue}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'claimed'");
+        $updated = $this->db->query("UPDATE deliveries SET status = 'picked_up', pickup_confirmed_at = NOW(), picked_up_at = NOW(), pickup_photo_path = '{$photoValue}' WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND status = 'claimed'");
         $wasUpdated = $updated && $this->db->affected_rows === 1;
         if ($wasUpdated) {
             $this->setArrivalWindow($deliveryId);
@@ -677,14 +729,13 @@ class DeliveryModel extends BaseModel {
         $statusUpdateFields = '';
         switch ($status) {
             case 'collected':
-                $statusUpdateFields = ", collected_at = NOW()";
+                $statusUpdateFields = ", picked_up_at = NOW()";
                 break;
             case 'in_transit':
                 $statusUpdateFields = ", transit_at = NOW()";
                 break;
             case 'delivered':
-                $statusUpdateFields = ", delivered_at = NOW()";
-                break;
+                return $this->finalizeDeliveryCompletion($deliveryId);
         }
 
         $sql = "UPDATE deliveries SET status = '{$status}'{$statusUpdateFields}, updated_at = NOW() WHERE delivery_id = {$deliveryId}";
@@ -699,7 +750,14 @@ class DeliveryModel extends BaseModel {
         $deliveryId = (int) $deliveryId;
         $ownerCondition = " AND status IN ('claimed', 'picked_up', 'in_transit')";
 
-        $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
+        $result = $this->db->query(
+            "SELECT d.volunteer_id, d.vehicle_type, d.total_distance_km, d.weight_kg, d.urgency,
+                    d.estimated_duration_minutes, d.picked_up_at, d.pickup_confirmed_at,
+                    COALESCE(NULLIF(d.estimated_duration_minutes, 0), n.estimated_duration_minutes, 0) AS reward_estimated_minutes
+             FROM deliveries d
+             LEFT JOIN donations n ON n.donation_id = d.donation_id
+             WHERE d.delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1"
+        );
         $delivery = $result ? $result->fetch_assoc() : null;
 
         if (!$delivery) {
@@ -708,14 +766,23 @@ class DeliveryModel extends BaseModel {
 
         $this->db->begin_transaction();
         try {
-            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId}{$ownerCondition}");
-            if ($this->db->affected_rows !== 1) {
+            $updated = $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW() WHERE delivery_id = {$deliveryId}{$ownerCondition}");
+            if (!$updated || $this->db->affected_rows !== 1) {
                 throw new RuntimeException('配送任務狀態已變更，無法完成行程。');
             }
+            $deliveredAt = $this->getDeliveredAt($deliveryId);
+            if ($deliveredAt === null) {
+                throw new RuntimeException('無法取得配送完成時間。');
+            }
             $volunteerId = (int) $delivery['volunteer_id'];
-            $points = (int) $delivery['points'];
+            $points = $this->calculateCompletedDeliveryPoints($delivery, $deliveredAt);
+            if (!$this->db->query("UPDATE deliveries SET points = {$points} WHERE delivery_id = {$deliveryId}")) {
+                throw new RuntimeException('無法更新配送點數。');
+            }
             if ($volunteerId > 0) {
-                $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
+                if (!$this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')")) {
+                    throw new RuntimeException('無法記錄配送點數交易。');
+                }
             }
             $this->db->commit();
             $this->notifyDonor($deliveryId, 'Go Rider 已送達', "配送任務 #{$deliveryId} 已送達，感謝您的愛心。", 'success');
@@ -727,6 +794,32 @@ class DeliveryModel extends BaseModel {
             $this->db->rollback();
             return false;
         }
+    }
+
+    private function getDeliveredAt($deliveryId) {
+        $result = $this->db->query("SELECT delivered_at FROM deliveries WHERE delivery_id = " . (int) $deliveryId . " LIMIT 1");
+        $row = $result ? $result->fetch_assoc() : null;
+        return $row['delivered_at'] ?? null;
+    }
+
+    private function calculateCompletedDeliveryPoints(array $delivery, $deliveredAt) {
+        $pickedUpAt = $delivery['picked_up_at'] ?? $delivery['pickup_confirmed_at'] ?? null;
+        $estimatedMinutes = (float) ($delivery['reward_estimated_minutes'] ?? $delivery['estimated_duration_minutes'] ?? 0);
+        $actualMinutes = 0;
+        $pickupTimestamp = $pickedUpAt ? strtotime($pickedUpAt) : false;
+        $deliveryTimestamp = $deliveredAt ? strtotime($deliveredAt) : false;
+        if ($pickupTimestamp !== false && $deliveryTimestamp !== false && $deliveryTimestamp > $pickupTimestamp) {
+            $actualMinutes = (float) ceil(($deliveryTimestamp - $pickupTimestamp) / 60);
+        }
+
+        return $this->calculatePoints(
+            (string) ($delivery['vehicle_type'] ?? 'motorcycle'),
+            (float) ($delivery['total_distance_km'] ?? 0),
+            (float) ($delivery['weight_kg'] ?? 0),
+            (string) ($delivery['urgency'] ?? 'normal'),
+            $estimatedMinutes,
+            $actualMinutes
+        );
     }
 
     private function notifyUser($userId, $title, $message, $type) {
@@ -765,40 +858,53 @@ class DeliveryModel extends BaseModel {
         return $notifiedCount;
     }
 
-    public static function calculatePoints($vehicle, $distance, $weight, $urgency) {
+    public static function calculatePoints(
+        string $vehicle,
+        float $distance,
+        float $weight,
+        string $urgency = 'normal',
+        float $estimatedMinutes = 0,
+        float $actualMinutes = 0
+    ): int {
         $isCar = $vehicle === 'car';
-        $points = $isCar ? 10 : 5;
+        $distance = is_finite($distance) ? max(0, $distance) : 0;
+        $weight = is_finite($weight) ? max(0, $weight) : 0;
+        $estimatedMinutes = is_finite($estimatedMinutes) ? $estimatedMinutes : 0;
+        $actualMinutes = is_finite($actualMinutes) ? $actualMinutes : 0;
 
-        if ($distance <= 2) {
-            $points += $isCar ? 5 : 3;
-        } elseif ($distance <= 4) {
-            $points += $isCar ? 8 : 5;
-        } elseif ($distance <= 6) {
-            $points += $isCar ? 11 : 7;
-        } elseif ($distance <= 8) {
-            $points += $isCar ? 14 : 10;
-        } elseif ($distance <= 10) {
-            $points += $isCar ? 17 : 13;
-        } else {
-            $points += $isCar ? 20 : 15;
+        $base = $isCar ? 8.0 : 5.0;
+        $distanceFee = $isCar
+            ? max(0, min($distance, 5) - 2) * 2
+                + max(0, min($distance, 10) - 5) * 3
+                + max(0, $distance - 10) * 4
+            : max(0, min($distance, 5) - 1) * 3
+                + max(0, min($distance, 10) - 5) * 4
+                + max(0, $distance - 10) * 5;
+        $weightFee = $isCar
+            ? max(0, min($weight, 20) - 5) * 0.5
+                + max(0, min($weight, 50) - 20)
+                + max(0, $weight - 50) * 1.5
+            : max(0, min($weight, 10) - 3)
+                + max(0, min($weight, 20) - 10) * 2;
+
+        $urgencyMultiplier = [
+            'normal' => 1.0,
+            'priority' => 1.2,
+            'urgent' => 1.5,
+        ][$urgency] ?? 1.0;
+
+        $earlyBonus = 0.0;
+        if ($estimatedMinutes > 0 && $actualMinutes > 0) {
+            $earlyRatio = ($estimatedMinutes - $actualMinutes) / $estimatedMinutes;
+            if ($earlyRatio >= 0.10 && $earlyRatio < 0.20) {
+                $earlyBonus = 0.10;
+            } elseif ($earlyRatio >= 0.20 && $earlyRatio < 0.30) {
+                $earlyBonus = 0.15;
+            } elseif ($earlyRatio >= 0.30 && $earlyRatio < 0.60) {
+                $earlyBonus = 0.20;
+            }
         }
 
-        if ($weight <= 5) {
-            $points += $isCar ? 2 : 0;
-        } elseif ($weight <= 10) {
-            $points += $isCar ? 5 : 3;
-        } elseif ($weight <= 20) {
-            $points += $isCar ? 8 : 6;
-        } else {
-            $points += $isCar ? 12 : 10;
-        }
-
-        $urgencyPoints = [
-            'normal' => $isCar ? 3 : 0,
-            'priority' => $isCar ? 6 : 3,
-            'urgent' => $isCar ? 10 : 6,
-        ];
-
-        return $points + ($urgencyPoints[$urgency] ?? 0);
+        return max(0, (int) floor(($base + $distanceFee + $weightFee) * $urgencyMultiplier * (1 + $earlyBonus)));
     }
 }
