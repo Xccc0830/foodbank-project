@@ -12,6 +12,33 @@ class ActivityModel extends BaseModel {
     /** 企業報名的單一活動最多可登記的員工人數（避免一次送出過大的表單） */
     const MAX_EMPLOYEES_PER_REGISTRATION = 200;
 
+    public function __construct() {
+        parent::__construct();
+        $this->syncStatusesByTime();
+    }
+
+    /**
+     * 活動狀態依時間自動更新（已取消的不動）：
+     * 還沒開始 → 計畫中；開始後 → 進行中；結束後 → 已完成（不能再報名，參加者可下載證書）。
+     * 沒填結束時間的活動，以開始當天 23:59 視為結束。每次請求只更新一次。
+     */
+    private function syncStatusesByTime() {
+        static $synced = false;
+        if ($synced) {
+            return;
+        }
+        $synced = true;
+        $this->db->query(
+            "UPDATE activities
+             SET status = CASE
+                 WHEN COALESCE(end_at, CONCAT(DATE(start_at), ' 23:59:59')) < NOW() THEN 'completed'
+                 WHEN start_at <= NOW() THEN 'ongoing'
+                 ELSE 'planned'
+             END
+             WHERE status <> 'cancelled' AND start_at IS NOT NULL"
+        );
+    }
+
     /** 企業報名的參加員工名冊（身分證字號加密保存，供活動保險使用）。DDL 會自動提交，須在交易外執行。 */
     public function ensureParticipantsTable() {
         // 建表會讓 MySQL 自動把進行中的交易存檔，交易中不建（資料表平常早已存在）

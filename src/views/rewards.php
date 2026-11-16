@@ -475,14 +475,14 @@ if ($isDonor) {
                     <td><?php echo htmlspecialchars($redemption['title']); ?></td>
                     <td><?php echo (int) $redemption['points_spent']; ?> 點</td>
                     <td><?php echo htmlspecialchars($redemption['created_at']); ?></td>
-                    <td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '待處理', 'fulfilled' => '已完成', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td>
+                    <td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '待核銷', 'fulfilled' => '已核銷', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td>
                     <td>
                         <?php if ($redemption['status'] === 'pending'): ?>
                             <form method="post" class="inline-form">
+                                <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="update_donor_redemption">
                                 <input type="hidden" name="redemption_id" value="<?php echo (int) $redemption['redemption_id']; ?>">
                                 <button class="btn btn-primary btn-sm" type="submit" name="status" value="fulfilled">標記完成</button>
-                                <button class="btn btn-secondary btn-sm" type="submit" name="status" value="cancelled">取消</button>
                             </form>
                         <?php else: ?>
                             <span class="toolbar-meta">無可用操作</span>

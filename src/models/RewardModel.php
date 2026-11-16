@@ -329,33 +329,39 @@ class RewardModel extends BaseModel {
         return $this->query("SELECT * FROM donor_reward_items WHERE donor_id = {$donorId} ORDER BY created_at DESC");
     }
 
+    /**
+     * 商家看自己提供的獎勵被 GO Rider 兌換的紀錄（GO Rider 兌換時寫入 reward_claims）。
+     * redemption_id 就是兌換編號 claim_id。
+     */
     public function getDonorRedemptions($donorId) {
         $donorId = (int) $donorId;
         return $this->query(
-            "SELECT drr.*, dri.title, u.full_name AS volunteer_name
-             FROM donor_reward_redemptions drr
-             JOIN donor_reward_items dri ON dri.item_id = drr.item_id
-             JOIN users u ON u.user_id = drr.volunteer_id
-             WHERE drr.donor_id = {$donorId}
-             ORDER BY drr.created_at DESC"
+            "SELECT rc.claim_id AS redemption_id, rc.title, rc.points_spent, rc.status, rc.created_at, rc.redeemed_at,
+                    u.full_name AS volunteer_name
+             FROM reward_claims rc
+             JOIN donor_reward_items dri ON dri.item_id = rc.donor_item_id
+             JOIN users u ON u.user_id = rc.user_id
+             WHERE rc.source_type = 'donor' AND dri.donor_id = {$donorId}
+             ORDER BY rc.created_at DESC"
         );
     }
 
+    /**
+     * 商家手動把待核銷的兌換標記為已完成（例如 GO Rider 已到店領取但沒掃 QR Code）。
+     * 取消並退回心意幣的規則尚未訂定，目前只開放標記完成。
+     */
     public function updateDonorRedemptionStatus($donorId, $redemptionId, $status) {
         $donorId = (int) $donorId;
         $redemptionId = (int) $redemptionId;
-        $allowedStatuses = ['fulfilled', 'cancelled'];
-
-        if ($donorId <= 0 || $redemptionId <= 0 || !in_array($status, $allowedStatuses, true)) {
+        if ($donorId <= 0 || $redemptionId <= 0 || $status !== 'fulfilled') {
             return false;
         }
 
-        $statusEscaped = $this->db->real_escape_string($status);
-        $fulfilledAt = $status === 'fulfilled' ? 'NOW()' : 'NULL';
         return (bool) $this->db->query(
-            "UPDATE donor_reward_redemptions
-             SET status = '{$statusEscaped}', fulfilled_at = {$fulfilledAt}
-             WHERE redemption_id = {$redemptionId} AND donor_id = {$donorId} AND status = 'pending'"
+            "UPDATE reward_claims
+             SET status = 'fulfilled', redeemed_at = NOW(), redeemed_by = {$donorId}
+             WHERE claim_id = {$redemptionId} AND source_type = 'donor' AND status = 'pending'
+               AND donor_item_id IN (SELECT item_id FROM donor_reward_items WHERE donor_id = {$donorId})"
         ) && $this->db->affected_rows === 1;
     }
 

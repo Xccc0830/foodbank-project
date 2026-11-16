@@ -3,6 +3,9 @@
  * Database and application configuration.
  */
 
+// 網站、測試、示範資料程式都用台灣時間（指令列的 PHP 預設時區可能不是台灣，會讓時間差好幾小時）
+date_default_timezone_set('Asia/Taipei');
+
 if (!defined('APP_NAME')) {
     define('APP_NAME', getenv('APP_NAME') ?: '食物銀行管理系統');
 }
