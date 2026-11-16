@@ -70,6 +70,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $ads = $adModel->getActiveAds(30);
+if (!$ads) {
+    $ads = AdvertisementModel::demoAds(); // 與首頁相同的 Demo 廣告，資料庫沒有廣告時顯示
+}
 $pendingAds = $currentRole === 'foodbank_staff' ? $adModel->listPending() : [];
 $ownUnpublishedAds = $currentRole === 'foodbank_staff' ? [] : $adModel->listOwnUnpublished($currentUserId);
 ?>
@@ -183,10 +186,10 @@ $ownUnpublishedAds = $currentRole === 'foodbank_staff' ? [] : $adModel->listOwnU
                     <div class="news-ad-body">
                         <h3><?php echo htmlspecialchars($ad['title']); ?></h3>
                         <p><?php echo nl2br(htmlspecialchars($ad['content'])); ?></p>
-                        <small><?php echo htmlspecialchars($ad['advertiser_name'] ?? ''); ?> · <?php echo htmlspecialchars(substr($ad['created_at'], 0, 10)); ?></small>
+                        <small><?php echo htmlspecialchars($ad['advertiser_name'] ?? ''); ?><?php if (!empty($ad['created_at'])): ?> · <?php echo htmlspecialchars(substr($ad['created_at'], 0, 10)); ?><?php endif; ?></small>
                         <div class="news-ad-actions">
                             <?php if (!empty($ad['link_url'])): ?><a class="btn btn-secondary btn-sm" href="<?php echo htmlspecialchars($ad['link_url'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">了解更多</a><?php endif; ?>
-                            <?php if ($currentRole === 'foodbank_staff' || (int) $ad['advertiser_id'] === $currentUserId): ?>
+                            <?php if (empty($ad['is_demo']) && ($currentRole === 'foodbank_staff' || (int) $ad['advertiser_id'] === $currentUserId)): ?>
                                 <form method="post" onsubmit="return confirm('確定要下架這則廣告嗎？');">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="remove_ad">

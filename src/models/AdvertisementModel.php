@@ -95,6 +95,17 @@ class AdvertisementModel extends BaseModel {
     /**
      * 目前有效（未下架、在刊登期間內）的廣告，最新的在前。
      */
+    /**
+     * Demo 廣告：僅供預覽效果，資料庫沒有刊登中的廣告時，首頁與最新廣告頁共用。
+     */
+    public static function demoAds() {
+        return [
+            ['title' => '愛心米糧大特惠', 'content' => '每購買一包白米，同步捐出一包給食物銀行，讓溫暖送進每個家庭。', 'advertiser_name' => '好鄰居超市（Demo）', 'is_demo' => true],
+            ['title' => '企業志工日招募', 'content' => '帶著同事一起參與物資分裝，打造有溫度的企業文化，歡迎團體報名。', 'advertiser_name' => '暖陽科技（Demo）', 'is_demo' => true],
+            ['title' => '冷鏈運輸合作夥伴', 'content' => '提供冷藏車隊支援生鮮物資配送，讓食材新鮮抵達。', 'advertiser_name' => '快捷物流（Demo）', 'is_demo' => true],
+        ];
+    }
+
     public function getActiveAds($limit = 50) {
         $limit = max(1, (int) $limit);
         return $this->query(

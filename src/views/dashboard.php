@@ -98,11 +98,7 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
             <?php
             // Demo 廣告：僅供預覽效果，資料庫沒有廣告時顯示
             if (!$homeAds) {
-                $homeAds = [
-                    ['title' => '愛心米糧大特惠', 'content' => '每購買一包白米，同步捐出一包給食物銀行，讓溫暖送進每個家庭。', 'advertiser_name' => '好鄰居超市（Demo）'],
-                    ['title' => '企業志工日招募', 'content' => '帶著同事一起參與物資分裝，打造有溫度的企業文化，歡迎團體報名。', 'advertiser_name' => '暖陽科技（Demo）'],
-                    ['title' => '冷鏈運輸合作夥伴', 'content' => '提供冷藏車隊支援生鮮物資配送，讓食材新鮮抵達。', 'advertiser_name' => '快捷物流（Demo）'],
-                ];
+                $homeAds = AdvertisementModel::demoAds();
             }
             ?>
             <?php if ($homeAds): ?>
