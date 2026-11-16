@@ -341,10 +341,13 @@ foreach ($rows as $row) {
                 <h3>目前庫存</h3>
                 <p>庫存為 0 的物資會自動從清單隱藏，進出紀錄仍保留。</p>
             </div>
-            <form method="get" class="toolbar-row">
+            <form method="get" class="filter-bar">
                 <input type="hidden" name="page" value="inventory">
-                <input type="search" name="stock_q" value="<?php echo htmlspecialchars($receiptKeyword); ?>" placeholder="搜尋物資、捐贈者或存放位置">
-                <button class="btn btn-secondary btn-sm" type="submit">搜尋</button>
+                <label class="filter-search">
+                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                    <input type="search" name="stock_q" value="<?php echo htmlspecialchars($receiptKeyword); ?>" placeholder="搜尋物資、捐贈者或存放位置" aria-label="搜尋">
+                </label>
+                <button class="btn btn-secondary btn-sm filter-submit" type="submit">搜尋</button>
             </form>
         </div>
         <?php if ($stockRows): ?>
@@ -587,18 +590,25 @@ foreach ($rows as $row) {
 
 <div class="card mt-32">
     <div class="card-header">
-        <form method="get" class="toolbar-row">
+        <form method="get" class="filter-bar">
             <input type="hidden" name="page" value="inventory">
-            <input type="search" name="q" value="<?php echo htmlspecialchars($keyword); ?>" placeholder="搜尋捐贈方、品項、訂單編號">
+            <label class="filter-search">
+                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" name="q" value="<?php echo htmlspecialchars($keyword); ?>" placeholder="搜尋捐贈方、品項、訂單編號" aria-label="搜尋">
+            </label>
             <select name="status" class="filter-select" aria-label="篩選狀態">
                 <option value="">全部狀態</option>
                 <?php foreach ($inventoryStatusLabels as $statusValue => $statusLabel): ?>
                     <option value="<?php echo $statusValue; ?>" <?php echo $statusFilter === $statusValue ? 'selected' : ''; ?>><?php echo htmlspecialchars($statusLabel); ?></option>
                 <?php endforeach; ?>
             </select>
-            <input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>" aria-label="開始日期">
-            <input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>" aria-label="結束日期">
-            <button class="btn btn-primary btn-sm" type="submit">篩選</button>
+            <div class="filter-dates">
+                <i class="far fa-calendar" aria-hidden="true"></i>
+                <input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>" aria-label="開始日期">
+                <span class="filter-dates-sep">至</span>
+                <input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>" aria-label="結束日期">
+            </div>
+            <button class="btn btn-primary btn-sm filter-submit" type="submit"><i class="fas fa-filter" aria-hidden="true"></i> 篩選</button>
         </form>
     </div>
     <div class="card-body">

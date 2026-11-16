@@ -3285,3 +3285,101 @@ body {
 .foodbank-vehicle-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .foodbank-vehicle-form label { color: #64748b; font-size: 13px; font-weight: 600; }
 .foodbank-vehicle-form select { width: auto; min-width: 110px; padding: 6px 10px; }
+
+/* 篩選列（庫存清單）：搜尋、狀態、日期區間、按鈕排成一排 */
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-bar .filter-search,
+.filter-bar .filter-dates,
+.filter-bar .filter-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.filter-bar .filter-search {
+    flex: 1 1 260px;
+    min-width: 220px;
+    cursor: text;
+}
+
+.filter-bar .filter-search i,
+.filter-bar .filter-dates i {
+    color: var(--gray-400);
+    font-size: 14px;
+}
+
+.filter-bar .filter-search input,
+.filter-bar .filter-dates input {
+    border: 0;
+    outline: none;
+    background: transparent;
+    padding: 0;
+    height: 100%;
+    font: inherit;
+    color: inherit;
+    box-shadow: none;
+}
+
+.filter-bar .filter-search input {
+    flex: 1;
+    min-width: 0;
+}
+
+.filter-bar .filter-search input::placeholder {
+    color: var(--gray-400);
+}
+
+.filter-bar .filter-select {
+    min-width: 140px;
+    cursor: pointer;
+}
+
+.filter-bar .filter-dates-sep {
+    color: var(--gray-500);
+    font-size: 13px;
+}
+
+.filter-bar .filter-search:focus-within,
+.filter-bar .filter-dates:focus-within,
+.filter-bar .filter-select:focus {
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 3px rgba(32, 59, 143, 0.12);
+    outline: none;
+}
+
+.filter-bar .filter-submit {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+    .filter-bar > * {
+        flex: 1 1 100%;
+    }
+
+    .filter-bar .filter-dates input {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+.filter-bar .filter-label {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+}

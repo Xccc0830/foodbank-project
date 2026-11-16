@@ -73,11 +73,16 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <?php if (!$isVolunteer): ?>
 <div class="card">
     <div class="card-body">
-        <form method="get" class="toolbar-row compact">
+        <form method="get" class="filter-bar">
             <input type="hidden" name="page" value="reports">
-            <div class="form-group"><label>開始日期</label><input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>"></div>
-            <div class="form-group"><label>結束日期</label><input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>"></div>
-            <button class="btn btn-primary" type="submit">查詢</button>
+            <span class="filter-label">查詢期間</span>
+            <div class="filter-dates">
+                <i class="far fa-calendar" aria-hidden="true"></i>
+                <input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>" aria-label="開始日期">
+                <span class="filter-dates-sep">至</span>
+                <input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>" aria-label="結束日期">
+            </div>
+            <button class="btn btn-primary btn-sm filter-submit" type="submit"><i class="fas fa-magnifying-glass" aria-hidden="true"></i> 查詢</button>
         </form>
     </div>
 </div>
