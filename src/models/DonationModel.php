@@ -876,8 +876,9 @@ class DonationModel extends BaseModel {
                        MAX(d.status) AS latest_delivery_status,
                        CASE
                            WHEN n.status = 'rejected' THEN 'rejected'
-                           WHEN COUNT(d.delivery_id) > 0 AND SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) = COUNT(d.delivery_id) THEN 'completed'
-                           WHEN COUNT(d.delivery_id) > 0 AND SUM(CASE WHEN d.status IN ('claimed', 'picked_up', 'exception') THEN 1 ELSE 0 END) > 0 THEN 'in_transit'
+                           WHEN SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) > 0
+                                AND SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) = SUM(CASE WHEN d.status <> 'cancelled' THEN 1 ELSE 0 END) THEN 'completed'
+                           WHEN SUM(CASE WHEN d.status IN ('claimed', 'arrived_pickup', 'picked_up', 'exception') THEN 1 ELSE 0 END) > 0 THEN 'in_transit'
                            WHEN n.status IN ('pending', 'assessed') THEN 'pending'
                            ELSE 'processing'
                        END AS order_status

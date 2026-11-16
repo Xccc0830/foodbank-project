@@ -57,6 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $isVolunteer && $deliveryModel->markArrivedAtPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId)
             ? ['type' => 'success', 'text' => '已標記到店，請拍攝物資照片後完成取件。']
             : ['type' => 'error', 'text' => '無法標記到店，任務狀態可能已變更。'];
+    } elseif ($action === 'arrive_dropoff') {
+        $message = $isVolunteer && $deliveryModel->markArrivedAtDropoff((int) ($_POST['delivery_id'] ?? 0), $currentUserId)
+            ? ['type' => 'success', 'text' => '已回報送達，請將物資交給食物銀行管理員確認收貨。']
+            : ['type' => 'error', 'text' => '無法回報送達，任務狀態可能已變更或已回報過。'];
     } elseif ($action === 'confirm_pickup') {
         require_once BASE_PATH . '/src/helpers/UploadHelper.php';
         $photoFile = $_FILES['pickup_photo'] ?? null;
@@ -409,9 +413,19 @@ if ($isVolunteer) {
                     <button class="btn btn-danger btn-sm" type="submit">回報異常</button>
                 </form>
             <?php else: ?>
+                <?php if (empty($activeDriverTrip['arrived_dropoff_at'])): ?>
+                    <form method="post" class="driver-trip-action-form">
+                        <?php echo csrfField(); ?>
+                        <input type="hidden" name="action" value="arrive_dropoff">
+                        <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
+                        <button type="submit" class="driver-action-button"><i class="fas fa-flag-checkered"></i> 我已送達食物銀行</button>
+                    </form>
+                <?php else: ?>
+                    <div class="driver-trip-note"><i class="fas fa-circle-check"></i> 已於 <?php echo htmlspecialchars(date('H:i', strtotime($activeDriverTrip['arrived_dropoff_at']))); ?> 回報送達，等待食物銀行確認收貨。</div>
+                <?php endif; ?>
                 <div class="driver-trip-note">
                     <i class="fas fa-circle-info"></i>
-                    送達食物銀行後，請將物資交給食物銀行管理員；由食物銀行管理員確認「已抵達」並清點物資後，任務才算完成。
+                    抵達食物銀行時請按「我已送達食物銀行」，系統以這個時間判斷是否準時；再將物資交給食物銀行管理員，確認收貨並清點物資後，任務才算完成。
                     <?php if (!empty($activeDriverTrip['estimated_arrival_start']) && !empty($activeDriverTrip['estimated_arrival_end'])): ?>
                         預估送達時間：<?php echo htmlspecialchars(date('H:i', strtotime($activeDriverTrip['estimated_arrival_start'])) . '–' . date('H:i', strtotime($activeDriverTrip['estimated_arrival_end']))); ?>
                     <?php endif; ?>
@@ -686,9 +700,10 @@ if ($isVolunteer) {
                             <?php if ($isVolunteer && in_array($delivery['status'], ['claimed', 'picked_up'], true) && (int) $delivery['volunteer_id'] === $currentUserId): ?>
                                 <span class="text-muted"><i class="fas fa-arrow-up"></i> 請至上方「配送中任務」卡片操作</span>
                             <?php endif; ?>
-                            <?php $canCompleteDelivery = $canConfirmArrival && (($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' || in_array($delivery['status'], ['claimed', 'picked_up', 'in_transit'], true)); ?>
+                            <?php $canCompleteDelivery = $canConfirmArrival && (($delivery['delivery_method'] ?? '') === 'food_bank' ? in_array($delivery['status'], ['open', 'claimed', 'arrived_pickup', 'picked_up'], true) : $delivery['status'] === 'picked_up'); ?>
+                            <?php if ($canCompleteDelivery && !empty($delivery['arrived_dropoff_at'])): ?><span class="text-muted"><i class="fas fa-flag-checkered"></i> 騎手 <?php echo htmlspecialchars(date('H:i', strtotime($delivery['arrived_dropoff_at']))); ?> 已回報送達</span><?php endif; ?>
                             <?php if ($canCompleteDelivery): ?><form method="post" class="delivery-action-form"><?php echo csrfField(); ?><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' ? '確認忠信派車已完成' : '已抵達，確認收貨'; ?></button></form><?php endif; ?>
-                            <?php if ($canManageDeliveries): ?>
+                            <?php if ($canManageDeliveries && $delivery['status'] !== 'delivered'): ?>
                                 <div class="inline-action-group">
                                     <form method="post" class="delivery-action-form">
                                         <?php echo csrfField(); ?>

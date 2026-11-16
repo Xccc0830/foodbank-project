@@ -58,6 +58,7 @@ class DeliveryModel extends BaseModel {
         }
         $columns = [
             'arrived_pickup_at' => "ALTER TABLE deliveries ADD arrived_pickup_at DATETIME DEFAULT NULL",
+            'arrived_dropoff_at' => "ALTER TABLE deliveries ADD arrived_dropoff_at DATETIME DEFAULT NULL",
             'received_confirmed_by' => "ALTER TABLE deliveries ADD received_confirmed_by INT DEFAULT NULL",
             'multi_stop_bonus' => "ALTER TABLE deliveries ADD multi_stop_bonus INT NOT NULL DEFAULT 0",
             'is_cold_storage' => "ALTER TABLE deliveries ADD is_cold_storage TINYINT(1) NOT NULL DEFAULT 0",
@@ -313,6 +314,7 @@ class DeliveryModel extends BaseModel {
         $result = $this->db->query("SELECT COUNT(*) AS total_tasks,
                            SUM(CASE WHEN volunteer_id IS NOT NULL OR delivery_method = 'food_bank' THEN 1 ELSE 0 END) AS accepted_tasks,
                            SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS completed_tasks,
+                           SUM(CASE WHEN " . self::COMPLETABLE_CONDITION . " THEN 1 ELSE 0 END) AS completable_tasks,
                            MAX(delivery_method = 'food_bank') AS is_food_bank
                                     FROM deliveries
                                     WHERE donation_id = {$donationId}
@@ -322,6 +324,7 @@ class DeliveryModel extends BaseModel {
             'total_tasks' => (int) ($progress['total_tasks'] ?? 0),
             'accepted_tasks' => (int) ($progress['accepted_tasks'] ?? 0),
             'completed_tasks' => (int) ($progress['completed_tasks'] ?? 0),
+            'completable_tasks' => (int) ($progress['completable_tasks'] ?? 0), // 可確認收貨（已取貨）的單數
             'is_food_bank' => !empty($progress['is_food_bank']),
         ];
     }
@@ -352,8 +355,7 @@ class DeliveryModel extends BaseModel {
     public function completeDonationDeliveries($donationId, $confirmedBy = null) {
         $donationId = (int) $donationId;
         $result = $this->db->query(
-            "SELECT delivery_id FROM deliveries WHERE donation_id = {$donationId}
-               AND (status IN ('claimed', 'arrived_pickup', 'picked_up', 'in_transit') OR (delivery_method = 'food_bank' AND status = 'open'))"
+            "SELECT delivery_id FROM deliveries WHERE donation_id = {$donationId} AND " . self::COMPLETABLE_CONDITION
         );
         if (!$result || $result->num_rows === 0) {
             return false;
@@ -434,6 +436,13 @@ class DeliveryModel extends BaseModel {
         return $rows;
     }
 
+    /**
+     * 可以「確認收貨」的配送單：
+     * GO Rider 的單必須已取貨（拍照）才能確認；忠信派車的單沒有騎手取貨步驟，進行中即可確認。
+     */
+    const COMPLETABLE_CONDITION = "((delivery_method = 'food_bank' AND status IN ('open', 'claimed', 'arrived_pickup', 'picked_up'))
+        OR (COALESCE(delivery_method, 'volunteer') <> 'food_bank' AND status = 'picked_up'))";
+
     public function canManageDelivery($deliveryId, $userId, $userRole) {
         if ($userRole !== 'foodbank_staff') {
             return false;
@@ -441,12 +450,16 @@ class DeliveryModel extends BaseModel {
 
         $deliveryId = (int) $deliveryId;
         $userId = (int) $userId;
-        $result = $this->db->query("SELECT created_by FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
+        $result = $this->db->query("SELECT created_by, status FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
         if (!$result || $result->num_rows === 0) {
             return false;
         }
 
         $delivery = $result->fetch_assoc();
+        // 已配達的單心意幣已入帳，不能再編輯或刪除（避免狀態被改回待接單而重複發幣）
+        if ($delivery['status'] === 'delivered') {
+            return false;
+        }
         return (int) ($delivery['created_by'] ?? 0) === $userId
             || $userRole === 'foodbank_staff';
     }
@@ -582,6 +595,21 @@ class DeliveryModel extends BaseModel {
         return true;
     }
 
+    /**
+     * GO Rider 回報已送達食物銀行：記下實際送達時間（用來判斷「準時送達 +1」），
+     * 狀態仍是已取貨，等食物銀行確認收貨後心意幣才入帳。
+     */
+    public function markArrivedAtDropoff($deliveryId, $volunteerId) {
+        $deliveryId = (int) $deliveryId;
+        $volunteerId = (int) $volunteerId;
+        $this->db->query("UPDATE deliveries SET arrived_dropoff_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND delivery_method = 'volunteer' AND status = 'picked_up' AND arrived_dropoff_at IS NULL");
+        if ($this->db->affected_rows !== 1) {
+            return false;
+        }
+        $this->notifyUsersByRoles(['foodbank_staff'], 'GO Rider 已送達', "配送任務 #{$deliveryId} 的 GO Rider 已回報送達食物銀行，請清點物資並確認收貨。", 'info');
+        return true;
+    }
+
     public function confirmPickup($deliveryId, $volunteerId, $pickupPhotoPath) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;
@@ -709,9 +737,9 @@ class DeliveryModel extends BaseModel {
 
     private function finalizeDeliveryCompletion($deliveryId, $confirmedBy = null) {
         $deliveryId = (int) $deliveryId;
-        $ownerCondition = " AND (status IN ('claimed', 'arrived_pickup', 'picked_up', 'in_transit') OR (delivery_method = 'food_bank' AND status = 'open'))";
+        $ownerCondition = ' AND ' . self::COMPLETABLE_CONDITION;
 
-        $result = $this->db->query("SELECT volunteer_id, points, multi_stop_bonus, delivery_method, estimated_arrival_end FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
+        $result = $this->db->query("SELECT volunteer_id, points, multi_stop_bonus, delivery_method, estimated_arrival_end, arrived_dropoff_at FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
 
         if (!$delivery) {
@@ -730,7 +758,9 @@ class DeliveryModel extends BaseModel {
             $bonusNotes = [];
             // 加給只發給 GO Rider（食物銀行自行配送的單 points 為 0，不發幣）
             if ($volunteerId > 0 && $points > 0) {
-                if (!empty($delivery['estimated_arrival_end']) && strtotime($delivery['estimated_arrival_end']) >= time()) {
+                // 準時與否看騎手回報送達的時間；騎手沒按「我已送達」時，才用食物銀行確認的時間
+                $arrivedAt = !empty($delivery['arrived_dropoff_at']) ? strtotime($delivery['arrived_dropoff_at']) : time();
+                if (!empty($delivery['estimated_arrival_end']) && strtotime($delivery['estimated_arrival_end']) >= $arrivedAt) {
                     $points += 1;
                     $bonusNotes[] = '準時送達 +1';
                 }

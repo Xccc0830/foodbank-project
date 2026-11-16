@@ -144,6 +144,7 @@ CREATE TABLE `deliveries` (
   `item_description` text DEFAULT NULL,
   `received_location` varchar(100) DEFAULT NULL,
   `arrived_pickup_at` datetime DEFAULT NULL,
+  `arrived_dropoff_at` datetime DEFAULT NULL,
   `received_confirmed_by` int(11) DEFAULT NULL,
   `multi_stop_bonus` int(11) NOT NULL DEFAULT 0,
   `is_cold_storage` tinyint(1) NOT NULL DEFAULT 0

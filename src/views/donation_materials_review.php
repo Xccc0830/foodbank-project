@@ -453,7 +453,7 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                                 <input type="hidden" name="donation_id" value="<?php echo (int) $donation['donation_id']; ?>">
                                 <button type="submit" class="btn btn-primary btn-sm">查看</button>
                             </form>
-                            <?php if ($deliveryProgress['accepted_tasks'] > 0 && $deliveryProgress['completed_tasks'] < $deliveryProgress['total_tasks']): ?>
+                            <?php if ($deliveryProgress['completable_tasks'] > 0): ?>
                                 <form method="post" class="inline-form">
                                     <?php echo csrfField(); ?>
                                     <input type="hidden" name="action" value="complete_published_donation">
@@ -647,7 +647,7 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                     <div>
                         <?php renderDetailInfoGrid([['label' => '發布時間', 'value' => $formatDateTime($viewingDonation['published_at'] ?? null)]]); ?>
                         <?php $viewProgress = $deliveryModel->getDonationDeliveryProgress((int) $viewingDonation['donation_id']); ?>
-                        <?php if ($viewProgress['accepted_tasks'] > 0 && $viewProgress['completed_tasks'] < $viewProgress['total_tasks']): ?>
+                        <?php if ($viewProgress['completable_tasks'] > 0): ?>
                             <form method="post" class="review-decision-form">
                                 <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="complete_published_donation">
