@@ -44,6 +44,13 @@ $rows = [
 $result = InventoryReceiptModel::computeExpiringLots($rows, $alerts, 7, $today);
 check('沒有期限不提醒、未設定分類用預設 7 天', count($result) === 1 && $result[0]['item_name'] === '餅乾' && $result[0]['alert_days'] === 7);
 
+// 略過資料表檢查時（程式沒更新、或交易進行中），庫存功能仍要能用
+$connection = $GLOBALS['db']->getConnection();
+check('一般情況庫存功能可用', (new InventoryReceiptModel($connection))->isReady());
+Transaction::begin($connection);
+check('略過資料表檢查時庫存功能仍可用', (new InventoryReceiptModel($connection))->isReady());
+Transaction::rollback($connection);
+
 if (!empty($failed)) {
     exit(1);
 }

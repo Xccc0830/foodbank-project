@@ -20,6 +20,9 @@ class InventoryReceiptModel extends BaseModel {
 
         if (schemaChecksNeeded()) {
             $this->ensureTable();
+        } else {
+            // 資料表已在程式更新後檢查過（見 runAllSchemaChecks），可以直接使用
+            $this->ready = true;
         }
     }
 
