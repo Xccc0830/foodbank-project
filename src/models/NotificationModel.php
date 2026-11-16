@@ -14,7 +14,9 @@ class NotificationModel extends BaseModel {
         } else {
             parent::__construct();
         }
-        $this->ensureDeliveryColumns();
+        if (schemaChecksNeeded()) {
+            $this->ensureDeliveryColumns();
+        }
     }
 
     private function ensureDeliveryColumns() {

@@ -217,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     } elseif ($donorName === '' || !$deliveryDate || !$deliveryTime || $hasInvalidItem) {
         $formMessage = ['type' => 'error', 'text' => '請完成企業資料、日期時間，以及至少一筆物資。'];
     } else {
-        $connection->begin_transaction();
+        Transaction::begin($connection);
         $insertedId = $donationModel->addDonation($donationData);
         if ($insertedId) {
             $itemStatement = $connection->prepare('INSERT INTO donation_items (donation_id, item_name, category_id, storage_condition, package_state, quantity, unit, length_cm, width_cm, height_cm, item_weight_kg, expiry_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -248,10 +248,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
                 $itemStatement->close();
             }
             if (!$itemsSaved) {
-                $connection->rollback();
+                Transaction::rollback($connection);
                 $insertedId = false;
             } else {
-                $connection->commit();
+                Transaction::commit($connection);
                 // 商家選的分類和系統判斷不同時記下來，讓食物銀行一鍵加入關鍵字
                 require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
                 $correctionModel = new ItemCategoryModel();

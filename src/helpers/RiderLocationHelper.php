@@ -5,6 +5,7 @@
  */
 
 require_once __DIR__ . '/DistanceHelper.php';
+require_once __DIR__ . '/TransactionHelper.php';
 
 class RiderLocationHelper {
     /** 位置超過這個秒數沒更新，就視為騎手已離線 */
@@ -12,6 +13,10 @@ class RiderLocationHelper {
     const ACTIVE_STATUSES = "'claimed','arrived_pickup','picked_up'";
 
     public static function ensureTable(mysqli $db) {
+        // 建表會讓 MySQL 自動把進行中的交易存檔，交易中不建（資料表平常早已存在）
+        if (Transaction::active()) {
+            return;
+        }
         $db->query(
             "CREATE TABLE IF NOT EXISTS rider_locations (
                 volunteer_id INT NOT NULL PRIMARY KEY,

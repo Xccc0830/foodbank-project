@@ -21,7 +21,7 @@ $donorId = 8;
 $riderId = 12;
 $staffId = 7;
 
-$db->begin_transaction();
+Transaction::begin($db);
 try {
     $donationId = $donationModel->addDonation([
         'donor_id' => $donorId, 'donor_name' => '測試商家', 'donation_type' => 'food',
@@ -60,6 +60,6 @@ try {
     check('商家收到「物資已成功送達」通知', $count() === 1);
     check('重複確認不會重複通知', !$deliveryModel->completeDelivery($deliveryId, $staffId) && $count() === 1);
 } finally {
-    $db->rollback();
+    Transaction::rollback($db);
 }
 exit(empty($failed) ? 0 : 1);

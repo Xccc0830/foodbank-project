@@ -12,7 +12,9 @@ class IdVerificationModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureSchema();
+        if (schemaChecksNeeded()) {
+            $this->ensureSchema();
+        }
     }
 
     private function ensureSchema() {

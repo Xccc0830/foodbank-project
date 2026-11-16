@@ -114,6 +114,8 @@ try {
     check('removed ad is hidden', !in_array('T廣告', array_column($adModel->getActiveAds(50), 'title'), true));
 } finally {
     if ($createdDeliveryId) {
+        // 逾時提醒會發給所有食物銀行人員（不只測試帳號），依任務編號刪掉
+        $connection->query("DELETE FROM notifications WHERE title = '配送逾時提醒' AND message LIKE '配送任務 #{$createdDeliveryId}%'");
         $connection->query("DELETE FROM deliveries WHERE delivery_id = {$createdDeliveryId}");
     }
     if ($createdDonationId) {

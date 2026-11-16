@@ -23,8 +23,10 @@ class ItemCategoryModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureKeywordsColumn();
-        $this->ensureProfileColumns();
+        if (schemaChecksNeeded()) {
+            $this->ensureKeywordsColumn();
+            $this->ensureProfileColumns();
+        }
     }
 
     private function ensureProfileColumns() {

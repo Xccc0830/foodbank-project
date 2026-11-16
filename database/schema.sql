@@ -520,6 +520,8 @@ CREATE TABLE `users` (
   `business_hours` varchar(100) DEFAULT NULL,
   `closed_days` varchar(100) DEFAULT NULL,
   `pickup_note` varchar(255) DEFAULT NULL,
+  `failed_login_count` int(11) NOT NULL DEFAULT 0,
+  `login_locked_until` datetime DEFAULT NULL,
   `id_number_encrypted` text DEFAULT NULL,
   `id_number_hash` char(64) DEFAULT NULL,
   `id_verify_status` enum('none','pending','approved','rejected') NOT NULL DEFAULT 'none',
@@ -1141,6 +1143,14 @@ CREATE TABLE `rider_applications` (
 --
 
 DROP TABLE IF EXISTS `advertisements`;
+-- 系統紀錄（例如資料表檢查的程式指紋，程式更新後才重新檢查資料表）
+CREATE TABLE IF NOT EXISTS `app_meta` (
+  `meta_key` varchar(50) NOT NULL,
+  `meta_value` varchar(255) NOT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`meta_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE `advertisements` (
   `ad_id` int(11) NOT NULL AUTO_INCREMENT,
   `advertiser_id` int(11) NOT NULL,

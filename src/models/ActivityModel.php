@@ -14,6 +14,10 @@ class ActivityModel extends BaseModel {
 
     /** 企業報名的參加員工名冊（身分證字號加密保存，供活動保險使用）。DDL 會自動提交，須在交易外執行。 */
     public function ensureParticipantsTable() {
+        // 建表會讓 MySQL 自動把進行中的交易存檔，交易中不建（資料表平常早已存在）
+        if (Transaction::active()) {
+            return;
+        }
         $this->db->query(
             "CREATE TABLE IF NOT EXISTS activity_participants (
                 participant_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -263,7 +267,7 @@ class ActivityModel extends BaseModel {
             }
         }
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         try {
             $activityResult = $this->db->query(
                 "SELECT capacity FROM activities
@@ -272,7 +276,7 @@ class ActivityModel extends BaseModel {
             );
             $activity = $activityResult ? $activityResult->fetch_assoc() : null;
             if (!$activity) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -282,12 +286,12 @@ class ActivityModel extends BaseModel {
                  ORDER BY assignment_id DESC LIMIT 1"
             );
             if (!$existingResult) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
             $existingAssignment = $existingResult->fetch_assoc();
             if ($existingAssignment && ($existingAssignment['status'] ?? '') === 'registered') {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -297,7 +301,7 @@ class ActivityModel extends BaseModel {
                  FOR UPDATE"
             );
             if (!$assignedRows) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
             $assignedCount = 0;
@@ -307,7 +311,7 @@ class ActivityModel extends BaseModel {
 
             $capacity = (int) ($activity['capacity'] ?? 0);
             if ($capacity > 0 && $assignedCount + $headcount > $capacity) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -355,16 +359,16 @@ class ActivityModel extends BaseModel {
             }
 
             if (!$saved) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
-            if (!$this->db->commit()) {
-                $this->db->rollback();
+            if (!Transaction::commit($this->db)) {
+                Transaction::rollback($this->db);
                 return false;
             }
             return true;
         } catch (Throwable $exception) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             throw $exception;
         }
     }

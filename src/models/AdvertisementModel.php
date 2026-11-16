@@ -10,7 +10,9 @@ class AdvertisementModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureReviewColumns();
+        if (schemaChecksNeeded()) {
+            $this->ensureReviewColumns();
+        }
     }
 
     private function ensureReviewColumns() {

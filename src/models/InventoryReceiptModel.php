@@ -18,7 +18,9 @@ class InventoryReceiptModel extends BaseModel {
             parent::__construct();
         }
 
-        $this->ensureTable();
+        if (schemaChecksNeeded()) {
+            $this->ensureTable();
+        }
     }
 
     private function ensureTable() {
@@ -135,7 +137,7 @@ class InventoryReceiptModel extends BaseModel {
             return ['status' => 'error'];
         }
 
-        if (!$this->db->begin_transaction()) {
+        if (!Transaction::begin($this->db)) {
             $this->hasError = true;
             error_log('無法開始物資異動交易：' . $this->db->error);
             $this->releaseStockLocks([$lockName]);
@@ -166,7 +168,7 @@ class InventoryReceiptModel extends BaseModel {
             $this->lastAvailableQuantity = max(0, $available);
 
             if ($movementType === 'out' && (float) $quantity > $available) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return ['status' => 'insufficient_stock', 'available' => max(0, $available)];
             }
 
@@ -199,7 +201,7 @@ class InventoryReceiptModel extends BaseModel {
             }
             $statement->close();
             $statement = null;
-            if (!$this->db->commit()) {
+            if (!Transaction::commit($this->db)) {
                 throw new RuntimeException('無法完成物資異動交易：' . $this->db->error);
             }
             return ['status' => 'success', 'available' => $available];
@@ -207,7 +209,7 @@ class InventoryReceiptModel extends BaseModel {
             if ($statement) {
                 $statement->close();
             }
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             $this->hasError = true;
             error_log('物資異動失敗：' . $error->getMessage());
             return ['status' => 'error'];
@@ -226,7 +228,7 @@ class InventoryReceiptModel extends BaseModel {
         if ($donationId <= 0 || $userId <= 0) {
             return false;
         }
-        if (!$this->db->begin_transaction()) {
+        if (!Transaction::begin($this->db)) {
             $this->hasError = true;
             error_log('無法開始物資清點入庫交易：' . $this->db->error);
             return false;
@@ -249,7 +251,7 @@ class InventoryReceiptModel extends BaseModel {
             $donation = $donationResult ? $donationResult->fetch_assoc() : null;
             $donationStatement->close();
             if (!$donation || $donation['status'] === 'rejected' || $donation['current_status'] === 'inspection_complete') {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -272,7 +274,7 @@ class InventoryReceiptModel extends BaseModel {
             if (!$deliveryStatus || (int) $deliveryStatus['delivery_count'] === 0
                 || (int) $deliveryStatus['delivered_count'] === 0
                 || (int) $deliveryStatus['unfinished_count'] > 0) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -291,7 +293,7 @@ class InventoryReceiptModel extends BaseModel {
             $items = $itemResult ? $itemResult->fetch_all(MYSQLI_ASSOC) : [];
             $itemStatement->close();
             if (!$items) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -307,7 +309,7 @@ class InventoryReceiptModel extends BaseModel {
                 $categoryId = (int) ($categoryIds[$itemId] ?? 0);
                 if ($categoryId <= 0) {
                     $categoryStatement->close();
-                    $this->db->rollback();
+                    Transaction::rollback($this->db);
                     return false;
                 }
                 $categoryStatement->bind_param('i', $categoryId);
@@ -318,7 +320,7 @@ class InventoryReceiptModel extends BaseModel {
                 $category = $categoryResult ? $categoryResult->fetch_assoc() : null;
                 if (!$category) {
                     $categoryStatement->close();
-                    $this->db->rollback();
+                    Transaction::rollback($this->db);
                     return false;
                 }
                 $categories[$itemId] = $category['category_name'];
@@ -395,12 +397,12 @@ class InventoryReceiptModel extends BaseModel {
             }
             $updateStatement->close();
 
-            if (!$this->db->commit()) {
+            if (!Transaction::commit($this->db)) {
                 throw new RuntimeException('無法完成物資清點入庫交易：' . $this->db->error);
             }
             $success = true;
         } catch (Throwable $error) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             $this->hasError = true;
             error_log('物資清點入庫失敗：' . $error->getMessage());
         } finally {

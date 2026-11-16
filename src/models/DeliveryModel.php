@@ -10,12 +10,14 @@ class DeliveryModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureDeliveryMethodColumn();
-        $this->ensureExceptionResponseColumns();
-        $this->ensurePickupPhotoColumn();
-        $this->ensureArrivalWindowColumns();
-        $this->ensureArrivedPickupSupport();
-        $this->ensureFoodbankVehicleColumn();
+        if (schemaChecksNeeded()) {
+            $this->ensureDeliveryMethodColumn();
+            $this->ensureExceptionResponseColumns();
+            $this->ensurePickupPhotoColumn();
+            $this->ensureArrivalWindowColumns();
+            $this->ensureArrivedPickupSupport();
+            $this->ensureFoodbankVehicleColumn();
+        }
     }
 
     /** 忠信派車可選的車種（GO Rider 派車仍用 vehicle_type 的機車／汽車） */
@@ -498,13 +500,13 @@ class DeliveryModel extends BaseModel {
         }
 
         $sql = "UPDATE deliveries SET donation_id = {$donationValue}, delivery_method = '{$deliveryMethod}', vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, weight_kg = {$weight}, urgency = '{$urgency}', status = '{$status}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         $updated = $this->db->query($sql);
         if (!$updated) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
-        return $this->db->commit();
+        return Transaction::commit($this->db);
     }
 
     public function updateException($deliveryId, $userId, $userRole, $notes, $response) {
@@ -746,7 +748,7 @@ class DeliveryModel extends BaseModel {
             return false;
         }
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         try {
             $confirmedSql = $confirmedBy ? (int) $confirmedBy : 'NULL';
             $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), received_confirmed_by = {$confirmedSql} WHERE delivery_id = {$deliveryId}{$ownerCondition}");
@@ -778,14 +780,14 @@ class DeliveryModel extends BaseModel {
                 $description = $this->db->real_escape_string('完成惜食配送' . ($bonusNotes ? '（' . implode('、', $bonusNotes) . '）' : ''));
                 $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '{$description}')");
             }
-            $this->db->commit();
+            Transaction::commit($this->db);
             $this->notifyDonorDelivered($deliveryId);
             if ($volunteerId > 0) {
                 $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚心意幣。", 'success');
             }
             return true;
         } catch (Throwable $exception) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
     }

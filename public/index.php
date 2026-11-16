@@ -32,12 +32,11 @@ getCsrfToken();
 
 // 登入與登出流程
 $connection = $db->getConnection();
-ensureUserColumns($connection);
-ensureEnterpriseSettingsPermission($connection);
-ensureBusinessProfileColumns($connection);
+$schemaNeedsCheck = schemaChecksNeeded();
 $action = $_GET['action'] ?? '';
 
-// 修復舊版初始化資料曾以錯誤編碼寫入的示範帳號資料。
+// 修復舊版初始化資料曾以錯誤編碼寫入的示範帳號資料（只在程式更新後檢查一次）。
+if ($schemaNeedsCheck) {
 $demoPasswordHashes = [
     'manager' => '866485796cfa8d7c0cf7111640205b83076433547577511d81f8030ae99ecea5',
     'staff' => '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6',
@@ -60,6 +59,8 @@ $connection->query(
     WHERE username IN ('official', 'manager', 'staff', 'volunteer', 'donor')
       AND (full_name LIKE '%?%' OR full_name = '')"
 );
+runAllSchemaChecks($connection);
+}
 if (!empty($_SESSION['user']['username'])) {
     $sessionUsername = $connection->real_escape_string($_SESSION['user']['username']);
     $sessionUserResult = $connection->query("SELECT user_id, username, full_name, role, member_type, staff_type, enterprise_name, status, email, phone, phone_verified FROM users WHERE username = '{$sessionUsername}' LIMIT 1");
@@ -88,9 +89,25 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $usernameEscaped = $connection->real_escape_string($username);
-    $result = $connection->query("SELECT user_id, username, full_name, role, member_type, staff_type, enterprise_name, status, password FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
+    $result = $connection->query("SELECT user_id, username, full_name, role, member_type, staff_type, enterprise_name, status, password, failed_login_count, login_locked_until FROM users WHERE username = '{$usernameEscaped}' LIMIT 1");
     $user = $result ? $result->fetch_assoc() : null;
-    $passwordValid = $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
+    // 同一帳號連續輸錯 5 次鎖定 10 分鐘，鎖定期間連正確密碼也不接受
+    $lockedSeconds = $user && !empty($user['login_locked_until']) ? strtotime($user['login_locked_until']) - time() : 0;
+    $passwordValid = $lockedSeconds <= 0 && $user && ((strlen($user['password']) === 64 && hash_equals($user['password'], hash('sha256', $password))) || password_verify($password, $user['password']));
+
+    if ($user && $lockedSeconds <= 0) {
+        $lockUserId = (int) $user['user_id'];
+        if ($passwordValid) {
+            $connection->query("UPDATE users SET failed_login_count = 0, login_locked_until = NULL WHERE user_id = {$lockUserId}");
+        } else {
+            $connection->query("UPDATE users SET failed_login_count = failed_login_count + 1 WHERE user_id = {$lockUserId}");
+            if ((int) $user['failed_login_count'] + 1 >= 5) {
+                $connection->query("UPDATE users SET failed_login_count = 0, login_locked_until = NOW() + INTERVAL 10 MINUTE WHERE user_id = {$lockUserId}");
+                $lockedSeconds = 600;
+            }
+        }
+    }
+    unset($user['failed_login_count'], $user['login_locked_until']);
 
     if ($passwordValid && $user['status'] === 'active') {
         if (strlen($user['password']) === 64) {
@@ -105,7 +122,9 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $loginError = '帳號、密碼錯誤，或帳號尚未啟用。';
+    $loginError = $lockedSeconds > 0
+        ? '密碼錯誤太多次，帳號暫時鎖定，請 ' . (int) ceil($lockedSeconds / 60) . ' 分鐘後再試。'
+        : '帳號、密碼錯誤，或帳號尚未啟用。';
 }
 
 if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {

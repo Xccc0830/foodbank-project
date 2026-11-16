@@ -44,7 +44,7 @@ $donorId = 8; $riderId = 12; $staffId = 7;
 // 建資料表欄位的指令（ALTER TABLE）會讓交易自動提交，rollback 不一定有效，所以結束時也明確刪除這次建立的資料
 $memberAd = $staffAd = $donationId = $deliveryId = 0;
 $notificationStart = (int) $db->query("SELECT COALESCE(MAX(notification_id), 0) AS m FROM notifications")->fetch_assoc()['m'];
-$db->begin_transaction();
+Transaction::begin($db);
 try {
     $memberAd = $adModel->create($donorId, '測試廣告', '這是測試用的廣告內容', '', null, '', '', false, true)['ad_id'] ?? 0;
     $staffAd = $adModel->create($staffId, '官方廣告', '這是測試用的官方廣告', '', null, '', '', true, true)['ad_id'] ?? 0;
@@ -75,7 +75,7 @@ try {
     $notified = (int) $db->query("SELECT COUNT(*) c FROM notifications WHERE user_id = {$donorId} AND title = '收到一則感謝'")->fetch_assoc()['c'];
     check('商家收到感謝通知', $notified >= 1);
 } finally {
-    $db->rollback();
+    Transaction::rollback($db);
     if ($deliveryId) {
         $db->query("DELETE FROM thanks_messages WHERE delivery_id = " . (int) $deliveryId);
         $db->query("DELETE FROM deliveries WHERE delivery_id = " . (int) $deliveryId);

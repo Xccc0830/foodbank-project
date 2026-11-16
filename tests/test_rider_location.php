@@ -22,7 +22,7 @@ $staffId = 7;
 // 建表是 DDL，會讓 MySQL 自動提交，必須在開啟交易之前先做
 RiderLocationHelper::ensureTable($db);
 $created = ['deliveries' => [], 'donations' => []];
-$db->begin_transaction();
+Transaction::begin($db);
 try {
     $make = function ($pickup, $dropoff) use (&$created, $donationModel, $deliveryModel, $donorId, $staffId) {
         $donationId = $donationModel->addDonation([
@@ -67,7 +67,7 @@ try {
     }
     check('每張單都先取貨再送達', $orderOk);
 } finally {
-    $db->rollback();
+    Transaction::rollback($db);
     // 模型建立時可能有 DDL 造成自動提交，rollback 不保證有效，所以再明確清掉這次建立的資料
     if ($created['deliveries']) {
         $db->query('DELETE FROM deliveries WHERE delivery_id IN (' . implode(',', array_map('intval', $created['deliveries'])) . ')');

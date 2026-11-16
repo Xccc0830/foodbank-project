@@ -13,9 +13,11 @@ class DonationModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureOrderNumberColumn();
-        $this->ensureEstimatedDistanceColumns();
-        $this->ensureRevisionSupport();
+        if (schemaChecksNeeded()) {
+            $this->ensureOrderNumberColumn();
+            $this->ensureEstimatedDistanceColumns();
+            $this->ensureRevisionSupport();
+        }
     }
 
     /** 物資單可由商家重送時，允許修改的欄位 */
@@ -686,9 +688,9 @@ class DonationModel extends BaseModel {
             return false;
         }
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         if (!$this->db->query("UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE donation_id = {$donation_id} AND status = 'assessed'")) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
 
@@ -699,7 +701,7 @@ class DonationModel extends BaseModel {
                         quantity = " . (float) $edit['quantity'] . ", item_weight_kg = {$weightSql}
                  WHERE item_id = " . (int) $itemId . " AND donation_id = {$donation_id}"
             )) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
         }
@@ -743,7 +745,7 @@ class DonationModel extends BaseModel {
                     "INSERT INTO donation_allocations (donation_id, allocation_number, sub_order_number, weight_kg, quantity, unit, status)
                      VALUES ({$donation_id}, {$taskNumber}, '{$subOrderNumber}', {$weight}, {$allocationQuantity}, '{$unit}', 'pending')"
                 )) {
-                    $this->db->rollback();
+                    Transaction::rollback($this->db);
                     return false;
                 }
                 $allocationId = (int) $this->db->insert_id;
@@ -758,7 +760,7 @@ class DonationModel extends BaseModel {
                     if (!$this->db->query(
                         "INSERT INTO donation_allocation_items (allocation_id, donation_item_id, quantity) VALUES ({$allocationId}, {$donationItemId}, {$portion})"
                     )) {
-                        $this->db->rollback();
+                        Transaction::rollback($this->db);
                         return false;
                     }
                 }
@@ -770,12 +772,12 @@ class DonationModel extends BaseModel {
                 (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, is_cold_storage, points, pickup_address, delivery_address, status, item_category, item_description)
                 VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, '{$urgency}', " . ($isCold ? 1 : 0) . ", {$points}, '{$pickupAddress}', '忠信食物銀行', '" . ($deliveryMethod === 'food_bank' ? 'claimed' : 'open') . "', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
         }
 
-        $this->db->commit();
+        Transaction::commit($this->db);
         if ($deliveryMethod === 'food_bank' && (int) ($existingDonation['donor_id'] ?? 0) > 0) {
             require_once __DIR__ . '/NotificationModel.php';
             $itemLabel = trim((string) ($publishData['item_name'] ?? $existingDonation['item_name'] ?? ''));

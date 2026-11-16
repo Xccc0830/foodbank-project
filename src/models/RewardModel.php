@@ -10,7 +10,9 @@ class RewardModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureClaimsTable();
+        if (schemaChecksNeeded()) {
+            $this->ensureClaimsTable();
+        }
     }
 
     private function ensureClaimsTable() {
@@ -109,13 +111,18 @@ class RewardModel extends BaseModel {
             return false;
         }
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         try {
+            // 資料庫設定成出錯不報錯，所以每一步都自己檢查；任何一步失敗就整筆退回，不會扣了幣卻沒拿到兌換券。
+            // 先鎖住這位使用者，連按兩次兌換也只會一筆一筆處理，不會重複扣幣。
+            if (!$this->db->query("SELECT user_id FROM users WHERE user_id = {$userId} FOR UPDATE")) {
+                throw new RuntimeException('鎖定使用者失敗');
+            }
             $balanceResult = $this->db->query("SELECT COALESCE(SUM(points), 0) AS balance FROM point_transactions WHERE user_id = {$userId}");
             $balanceRow = $balanceResult ? $balanceResult->fetch_assoc() : null;
             $currentBalance = max(0, $balanceRow ? (int) $balanceRow['balance'] : 0);
             if ($currentBalance < $cost) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -123,22 +130,32 @@ class RewardModel extends BaseModel {
             $tokenHash = hash('sha256', $token);
             $expiresAt = date('Y-m-d H:i:s', time() + 600);
             $title = $this->db->real_escape_string($reward['title']);
-            $this->db->query("INSERT INTO point_transactions (user_id, points, transaction_type, description) VALUES ({$userId}, -{$cost}, 'redeemed', '兌換公益獎勵')");
-            $this->db->query(
+            if (!$this->db->query("INSERT INTO point_transactions (user_id, points, transaction_type, description) VALUES ({$userId}, -{$cost}, 'redeemed', '兌換公益獎勵')")) {
+                throw new RuntimeException('扣除心意幣失敗');
+            }
+            $claimCreated = $this->db->query(
                 "INSERT INTO reward_claims (user_id, source_type, reward_id, donor_item_id, title, points_spent, token_hash, token_value, token_expires_at)
                  VALUES ({$userId}, '{$sourceType}', " . ($sourceType === 'foodbank' ? $sourceId : 'NULL') . ", " . ($sourceType === 'donor' ? $sourceId : 'NULL') . ", '{$title}', {$cost}, '{$tokenHash}', '{$token}', '{$expiresAt}')"
             );
+            if (!$claimCreated) {
+                throw new RuntimeException('建立兌換券失敗');
+            }
+            $claimId = (int) $this->db->insert_id;
 
             if ($reward['stock'] !== null) {
-                $this->db->query("UPDATE {$table} SET stock = stock - 1 WHERE {$idColumn} = {$sourceId} AND stock > 0");
+                $stockUpdated = $this->db->query("UPDATE {$table} SET stock = stock - 1 WHERE {$idColumn} = {$sourceId} AND stock > 0");
+                if (!$stockUpdated || $this->db->affected_rows !== 1) {
+                    throw new RuntimeException('庫存已用完');
+                }
             }
 
-            $claimId = (int) $this->db->insert_id;
-            $this->db->commit();
+            if (!Transaction::commit($this->db)) {
+                throw new RuntimeException('儲存兌換紀錄失敗');
+            }
             $this->notifyRedemptionCreated($userId, $sourceType, $sourceId, $reward['title'], $cost);
             return ['token' => $token, 'expires_at' => $expiresAt, 'claim_id' => $claimId];
         } catch (Throwable $exception) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
     }

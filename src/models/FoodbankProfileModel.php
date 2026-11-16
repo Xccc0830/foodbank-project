@@ -15,7 +15,9 @@ class FoodbankProfileModel {
 
     public function __construct($connection = null) {
         $this->db = $connection ?: $GLOBALS['db']->getConnection();
-        self::ensureTable($this->db);
+        if (schemaChecksNeeded()) {
+            self::ensureTable($this->db);
+        }
     }
 
     public static function ensureTable(mysqli $db) {
