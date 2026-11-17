@@ -4,6 +4,7 @@
  */
 
 require_once BASE_PATH . '/src/models/DeliveryModel.php';
+require_once BASE_PATH . '/src/models/DonationModel.php';
 require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 
 $deliveryModel = new DeliveryModel();
@@ -56,6 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $isVolunteer && $deliveryModel->markArrivedAtPickup((int) ($_POST['delivery_id'] ?? 0), $currentUserId)
             ? ['type' => 'success', 'text' => '已標記到店，請拍攝物資照片後完成取件。']
             : ['type' => 'error', 'text' => '無法標記到店，任務狀態可能已變更。'];
+    } elseif ($action === 'arrive_dropoff') {
+        $message = $isVolunteer && $deliveryModel->markArrivedAtDropoff((int) ($_POST['delivery_id'] ?? 0), $currentUserId)
+            ? ['type' => 'success', 'text' => '已回報送達，請將物資交給食物銀行管理員確認收貨。']
+            : ['type' => 'error', 'text' => '無法回報送達，任務狀態可能已變更或已回報過。'];
     } elseif ($action === 'confirm_pickup') {
         require_once BASE_PATH . '/src/helpers/UploadHelper.php';
         $photoFile = $_FILES['pickup_photo'] ?? null;
@@ -170,8 +175,14 @@ $completedDeliveries = array_filter($deliveries, static function ($delivery) use
     return $delivery['status'] === 'delivered'
         && ($isOfficial || (int) ($delivery['volunteer_id'] ?? 0) === $currentUserId);
 });
-$pendingDeliveries = array_filter($deliveries, static function ($delivery) {
-    return $delivery['status'] !== 'delivered';
+$pendingDeliveries = array_filter($deliveries, static function ($delivery) use ($isOfficial, $currentUserId) {
+    if ($delivery['status'] === 'delivered') {
+        return false;
+    }
+    // GO Rider 只看得到「還沒人接的 GO Rider 單」和「自己接的單」；忠信派車的單與別人接的單不顯示
+    return $isOfficial
+        || (($delivery['delivery_method'] ?? '') === 'volunteer'
+            && ($delivery['status'] === 'open' || (int) ($delivery['volunteer_id'] ?? 0) === $currentUserId));
 });
 
 $activeDriverTrip = null;
@@ -203,6 +214,7 @@ if ($isVolunteer) {
     .driver-trip-map[data-theme="light"] .driver-trip-route-line { background: repeating-linear-gradient(90deg, #203B8F 0, #203B8F 10px, transparent 10px, transparent 18px); }
     .driver-trip-route-line::after { content: "\f3c5"; font-family: "Font Awesome 5 Free"; font-weight: 900; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%); font-size: 14px; color: #f8fafc; }
     .driver-trip-map[data-theme="light"] .driver-trip-route-line::after { color: #203B8F; }
+    .driver-trip-map > .driver-navigate-btn + .driver-navigate-btn { margin-top: 14px; }
     .driver-navigate-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; border: none; background: #203B8F; color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: none; }
     .driver-navigate-btn:hover { background: #172F75; }
     .driver-trip-sheet { background: var(--bg-primary, #fff); color: var(--text-primary, #111827); padding: 18px 20px 20px; }
@@ -252,6 +264,9 @@ if ($isVolunteer) {
         }
     }
 ?>
+<?php if ($hasOtherStop): ?>
+<div class="driver-trip-note" data-route-plan hidden><strong><i class="fas fa-route"></i> 建議路線順序（由近到遠、先取貨再送達）</strong><ol data-route-plan-list></ol></div>
+<?php endif; ?>
 <div class="driver-trip-card" data-driver-trip data-status="<?php echo htmlspecialchars($activeDriverTrip['status']); ?>">
     <div class="driver-trip-map" data-theme="dark" data-map-theme>
         <div class="driver-trip-map-topbar">
@@ -282,7 +297,18 @@ if ($isVolunteer) {
             </div>
             <div class="driver-trip-stop">
                 <i class="fas fa-house-user"></i>
-                <div><strong>送達地址</strong><span><?php echo htmlspecialchars($activeDriverTrip['delivery_address']); ?></span></div>
+                <div><strong>送達地址</strong><span><?php echo htmlspecialchars($activeDriverTrip['delivery_address']); ?></span>
+                    <?php
+                    // 送到食物銀行時，附上食物銀行在「設置」填的收貨時間與備註
+                    require_once BASE_PATH . '/src/models/FoodbankProfileModel.php';
+                    $tripFoodbank = (new FoodbankProfileModel())->get();
+                    if (trim((string) $activeDriverTrip['delivery_address']) === trim($tripFoodbank['address'])):
+                        $tripReceiving = FoodbankProfileModel::receivingSummary($tripFoodbank); ?>
+                        <?php if ($tripReceiving !== ''): ?><span><?php echo htmlspecialchars($tripReceiving); ?></span><?php endif; ?>
+                        <?php if ($tripFoodbank['receiving_note'] !== ''): ?><span>收貨備註：<?php echo htmlspecialchars($tripFoodbank['receiving_note']); ?></span><?php endif; ?>
+                        <?php if ($tripFoodbank['contact_phone'] !== ''): ?><a class="btn btn-secondary btn-sm" href="tel:<?php echo htmlspecialchars(preg_replace('/[^0-9+]/', '', $tripFoodbank['contact_phone']), ENT_QUOTES, 'UTF-8'); ?>"><i class="fas fa-phone"></i> 聯絡食物銀行</a><?php endif; ?>
+                    <?php endif; ?>
+                </div>
             </div>
             <?php
                 $tripItemCount = (int) ($activeDriverTrip['item_count'] ?? 0);
@@ -301,6 +327,42 @@ if ($isVolunteer) {
                         <strong>物資規格</strong>
                         <span><?php echo $tripItemCount; ?> 項物資</span>
                         <span>長寬高：<?php echo count($tripDimensionParts) === 3 ? htmlspecialchars(implode(' × ', $tripDimensionParts)) . ' cm' : '未填寫'; ?></span>
+                    </div>
+                </div>
+            <?php endif; ?>
+            <?php
+                $tripWeight = (float) ($activeDriverTrip['total_item_weight_kg'] ?? 0) ?: (float) ($activeDriverTrip['weight_kg'] ?? 0);
+                $tripStorageLevel = (int) ($activeDriverTrip['storage_level'] ?? 1);
+                $tripStorageText = [2 => '含冷藏物資，請準備保冷袋或冰桶、盡快送達', 3 => '含冷凍物資，請準備保冷袋與冰塊、盡快送達'][$tripStorageLevel] ?? '';
+            ?>
+            <?php if ($tripWeight > 0 || $tripStorageText !== ''): ?>
+                <div class="driver-trip-stop">
+                    <i class="fas fa-weight-hanging"></i>
+                    <div>
+                        <strong>重量與保存</strong>
+                        <?php if ($tripWeight > 0): ?><span>總重約 <?php echo htmlspecialchars(rtrim(rtrim(number_format($tripWeight, 2, '.', ''), '0'), '.')); ?> 公斤</span><?php endif; ?>
+                        <?php if ($tripStorageText !== ''): ?><span><?php echo htmlspecialchars($tripStorageText); ?></span><?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+            <div class="driver-trip-stop" data-trip-eta data-destination="<?php echo htmlspecialchars($tripDestinationAddress, ENT_QUOTES, 'UTF-8'); ?>">
+                <i class="fas fa-gauge-high"></i>
+                <div>
+                    <strong>路程資訊</strong>
+                    <?php if (!empty($activeDriverTrip['total_distance_km'])): ?><span>全程約 <?php echo htmlspecialchars(rtrim(rtrim(number_format((float) $activeDriverTrip['total_distance_km'], 1, '.', ''), '0'), '.')); ?> 公里</span><?php endif; ?>
+                    <span data-trip-eta-text>允許定位後，會顯示距離目的地的剩餘距離與時間</span>
+                </div>
+            </div>
+            <?php $tripOpenDays = DonationModel::formatOpenDays($activeDriverTrip['donor_open_days'] ?? ''); ?>
+            <?php if (!empty($activeDriverTrip['donor_business_hours']) || $tripOpenDays !== '' || !empty($activeDriverTrip['donor_closed_days']) || !empty($activeDriverTrip['donor_pickup_note'])): ?>
+                <div class="driver-trip-stop">
+                    <i class="fas fa-clock"></i>
+                    <div>
+                        <strong>店家取貨資訊</strong>
+                        <?php if ($tripOpenDays !== ''): ?><span>營業日：<?php echo htmlspecialchars($tripOpenDays); ?></span><?php endif; ?>
+                        <?php if (!empty($activeDriverTrip['donor_business_hours'])): ?><span>營業時間：<?php echo htmlspecialchars($activeDriverTrip['donor_business_hours']); ?></span><?php endif; ?>
+                        <?php if (!empty($activeDriverTrip['donor_closed_days'])): ?><span>公休日：<?php echo htmlspecialchars($activeDriverTrip['donor_closed_days']); ?></span><?php endif; ?>
+                        <?php if (!empty($activeDriverTrip['donor_pickup_note'])): ?><span>取貨備註：<?php echo htmlspecialchars($activeDriverTrip['donor_pickup_note']); ?></span><?php endif; ?>
                     </div>
                 </div>
             <?php endif; ?>
@@ -351,9 +413,19 @@ if ($isVolunteer) {
                     <button class="btn btn-danger btn-sm" type="submit">回報異常</button>
                 </form>
             <?php else: ?>
+                <?php if (empty($activeDriverTrip['arrived_dropoff_at'])): ?>
+                    <form method="post" class="driver-trip-action-form">
+                        <?php echo csrfField(); ?>
+                        <input type="hidden" name="action" value="arrive_dropoff">
+                        <input type="hidden" name="delivery_id" value="<?php echo (int) $activeDriverTrip['delivery_id']; ?>">
+                        <button type="submit" class="driver-action-button"><i class="fas fa-flag-checkered"></i> 我已送達食物銀行</button>
+                    </form>
+                <?php else: ?>
+                    <div class="driver-trip-note"><i class="fas fa-circle-check"></i> 已於 <?php echo htmlspecialchars(date('H:i', strtotime($activeDriverTrip['arrived_dropoff_at']))); ?> 回報送達，等待食物銀行確認收貨。</div>
+                <?php endif; ?>
                 <div class="driver-trip-note">
                     <i class="fas fa-circle-info"></i>
-                    送達食物銀行後，請將物資交給食物銀行管理員；由食物銀行管理員確認「已抵達」並清點物資後，任務才算完成。
+                    抵達食物銀行時請按「我已送達食物銀行」，系統以這個時間判斷是否準時；再將物資交給食物銀行管理員，確認收貨並清點物資後，任務才算完成。
                     <?php if (!empty($activeDriverTrip['estimated_arrival_start']) && !empty($activeDriverTrip['estimated_arrival_end'])): ?>
                         預估送達時間：<?php echo htmlspecialchars(date('H:i', strtotime($activeDriverTrip['estimated_arrival_start'])) . '–' . date('H:i', strtotime($activeDriverTrip['estimated_arrival_end']))); ?>
                     <?php endif; ?>
@@ -376,17 +448,26 @@ if ($isVolunteer) {
         <h1 class="view-title"><?php echo $page === 'material_transport' ? '物資運送' : ($isVolunteer ? '可接配送' : '配送任務'); ?></h1>
         <p class="view-subtitle"><?php echo $page === 'material_transport' ? '查看、接取與追蹤物資運送任務' : ($isVolunteer ? '查看、接取與追蹤自己的配送任務' : '發布、管理與追蹤惜食配送任務'); ?></p>
     </div>
+    <div class="btn-group">
+        <?php if ($canManageDeliveries): ?>
+            <button type="button" class="btn btn-primary" data-modal-open="createDeliveryModal"><i class="fas fa-bullhorn"></i> 發布配送任務</button>
+        <?php endif; ?>
+        <button type="button" class="btn btn-secondary" data-modal-open="rewardRulesModal"><i class="fas fa-gift"></i> 獎勵機制</button>
+    </div>
 </div>
 
 <?php if ($message): ?>
     <div class="alert alert-<?php echo $message['type']; ?>"><?php echo htmlspecialchars($message['text']); ?></div>
 <?php endif; ?>
 
-<div class="grid-2">
-    <?php if ($canManageDeliveries): ?>
-    <div class="card">
-        <div class="card-header"><h2>發布配送任務</h2><p>依規劃書公式預先計算公益點數</p></div>
-        <div class="card-body">
+<?php if ($canManageDeliveries): ?>
+<div class="app-modal-overlay" id="createDeliveryModal" role="dialog" aria-modal="true" aria-labelledby="createDeliveryTitle" hidden>
+    <div class="app-modal">
+        <div class="app-modal-header">
+            <div><h2 id="createDeliveryTitle">發布配送任務</h2><p>依獎勵機制自動計算心意幣</p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
             <form method="post">
                 <input type="hidden" name="action" value="create_delivery">
                 <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" max="2147483647" placeholder="可留白"></div>
@@ -405,16 +486,22 @@ if ($isVolunteer) {
             </form>
         </div>
     </div>
-    <?php endif; ?>
+</div>
+<?php endif; ?>
 
-    <div class="card">
-        <div class="card-header"><h2>點數規則</h2><p>公益點數不具現金兌換功能</p></div>
-        <div class="card-body">
+<div class="app-modal-overlay" id="rewardRulesModal" role="dialog" aria-modal="true" aria-labelledby="rewardRulesTitle" hidden>
+    <div class="app-modal">
+        <div class="app-modal-header">
+            <div><h2 id="rewardRulesTitle">獎勵機制</h2><p>GO Rider 完成配送可獲得心意幣，心意幣不具現金兌換功能</p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
             <ul class="feature-list">
-                <li>汽車基本 10 點，機車基本 5 點</li>
-                <li>距離、重量與急件程度會增加點數</li>
-                <li>總距離為接單位置至商家，加上商家至食物銀行</li>
-                <li>完成送達後才會記錄點數</li>
+                <li>基本：機車 3 枚、汽車 5 枚</li>
+                <li>重量每 5 公斤 +3（最多 +15），距離 2／5／10 公里以上依序 +2／+4／+6</li>
+                <li>商家申請並經食物銀行同意的緊急運送 +4，冷藏冷凍物資 +2</li>
+                <li>完成後另有準時 +1、順路每多一站 +1、首次配送 +3</li>
+                <li>食物銀行確認收貨後才會入帳</li>
             </ul>
         </div>
     </div>
@@ -469,34 +556,46 @@ if ($isVolunteer) {
 </div>
 <?php endif; ?>
 
-<div class="card mt-32">
-    <div class="card-header"><h2>物資配送流程</h2><p>從取貨到送達的完整狀態追蹤</p></div>
+<?php
+    // 配送進度總覽：依實際狀態統計目前看得到的任務數量（食物銀行看全部、GO Rider 看自己的與可接的）
+    $flowCounts = ['open' => 0, 'pickup' => 0, 'transit' => 0, 'delivered' => count($completedDeliveries), 'exception' => 0];
+    foreach ($pendingDeliveries as $flowDelivery) {
+        $flowStatus = $flowDelivery['status'];
+        if ($flowStatus === 'open' && ($flowDelivery['delivery_method'] ?? '') !== 'food_bank') {
+            $flowCounts['open']++;
+        } elseif (in_array($flowStatus, ['open', 'claimed', 'arrived_pickup'], true)) {
+            $flowCounts['pickup']++;
+        } elseif (in_array($flowStatus, ['picked_up', 'in_transit'], true)) {
+            $flowCounts['transit']++;
+        } elseif ($flowStatus === 'exception') {
+            $flowCounts['exception']++;
+        }
+    }
+    $flowSteps = [
+        ['key' => 'open', 'icon' => 'fa-clipboard-list', 'title' => '待接單', 'desc' => '等待 GO Rider 接單'],
+        ['key' => 'pickup', 'icon' => 'fa-motorcycle', 'title' => '前往取貨', 'desc' => '已接單、忠信派車或已到店'],
+        ['key' => 'transit', 'icon' => 'fa-truck-fast', 'title' => '運送中', 'desc' => '已拍照取貨，前往送達'],
+        ['key' => 'delivered', 'icon' => 'fa-circle-check', 'title' => '已送達', 'desc' => '食物銀行確認收貨'],
+    ];
+?>
+<div class="card mt-32 delivery-flow-card">
+    <div class="card-header delivery-flow-header">
+        <div><h2>配送進度總覽</h2><p>從接單、取貨到送達，各階段目前的任務數量</p></div>
+        <?php if ($flowCounts['exception'] > 0): ?>
+            <span class="status status-exception"><i class="fas fa-triangle-exclamation"></i> 異常待處理 <?php echo $flowCounts['exception']; ?> 筆</span>
+        <?php endif; ?>
+    </div>
     <div class="card-body">
-        <div style="display: flex; justify-content: space-around; align-items: center; text-align: center;">
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">📦</div>
-                <div style="font-weight: bold;">待收貨</div>
-                <div style="font-size: 12px; color: #666;">配送會員接單後</div>
-            </div>
-            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">✅</div>
-                <div style="font-weight: bold;">已收取</div>
-                <div style="font-size: 12px; color: #666;">驗收物資</div>
-            </div>
-            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">🚚</div>
-                <div style="font-weight: bold;">配送中</div>
-                <div style="font-size: 12px; color: #666;">運送中</div>
-            </div>
-            <div style="flex: 0.2; text-align: center; color: #999;">→</div>
-            <div style="flex: 1;">
-                <div style="font-size: 24px; margin-bottom: 8px;">🏪</div>
-                <div style="font-weight: bold;">已送達</div>
-                <div style="font-size: 12px; color: #666;">配送完成</div>
-            </div>
-        </div>
+        <ol class="delivery-flow">
+            <?php foreach ($flowSteps as $flowStep): $flowCount = $flowCounts[$flowStep['key']]; ?>
+                <li class="delivery-flow-step<?php echo $flowCount > 0 ? ' has-items' : ''; ?><?php echo $flowStep['key'] === 'delivered' ? ' is-final' : ''; ?>">
+                    <span class="delivery-flow-icon"><i class="fas <?php echo $flowStep['icon']; ?>"></i></span>
+                    <strong><?php echo $flowStep['title']; ?></strong>
+                    <small><?php echo $flowStep['desc']; ?></small>
+                    <span class="delivery-flow-count"><?php echo $flowCount; ?> 筆</span>
+                </li>
+            <?php endforeach; ?>
+        </ol>
     </div>
 </div>
 
@@ -539,11 +638,16 @@ if ($isVolunteer) {
                     <td><?php echo ['normal' => '一般', 'priority' => '優先', 'urgent' => '急件'][$delivery['urgency']] ?? '一般'; ?></td>
                     <td><strong><?php echo (int) $delivery['points']; ?> 點</strong></td>
                     <td>
-                        <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' ? '待忠信派車' : (['open' => '待接單', 'claimed' => '已接單', 'arrived_pickup' => '已到店', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']); ?></span>
+                        <span class="status status-<?php echo htmlspecialchars($delivery['status']); ?>"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' && in_array($delivery['status'], ['open', 'claimed'], true) ? '忠信派車中' : (['open' => '待接單', 'claimed' => '已接單', 'arrived_pickup' => '已到店', 'waiting_pickup' => '待收貨', 'collected' => '已收取', 'picked_up' => '已取貨', 'in_transit' => '配送中', 'delivered' => '已配達', 'exception' => '異常待處理', 'cancelled' => '已取消'][$delivery['status']] ?? $delivery['status']); ?></span>
                         <?php if ($isOfficial && !empty($delivery['pickup_photo_path'])): ?>
                             <br><a href="<?php echo htmlspecialchars(storedPublicImageUrl($delivery['pickup_photo_path']), ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">取貨照片</a>
                         <?php endif; ?>
-                        <?php if ($isOfficial && !empty($delivery['volunteer_id'])): ?>
+                        <?php if ($isOfficial && ($delivery['delivery_method'] ?? '') !== 'food_bank' && !empty($delivery['volunteer_id']) && in_array($delivery['status'], ['claimed', 'arrived_pickup', 'picked_up'], true)): ?>
+                            <br><button type="button" class="btn btn-secondary btn-sm" data-rider-location data-delivery-id="<?php echo (int) $delivery['delivery_id']; ?>"><i class="fas fa-location-crosshairs"></i> GO Rider 位置</button>
+                        <?php endif; ?>
+                        <?php if (($delivery['delivery_method'] ?? '') === 'food_bank'): ?>
+                            <br><small>派送：忠信食物銀行</small>
+                        <?php elseif ($isOfficial && !empty($delivery['volunteer_id'])): ?>
                             <br><small>GO Rider：<?php echo htmlspecialchars($delivery['volunteer_name'] ?? ''); ?>
                             <?php if (!empty($delivery['volunteer_phone'])): ?>
                                 <a href="tel:<?php echo htmlspecialchars($delivery['volunteer_phone'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($delivery['volunteer_phone']); ?></a>
@@ -596,9 +700,10 @@ if ($isVolunteer) {
                             <?php if ($isVolunteer && in_array($delivery['status'], ['claimed', 'picked_up'], true) && (int) $delivery['volunteer_id'] === $currentUserId): ?>
                                 <span class="text-muted"><i class="fas fa-arrow-up"></i> 請至上方「配送中任務」卡片操作</span>
                             <?php endif; ?>
-                            <?php $canCompleteDelivery = $canConfirmArrival && (($delivery['delivery_method'] ?? '') === 'food_bank' && $delivery['status'] === 'open' || in_array($delivery['status'], ['claimed', 'picked_up', 'in_transit'], true)); ?>
+                            <?php $canCompleteDelivery = $canConfirmArrival && (($delivery['delivery_method'] ?? '') === 'food_bank' ? in_array($delivery['status'], ['open', 'claimed', 'arrived_pickup', 'picked_up'], true) : $delivery['status'] === 'picked_up'); ?>
+                            <?php if ($canCompleteDelivery && !empty($delivery['arrived_dropoff_at'])): ?><span class="text-muted"><i class="fas fa-flag-checkered"></i> 騎手 <?php echo htmlspecialchars(date('H:i', strtotime($delivery['arrived_dropoff_at']))); ?> 已回報送達</span><?php endif; ?>
                             <?php if ($canCompleteDelivery): ?><form method="post" class="delivery-action-form"><?php echo csrfField(); ?><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' ? '確認忠信派車已完成' : '已抵達，確認收貨'; ?></button></form><?php endif; ?>
-                            <?php if ($canManageDeliveries): ?>
+                            <?php if ($canManageDeliveries && $delivery['status'] !== 'delivered'): ?>
                                 <div class="inline-action-group">
                                     <form method="post" class="delivery-action-form">
                                         <?php echo csrfField(); ?>
@@ -671,7 +776,7 @@ if ($isVolunteer) {
 <div class="map-modal-overlay" id="mapModal" role="dialog" aria-modal="true" aria-label="地圖" hidden>
     <div class="map-modal">
         <button type="button" class="icon-btn map-modal-close" id="mapModalClose" aria-label="關閉地圖"><i class="fas fa-times"></i></button>
-        <iframe id="mapModalFrame" title="地圖" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        <iframe id="mapModalFrame" title="地圖" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
 </div>
 <script>

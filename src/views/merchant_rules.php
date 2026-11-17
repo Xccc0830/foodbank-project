@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $_SESSION[$flashKey] = $result === true
         ? ['type' => 'success', 'text' => '折扣方案已儲存。']
         : ['type' => 'error', 'text' => $result];
-    header('Location: ?page=merchant_rules');
+    redirectTo('?page=merchant_rules');
     exit;
 }
 

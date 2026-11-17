@@ -17,6 +17,10 @@ function geocodeAddress($address) {
     if ($address === '') {
         return false;
     }
+    // 手機定位傳來的「緯度,經度」直接當座標用
+    if (preg_match('/^(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$/', $address, $coordinate)) {
+        return ['lat' => (float) $coordinate[1], 'lon' => (float) $coordinate[2], 'approximate' => false];
+    }
 
     $cached = geocodeCacheGet($address);
     if ($cached !== null) {
@@ -55,7 +59,8 @@ function geocodeCacheGet($address) {
         return null;
     }
     static $tableReady = false;
-    if (!$tableReady) {
+    // 建表會讓 MySQL 自動把進行中的交易存檔，交易中不建（資料表平常早已存在）
+    if (!$tableReady && !(class_exists('Transaction', false) && Transaction::active())) {
         $connection->query(
             "CREATE TABLE IF NOT EXISTS geocode_cache (
                 address_hash CHAR(32) NOT NULL PRIMARY KEY,

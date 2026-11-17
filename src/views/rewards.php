@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($preview === null) {
         $_SESSION['rewards_flash_message'] = $message;
-        header('Location: ' . $redirectUrl);
+        redirectTo($redirectUrl);
         exit;
     }
 }

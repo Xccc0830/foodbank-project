@@ -4,9 +4,109 @@
  */
 
 require_once __DIR__ . '/BaseModel.php';
+require_once __DIR__ . '/../helpers/IdNumberHelper.php';
 
 class ActivityModel extends BaseModel {
     protected $table = 'activities';
+
+    /** 企業報名的單一活動最多可登記的員工人數（避免一次送出過大的表單） */
+    const MAX_EMPLOYEES_PER_REGISTRATION = 200;
+
+    public function __construct() {
+        parent::__construct();
+        $this->syncStatusesByTime();
+    }
+
+    /**
+     * 活動狀態依時間自動更新（已取消的不動）：
+     * 還沒開始 → 計畫中；開始後 → 進行中；結束後 → 已完成（不能再報名，參加者可下載證書）。
+     * 沒填結束時間的活動，以開始當天 23:59 視為結束。每次請求只更新一次。
+     */
+    private function syncStatusesByTime() {
+        static $synced = false;
+        if ($synced) {
+            return;
+        }
+        $synced = true;
+        $this->db->query(
+            "UPDATE activities
+             SET status = CASE
+                 WHEN COALESCE(end_at, CONCAT(DATE(start_at), ' 23:59:59')) < NOW() THEN 'completed'
+                 WHEN start_at <= NOW() THEN 'ongoing'
+                 ELSE 'planned'
+             END
+             WHERE status <> 'cancelled' AND start_at IS NOT NULL"
+        );
+    }
+
+    /** 企業報名的參加員工名冊（身分證字號加密保存，供活動保險使用）。DDL 會自動提交，須在交易外執行。 */
+    public function ensureParticipantsTable() {
+        // 建表會讓 MySQL 自動把進行中的交易存檔，交易中不建（資料表平常早已存在）
+        if (Transaction::active()) {
+            return;
+        }
+        $this->db->query(
+            "CREATE TABLE IF NOT EXISTS activity_participants (
+                participant_id INT AUTO_INCREMENT PRIMARY KEY,
+                assignment_id INT NOT NULL,
+                full_name VARCHAR(50) NOT NULL,
+                phone VARCHAR(20) NOT NULL,
+                id_number_encrypted TEXT NOT NULL,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_activity_participants_assignment (assignment_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    }
+
+    /**
+     * 檢查企業填寫的員工名單。通過回傳 null，否則回傳給使用者看的錯誤訊息。
+     * @param array<int,array{full_name?:string,phone?:string,id_number?:string}> $employees
+     */
+    public static function validateEmployees(array $employees) {
+        if (!$employees) {
+            return '請至少填寫 1 位參加員工。';
+        }
+        if (count($employees) > self::MAX_EMPLOYEES_PER_REGISTRATION) {
+            return '單次最多登記 ' . self::MAX_EMPLOYEES_PER_REGISTRATION . ' 位員工。';
+        }
+        $seenIds = [];
+        foreach (array_values($employees) as $index => $employee) {
+            $label = '第 ' . ($index + 1) . ' 位員工';
+            $name = trim((string) ($employee['full_name'] ?? ''));
+            $phone = preg_replace('/[\s-]/', '', (string) ($employee['phone'] ?? ''));
+            $idNumber = IdNumberHelper::normalize($employee['id_number'] ?? '');
+            if ($name === '' || mb_strlen($name) > 50) {
+                return $label . '的姓名未填寫或太長。';
+            }
+            if (!preg_match('/^09\d{8}$/', $phone)) {
+                return $label . '的手機號碼格式不正確（例如 0912345678）。';
+            }
+            if (!IdNumberHelper::isValid($idNumber)) {
+                return $label . '的身分證字號格式不正確。';
+            }
+            if (isset($seenIds[$idNumber])) {
+                return $label . '的身分證字號和第 ' . $seenIds[$idNumber] . ' 位重複。';
+            }
+            $seenIds[$idNumber] = $index + 1;
+        }
+        return null;
+    }
+
+    /** 某筆企業報名的員工名冊；$withFullId 為 true 才解密完整身分證字號（只給食物銀行匯出保險名冊用） */
+    public function getEmployees($assignmentId, $withFullId = false) {
+        $assignmentId = (int) $assignmentId;
+        $rows = $this->query("SELECT participant_id, full_name, phone, id_number_encrypted FROM activity_participants WHERE assignment_id = {$assignmentId} ORDER BY participant_id");
+        foreach ($rows as &$row) {
+            $plain = IdNumberHelper::decrypt($row['id_number_encrypted']);
+            $row['id_number_masked'] = $plain ? IdNumberHelper::mask($plain) : '';
+            if ($withFullId) {
+                $row['id_number'] = $plain ?: '';
+            }
+            unset($row['id_number_encrypted']);
+        }
+        unset($row);
+        return $rows;
+    }
 
     public function getAllActivities() {
         return $this->query(
@@ -133,9 +233,25 @@ class ActivityModel extends BaseModel {
         return true;
     }
 
-    public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null, $headcount = null) {
+    /** 會員已通過身分驗證時回傳其身分證字號（報名時可直接沿用，不必再輸入）；否則回傳 null */
+    public function getVerifiedIdNumber($userId) {
+        $userId = (int) $userId;
+        $rows = $this->query("SELECT id_verify_status, id_number_encrypted FROM users WHERE user_id = {$userId} LIMIT 1");
+        if (!$rows || ($rows[0]['id_verify_status'] ?? '') !== 'approved' || empty($rows[0]['id_number_encrypted'])) {
+            return null;
+        }
+        return IdNumberHelper::decrypt($rows[0]['id_number_encrypted']);
+    }
+
+    /**
+     * 報名活動。參加者都要附上姓名、電話、身分證字號（供活動保險使用）：
+     * 企業會員附員工名單，報名人數即名單人數；一般會員附本人 1 筆資料。
+     * 兩者可同時報名，不必等企業先認領，只受活動總名額限制。
+     */
+    public function register($activityId, $userId, $assignmentType = 'individual', $organizationName = null, $headcount = null, array $employees = []) {
         $activityId = (int) $activityId;
         $userId = (int) $userId;
+        $this->ensureParticipantsTable();
         $userResult = $this->db->query("SELECT role, member_type, enterprise_name, full_name FROM users WHERE user_id = {$userId} AND status = 'active' LIMIT 1");
         $userInfo = $userResult ? $userResult->fetch_assoc() : null;
         if (!$userInfo) {
@@ -156,9 +272,19 @@ class ActivityModel extends BaseModel {
             $organizationName = trim((string) ($userInfo['enterprise_name'] ?: $organizationName ?: $userInfo['full_name']));
         }
 
-        // 僅企業會員可自填活動參與人數，個人會員一律以 1 人計。
-        $headcount = $isEnterpriseMember ? (int) $headcount : 1;
-        if ($headcount < 1) {
+        // 企業會員：人數就是員工名單的人數；個人會員只能登記本人 1 筆。名單都必須完整有效。
+        $employees = array_values($employees);
+        if (self::validateEmployees($employees) !== null) {
+            return false;
+        }
+        if ($isEnterpriseMember) {
+            if ($headcount !== null && (int) $headcount !== count($employees)) {
+                return false;
+            }
+            $headcount = count($employees);
+        } elseif (count($employees) !== 1) {
+            return false;
+        } else {
             $headcount = 1;
         }
 
@@ -168,7 +294,7 @@ class ActivityModel extends BaseModel {
             }
         }
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         try {
             $activityResult = $this->db->query(
                 "SELECT capacity FROM activities
@@ -177,7 +303,7 @@ class ActivityModel extends BaseModel {
             );
             $activity = $activityResult ? $activityResult->fetch_assoc() : null;
             if (!$activity) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -187,38 +313,32 @@ class ActivityModel extends BaseModel {
                  ORDER BY assignment_id DESC LIMIT 1"
             );
             if (!$existingResult) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
             $existingAssignment = $existingResult->fetch_assoc();
             if ($existingAssignment && ($existingAssignment['status'] ?? '') === 'registered') {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
             $assignedRows = $this->db->query(
-                "SELECT participant_count, assignment_type FROM activity_assignments
+                "SELECT participant_count FROM activity_assignments
                  WHERE activity_id = {$activityId} AND status <> 'cancelled'
                  FOR UPDATE"
             );
             if (!$assignedRows) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
             $assignedCount = 0;
-            $hasCompanyClaim = false;
             while ($assignedRow = $assignedRows->fetch_assoc()) {
                 $assignedCount += (int) $assignedRow['participant_count'];
-                $hasCompanyClaim = $hasCompanyClaim || ($assignedRow['assignment_type'] ?? '') === 'company';
             }
 
             $capacity = (int) ($activity['capacity'] ?? 0);
-            if (!$isEnterpriseMember && $capacity > 0 && !$hasCompanyClaim) {
-                $this->db->rollback();
-                return false;
-            }
             if ($capacity > 0 && $assignedCount + $headcount > $capacity) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -227,6 +347,7 @@ class ActivityModel extends BaseModel {
                 ? "'" . $this->db->real_escape_string($organizationName) . "'"
                 : 'NULL';
 
+            $assignmentId = $existingAssignment ? (int) $existingAssignment['assignment_id'] : 0;
             if ($existingAssignment) {
                 $saved = $this->db->query(
                     "UPDATE activity_assignments
@@ -241,19 +362,40 @@ class ActivityModel extends BaseModel {
                         (activity_id, user_id, points, assignment_type, organization_name, participant_count)
                      VALUES ({$activityId}, {$userId}, {$points}, '{$assignmentType}', {$organizationNameEscaped}, {$headcount})"
                 );
+                $assignmentId = (int) $this->db->insert_id;
+            }
+
+            // 重新報名時以新名單為準
+            if ($saved) {
+                $saved = $this->db->query("DELETE FROM activity_participants WHERE assignment_id = {$assignmentId}");
+                $stmt = $saved ? $this->db->prepare("INSERT INTO activity_participants (assignment_id, full_name, phone, id_number_encrypted) VALUES (?, ?, ?, ?)") : false;
+                foreach ($employees as $employee) {
+                    if (!$stmt) {
+                        $saved = false;
+                        break;
+                    }
+                    $name = trim((string) $employee['full_name']);
+                    $phone = preg_replace('/[\s-]/', '', (string) $employee['phone']);
+                    $encryptedId = IdNumberHelper::encrypt($employee['id_number']);
+                    $stmt->bind_param('isss', $assignmentId, $name, $phone, $encryptedId);
+                    if (!$stmt->execute()) {
+                        $saved = false;
+                        break;
+                    }
+                }
             }
 
             if (!$saved) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
-            if (!$this->db->commit()) {
-                $this->db->rollback();
+            if (!Transaction::commit($this->db)) {
+                Transaction::rollback($this->db);
                 return false;
             }
             return true;
         } catch (Throwable $exception) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             throw $exception;
         }
     }
@@ -268,12 +410,21 @@ class ActivityModel extends BaseModel {
         }
 
         $cancellationReasonEscaped = $this->db->real_escape_string($cancellationReason);
+        $this->ensureParticipantsTable();
 
-        return (bool) $this->db->query(
+        $cancelled = $this->db->query(
             "UPDATE activity_assignments
              SET status = 'cancelled', cancelled_at = NOW(), cancellation_reason = '{$cancellationReasonEscaped}'
              WHERE activity_id = {$activityId} AND user_id = {$userId} AND status = 'registered' LIMIT 1"
-        );
+        ) && $this->db->affected_rows === 1;
+        if ($cancelled) {
+            // 取消報名後不再需要員工的個人資料
+            $this->db->query(
+                "DELETE ap FROM activity_participants ap INNER JOIN activity_assignments aa ON aa.assignment_id = ap.assignment_id
+                 WHERE aa.activity_id = {$activityId} AND aa.user_id = {$userId} AND aa.status = 'cancelled'"
+            );
+        }
+        return $cancelled;
     }
 
     public function deleteActivity($activityId, $userId, $userRole = null) {
@@ -284,6 +435,9 @@ class ActivityModel extends BaseModel {
             return false;
         }
 
+        $this->ensureParticipantsTable();
+        // 員工名冊含身分證字號，活動刪除時一併刪除
+        $this->db->query("DELETE ap FROM activity_participants ap INNER JOIN activity_assignments aa ON aa.assignment_id = ap.assignment_id WHERE aa.activity_id = {$activityId}");
         $this->db->query("DELETE FROM activity_assignments WHERE activity_id = {$activityId}");
         $this->db->query("DELETE FROM activities WHERE activity_id = {$activityId}");
 

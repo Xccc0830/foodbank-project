@@ -22,7 +22,7 @@ $memberId = 8;
 $otherId = 11;
 $staffId = 7;
 
-$db->begin_transaction();
+Transaction::begin($db);
 try {
     check('格式錯誤不能送出', is_string($model->submit($memberId, 'A123456788')));
     check('正確字號可送出', $model->submit($memberId, 'a123456789') === true);
@@ -42,6 +42,6 @@ try {
     $audit = (int) $db->query("SELECT COUNT(*) c FROM audit_logs WHERE action_type = 'id_verification_approved' AND record_id = {$memberId}")->fetch_assoc()['c'];
     check('審核有寫入稽核紀錄', $audit >= 1);
 } finally {
-    $db->rollback();
+    Transaction::rollback($db);
 }
 exit(empty($failed) ? 0 : 1);

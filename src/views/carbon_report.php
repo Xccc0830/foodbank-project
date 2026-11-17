@@ -17,6 +17,68 @@ $foodWasteFactor = 2.5;
 $carFactor = 0.192;
 $motorcycleFactor = 0.081;
 
+require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
+new ItemCategoryModel(); // 確保分類的減碳係數欄位存在
+
+/**
+ * 依物資分類統計已完成配送的物資重量與惜食避免排放。各分類可在「物資分類」頁設定自己的減碳係數，沒設定用預設值。
+ * $ownerSql：限定某企業（例如 " AND n.donor_id = 11"）；$deliveredSql：限定配達期間。
+ */
+$loadCategoryCarbon = static function ($ownerSql = '', $deliveredSql = '') use ($connection, $foodWasteFactor) {
+    $rows = [];
+    $result = $connection->query(
+        "SELECT COALESCE(c.category_name, '未分類') AS category_name,
+                COALESCE(c.carbon_factor, {$foodWasteFactor}) AS factor,
+                COUNT(*) AS item_count,
+                SUM(COALESCE(i.item_weight_kg, 0)) AS total_weight
+         FROM donation_items i
+         INNER JOIN donations n ON n.donation_id = i.donation_id
+         LEFT JOIN item_categories c ON c.category_id = i.category_id
+         WHERE EXISTS (SELECT 1 FROM deliveries d WHERE d.donation_id = n.donation_id AND d.status = 'delivered'{$deliveredSql}){$ownerSql}
+         GROUP BY category_name, factor
+         ORDER BY total_weight DESC"
+    );
+    while ($result && ($row = $result->fetch_assoc())) {
+        $row['avoided'] = (float) $row['total_weight'] * (float) $row['factor'];
+        $rows[] = $row;
+    }
+    return $rows;
+};
+
+$renderCategoryCarbon = static function (array $rows, $subtitle) {
+    $totalWeight = array_sum(array_column($rows, 'total_weight'));
+    ?>
+    <div class="card mt-32">
+        <div class="card-header"><h2>依物資分類統計</h2><p><?php echo htmlspecialchars($subtitle); ?></p></div>
+        <div class="card-body">
+            <?php if ($rows): ?>
+                <div class="data-table-wrapper"><table class="data-table carbon-category-table">
+                    <thead><tr><th>分類</th><th>物資筆數</th><th>重量 (kg)</th><th>佔比</th><th>減碳係數</th><th>惜食避免排放</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($rows as $row): $share = $totalWeight > 0 ? (float) $row['total_weight'] / $totalWeight * 100 : 0; ?>
+                        <tr>
+                            <td><strong><?php echo htmlspecialchars($row['category_name']); ?></strong></td>
+                            <td><?php echo (int) $row['item_count']; ?></td>
+                            <td><?php echo number_format((float) $row['total_weight'], 1); ?></td>
+                            <td>
+                                <div class="carbon-share"><span class="carbon-share-bar" style="width: <?php echo round($share, 1); ?>%"></span></div>
+                                <small><?php echo number_format($share, 1); ?>%</small>
+                            </td>
+                            <td><?php echo htmlspecialchars((string) (float) $row['factor']); ?></td>
+                            <td><strong><?php echo number_format($row['avoided'], 1); ?> kgCO2e</strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table></div>
+                <p class="form-hint">重量以商家填寫的各項物資重量加總；沒填重量的物資不計入。減碳係數可在「物資分類」頁依參考資料調整。</p>
+            <?php else: ?>
+                <div class="empty-state"><i class="fas fa-layer-group"></i><p>尚無可依分類統計的已完成配送物資</p></div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+};
+
 if ($isEnterpriseMember) {
     $enterpriseId = (int) ($currentUser['user_id'] ?? 0);
     $selectedYear = (int) ($_GET['year'] ?? date('Y'));
@@ -165,6 +227,8 @@ if ($isEnterpriseMember) {
         <div class="stat-card"><h3>合作配送會員</h3><div class="stat-number"><?php echo number_format((int) $summary['volunteer_count']); ?></div><p class="stat-label">參與完成配送的人數</p></div>
     </div>
 
+    <?php $renderCategoryCarbon($loadCategoryCarbon(' AND n.donor_id = ' . $enterpriseId, " AND d.delivered_at >= '{$yearStartEscaped}' AND d.delivered_at < '{$yearEndEscaped}'"), $selectedYear . ' 年度您捐贈的物資，依分類估算的環境效益'); ?>
+
     <div class="card mt-32">
         <div class="card-header"><h2><?php echo $selectedYear; ?> 年度捐贈紀錄</h2><p>資料由系統完成的配送自動產生。</p></div>
         <div class="card-body">
@@ -280,3 +344,5 @@ $totals = [
         <?php endif; ?>
     </div>
 </div>
+
+<?php $renderCategoryCarbon($loadCategoryCarbon($reportOwnerCondition), '全平台已完成配送的物資，依分類估算的環境效益'); ?>

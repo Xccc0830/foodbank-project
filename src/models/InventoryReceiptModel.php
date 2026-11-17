@@ -18,7 +18,12 @@ class InventoryReceiptModel extends BaseModel {
             parent::__construct();
         }
 
-        $this->ensureTable();
+        if (schemaChecksNeeded()) {
+            $this->ensureTable();
+        } else {
+            // 資料表已在程式更新後檢查過（見 runAllSchemaChecks），可以直接使用
+            $this->ready = true;
+        }
     }
 
     private function ensureTable() {
@@ -101,15 +106,6 @@ class InventoryReceiptModel extends BaseModel {
         return $this->hasError;
     }
 
-    public function getLastAvailableQuantity() {
-        return $this->lastAvailableQuantity;
-    }
-
-    public function addReceipt(array $data, $userId) {
-        $data['movement_type'] = 'in';
-        return $this->recordManualMovement($data, $userId)['status'] === 'success';
-    }
-
     public function recordManualMovement(array $data, $userId) {
         if (!$this->ready) {
             return ['status' => 'error'];
@@ -144,7 +140,7 @@ class InventoryReceiptModel extends BaseModel {
             return ['status' => 'error'];
         }
 
-        if (!$this->db->begin_transaction()) {
+        if (!Transaction::begin($this->db)) {
             $this->hasError = true;
             error_log('無法開始物資異動交易：' . $this->db->error);
             $this->releaseStockLocks([$lockName]);
@@ -175,7 +171,7 @@ class InventoryReceiptModel extends BaseModel {
             $this->lastAvailableQuantity = max(0, $available);
 
             if ($movementType === 'out' && (float) $quantity > $available) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return ['status' => 'insufficient_stock', 'available' => max(0, $available)];
             }
 
@@ -208,7 +204,7 @@ class InventoryReceiptModel extends BaseModel {
             }
             $statement->close();
             $statement = null;
-            if (!$this->db->commit()) {
+            if (!Transaction::commit($this->db)) {
                 throw new RuntimeException('無法完成物資異動交易：' . $this->db->error);
             }
             return ['status' => 'success', 'available' => $available];
@@ -216,7 +212,7 @@ class InventoryReceiptModel extends BaseModel {
             if ($statement) {
                 $statement->close();
             }
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             $this->hasError = true;
             error_log('物資異動失敗：' . $error->getMessage());
             return ['status' => 'error'];
@@ -235,7 +231,7 @@ class InventoryReceiptModel extends BaseModel {
         if ($donationId <= 0 || $userId <= 0) {
             return false;
         }
-        if (!$this->db->begin_transaction()) {
+        if (!Transaction::begin($this->db)) {
             $this->hasError = true;
             error_log('無法開始物資清點入庫交易：' . $this->db->error);
             return false;
@@ -258,7 +254,7 @@ class InventoryReceiptModel extends BaseModel {
             $donation = $donationResult ? $donationResult->fetch_assoc() : null;
             $donationStatement->close();
             if (!$donation || $donation['status'] === 'rejected' || $donation['current_status'] === 'inspection_complete') {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -281,7 +277,7 @@ class InventoryReceiptModel extends BaseModel {
             if (!$deliveryStatus || (int) $deliveryStatus['delivery_count'] === 0
                 || (int) $deliveryStatus['delivered_count'] === 0
                 || (int) $deliveryStatus['unfinished_count'] > 0) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -300,7 +296,7 @@ class InventoryReceiptModel extends BaseModel {
             $items = $itemResult ? $itemResult->fetch_all(MYSQLI_ASSOC) : [];
             $itemStatement->close();
             if (!$items) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
 
@@ -316,7 +312,7 @@ class InventoryReceiptModel extends BaseModel {
                 $categoryId = (int) ($categoryIds[$itemId] ?? 0);
                 if ($categoryId <= 0) {
                     $categoryStatement->close();
-                    $this->db->rollback();
+                    Transaction::rollback($this->db);
                     return false;
                 }
                 $categoryStatement->bind_param('i', $categoryId);
@@ -327,7 +323,7 @@ class InventoryReceiptModel extends BaseModel {
                 $category = $categoryResult ? $categoryResult->fetch_assoc() : null;
                 if (!$category) {
                     $categoryStatement->close();
-                    $this->db->rollback();
+                    Transaction::rollback($this->db);
                     return false;
                 }
                 $categories[$itemId] = $category['category_name'];
@@ -404,12 +400,12 @@ class InventoryReceiptModel extends BaseModel {
             }
             $updateStatement->close();
 
-            if (!$this->db->commit()) {
+            if (!Transaction::commit($this->db)) {
                 throw new RuntimeException('無法完成物資清點入庫交易：' . $this->db->error);
             }
             $success = true;
         } catch (Throwable $error) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             $this->hasError = true;
             error_log('物資清點入庫失敗：' . $error->getMessage());
         } finally {
@@ -493,6 +489,75 @@ class InventoryReceiptModel extends BaseModel {
         $rows = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
         $statement->close();
         return $rows;
+    }
+
+    /**
+     * 即期品：依「先到期先出」推算每個品項目前剩下的批次，回傳在提醒天數內（含已過期）的批次。
+     *
+     * @param array<string,int> $alertDaysByCategory 分類名稱 => 提醒天數
+     * @return array<int,array{item_name:string,category:string,unit:string,quantity:float,expiry_date:string,days_left:int,alert_days:int}>
+     */
+    public function getExpiringStock(array $alertDaysByCategory, $defaultAlertDays = 7, $today = null) {
+        if (!$this->ready) {
+            return [];
+        }
+        $today = $today ?: date('Y-m-d');
+        $result = $this->db->query(
+            "SELECT item_name, category, unit, movement_type, quantity, expiry_date
+             FROM inventory_receipts
+             ORDER BY item_name, category, unit, (expiry_date IS NULL), expiry_date, receipt_id"
+        );
+        if (!$result) {
+            $this->hasError = true;
+            return [];
+        }
+
+        return self::computeExpiringLots($result->fetch_all(MYSQLI_ASSOC), $alertDaysByCategory, $defaultAlertDays, $today);
+    }
+
+    /** 純計算（方便測試）：$rows 需依品項、到期日排序，欄位同 inventory_receipts。 */
+    public static function computeExpiringLots(array $rows, array $alertDaysByCategory, $defaultAlertDays, $today) {
+        $groups = [];
+        foreach ($rows as $row) {
+            $key = $row['item_name'] . "\0" . $row['category'] . "\0" . $row['unit'];
+            if (!isset($groups[$key])) {
+                $groups[$key] = ['item_name' => $row['item_name'], 'category' => $row['category'], 'unit' => $row['unit'], 'lots' => [], 'out' => 0.0];
+            }
+            if ($row['movement_type'] === 'out') {
+                $groups[$key]['out'] += (float) $row['quantity'];
+            } else {
+                $groups[$key]['lots'][] = ['quantity' => (float) $row['quantity'], 'expiry_date' => $row['expiry_date']];
+            }
+        }
+
+        $expiring = [];
+        foreach ($groups as $group) {
+            $toConsume = $group['out'];
+            $alertDays = (int) ($alertDaysByCategory[$group['category']] ?? $defaultAlertDays);
+            foreach ($group['lots'] as $lot) {
+                $remaining = $lot['quantity'] - $toConsume;
+                $toConsume = max(0, $toConsume - $lot['quantity']);
+                if ($remaining <= 0 || empty($lot['expiry_date'])) {
+                    continue;
+                }
+                $daysLeft = (int) floor((strtotime($lot['expiry_date']) - strtotime($today)) / 86400);
+                if ($daysLeft <= $alertDays) {
+                    $expiring[] = [
+                        'item_name' => $group['item_name'],
+                        'category' => $group['category'],
+                        'unit' => $group['unit'],
+                        'quantity' => $remaining,
+                        'expiry_date' => $lot['expiry_date'],
+                        'days_left' => $daysLeft,
+                        'alert_days' => $alertDays,
+                    ];
+                }
+            }
+        }
+        usort($expiring, static function ($a, $b) {
+            return $a['days_left'] <=> $b['days_left'];
+        });
+        return $expiring;
     }
 
     public function getSummaryCounts() {

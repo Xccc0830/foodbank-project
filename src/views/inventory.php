@@ -54,6 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         $_POST['movement_type'] = $movementType;
         $movementResult = $receiptModel->recordManualMovement($_POST, (int) ($currentUser['user_id'] ?? 0));
         if ($movementResult['status'] === 'success') {
+            if ($movementType === 'in') {
+                $chosenCategory = $itemCategoryModel->getCategoryByName((string) ($_POST['category'] ?? ''));
+                if ($chosenCategory) {
+                    $itemCategoryModel->recordCorrectionIfNeeded($_POST['item_name'] ?? '', (int) $chosenCategory['category_id'], 'inventory');
+                }
+            }
             $inventoryMessage = [
                 'type' => 'success',
                 'text' => $movementType === 'out' ? '物資已成功取出並更新庫存。' : '物資入庫紀錄已新增。',
@@ -194,6 +200,47 @@ foreach ($rows as $row) {
     <?php endforeach; ?>
 </div>
 
+<?php
+    // 即期品提醒：依各分類設定的提醒天數（在「物資分類」頁可調整）
+    $alertDaysByCategory = [];
+    foreach ($receiptCategories as $receiptCategory) {
+        $alertDaysByCategory[$receiptCategory['category_name']] = (int) ($receiptCategory['expiry_alert_days'] ?? ItemCategoryModel::DEFAULT_EXPIRY_ALERT_DAYS);
+    }
+    $expiringStock = $receiptModel->getExpiringStock($alertDaysByCategory, ItemCategoryModel::DEFAULT_EXPIRY_ALERT_DAYS);
+?>
+<?php if ($expiringStock): ?>
+<section class="card mt-32 expiring-stock-card">
+    <div class="card-header">
+        <h2><i class="fas fa-hourglass-half"></i> 即期品提醒</h2>
+        <p>以下物資快到期或已過期，請優先分送或處理（依「先到期先出」推算目前剩下的批次）。</p>
+    </div>
+    <div class="card-body">
+        <div class="data-table-wrapper"><table class="data-table expiring-stock-table">
+            <thead><tr><th>物資名稱</th><th>分類</th><th>剩餘數量</th><th>有效期限</th><th>狀態</th></tr></thead>
+            <tbody>
+            <?php foreach ($expiringStock as $lot): ?>
+                <tr>
+                    <td><strong><?php echo htmlspecialchars($lot['item_name']); ?></strong></td>
+                    <td><?php echo htmlspecialchars($lot['category']); ?></td>
+                    <td><?php echo htmlspecialchars(rtrim(rtrim(number_format($lot['quantity'], 2, '.', ''), '0'), '.') . ' ' . $lot['unit']); ?></td>
+                    <td><?php echo htmlspecialchars($lot['expiry_date']); ?></td>
+                    <td>
+                        <?php if ($lot['days_left'] < 0): ?>
+                            <span class="status status-exception">已過期 <?php echo abs($lot['days_left']); ?> 天</span>
+                        <?php elseif ($lot['days_left'] === 0): ?>
+                            <span class="status status-exception">今天到期</span>
+                        <?php else: ?>
+                            <span class="status status-pending">剩 <?php echo $lot['days_left']; ?> 天</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table></div>
+    </div>
+</section>
+<?php endif; ?>
+
 <section class="card mt-32 stock-receipt-section">
     <div class="card-header stock-receipt-heading">
         <div>
@@ -294,10 +341,13 @@ foreach ($rows as $row) {
                 <h3>目前庫存</h3>
                 <p>庫存為 0 的物資會自動從清單隱藏，進出紀錄仍保留。</p>
             </div>
-            <form method="get" class="toolbar-row">
+            <form method="get" class="filter-bar">
                 <input type="hidden" name="page" value="inventory">
-                <input type="search" name="stock_q" value="<?php echo htmlspecialchars($receiptKeyword); ?>" placeholder="搜尋物資、捐贈者或存放位置">
-                <button class="btn btn-secondary btn-sm" type="submit">搜尋</button>
+                <label class="filter-search">
+                    <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                    <input type="search" name="stock_q" value="<?php echo htmlspecialchars($receiptKeyword); ?>" placeholder="搜尋物資、捐贈者或存放位置" aria-label="搜尋">
+                </label>
+                <button class="btn btn-secondary btn-sm filter-submit" type="submit">搜尋</button>
             </form>
         </div>
         <?php if ($stockRows): ?>
@@ -540,18 +590,25 @@ foreach ($rows as $row) {
 
 <div class="card mt-32">
     <div class="card-header">
-        <form method="get" class="toolbar-row">
+        <form method="get" class="filter-bar">
             <input type="hidden" name="page" value="inventory">
-            <input type="search" name="q" value="<?php echo htmlspecialchars($keyword); ?>" placeholder="搜尋捐贈方、品項、訂單編號">
+            <label class="filter-search">
+                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" name="q" value="<?php echo htmlspecialchars($keyword); ?>" placeholder="搜尋捐贈方、品項、訂單編號" aria-label="搜尋">
+            </label>
             <select name="status" class="filter-select" aria-label="篩選狀態">
                 <option value="">全部狀態</option>
                 <?php foreach ($inventoryStatusLabels as $statusValue => $statusLabel): ?>
                     <option value="<?php echo $statusValue; ?>" <?php echo $statusFilter === $statusValue ? 'selected' : ''; ?>><?php echo htmlspecialchars($statusLabel); ?></option>
                 <?php endforeach; ?>
             </select>
-            <input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>" aria-label="開始日期">
-            <input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>" aria-label="結束日期">
-            <button class="btn btn-primary btn-sm" type="submit">篩選</button>
+            <div class="filter-dates">
+                <i class="far fa-calendar" aria-hidden="true"></i>
+                <input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>" aria-label="開始日期">
+                <span class="filter-dates-sep">至</span>
+                <input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>" aria-label="結束日期">
+            </div>
+            <button class="btn btn-primary btn-sm filter-submit" type="submit"><i class="fas fa-filter" aria-hidden="true"></i> 篩選</button>
         </form>
     </div>
     <div class="card-body">

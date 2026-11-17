@@ -15,7 +15,7 @@ function check($label, $ok) {
 $donor = $db->query("SELECT user_id FROM users LIMIT 1")->fetch_assoc();
 $donorId = (int) $donor['user_id'];
 
-$db->begin_transaction();
+Transaction::begin($db);
 try {
     $id = $model->addDonation([
         'donor_id' => $donorId, 'donor_name' => '測試商家', 'donation_type' => 'food',
@@ -46,6 +46,6 @@ try {
     $events = array_reverse(array_column($model->getRevisions($id), 'event'));
     check('歷史依序為 submitted/rejected/resubmitted', $events === ['submitted', 'rejected', 'resubmitted']);
 } finally {
-    $db->rollback();
+    Transaction::rollback($db);
 }
 exit(empty($failed) ? 0 : 1);

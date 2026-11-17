@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../helpers/SpecCheckHelper.php';
 /**
  * 捐贈模型 (Donation Model)
  * 用於管理食物銀行的捐贈記錄
@@ -12,9 +13,11 @@ class DonationModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureOrderNumberColumn();
-        $this->ensureEstimatedDistanceColumns();
-        $this->ensureRevisionSupport();
+        if (schemaChecksNeeded()) {
+            $this->ensureOrderNumberColumn();
+            $this->ensureEstimatedDistanceColumns();
+            $this->ensureRevisionSupport();
+        }
     }
 
     /** 物資單可由商家重送時，允許修改的欄位 */
@@ -24,6 +27,17 @@ class DonationModel extends BaseModel {
     ];
 
     /** 欄位的中文名稱（審核頁勾選、商家頁顯示用） */
+    /** 食物銀行婉拒時可勾選的快捷原因 */
+    const REJECTION_REASON_PRESETS = [
+        'expiry_short' => '保存期限太短，來不及分送',
+        'package_damaged' => '包裝破損或已開封',
+        'spec_unclear' => '物資名稱、規格或重量填寫不清楚',
+        'category_not_needed' => '目前不需要這類物資',
+        'stock_full' => '倉庫庫存已滿，暫時無法收',
+        'pickup_info_problem' => '取貨地址或時間有問題',
+        'photo_unclear' => '照片不清楚，無法確認物資狀況',
+    ];
+
     const RESUBMIT_FIELD_LABELS = [
         'item_name' => '物資名稱',
         'quantity' => '數量',
@@ -43,6 +57,98 @@ class DonationModel extends BaseModel {
         $result = $this->db->query("SELECT default_pickup_address FROM users WHERE user_id = {$userId} LIMIT 1");
         $row = $result ? $result->fetch_assoc() : null;
         return trim((string) ($row['default_pickup_address'] ?? ''));
+    }
+
+    const WEEKDAY_LABELS = [1 => '週一', 2 => '週二', 3 => '週三', 4 => '週四', 5 => '週五', 6 => '週六', 7 => '週日'];
+
+    /** 營業日字串（例如 "1,2,3,4,5"）轉成顯示文字；沒設定回傳空字串，七天全選為「每天營業」。 */
+    public static function formatOpenDays($openDays) {
+        $labels = [];
+        foreach (array_filter(explode(',', (string) $openDays)) as $day) {
+            if (isset(self::WEEKDAY_LABELS[(int) $day])) {
+                $labels[] = self::WEEKDAY_LABELS[(int) $day];
+            }
+        }
+        return count($labels) === 7 ? '每天營業' : implode('、', $labels);
+    }
+
+    /** 指定日期（Y-m-d）商家是否營業；沒有設定營業日就不限制。 */
+    public static function isOpenOn($openDays, $date) {
+        if (trim((string) $openDays) === '') {
+            return true;
+        }
+        $timestamp = strtotime((string) $date);
+        return $timestamp === false || in_array((string) date('N', $timestamp), explode(',', (string) $openDays), true);
+    }
+
+    /** 商家資料（設置頁用）；沒有的欄位以空字串回傳。 */
+    public function getBusinessProfile($userId) {
+        $userId = (int) $userId;
+        $result = $this->db->query("SELECT username, full_name, email, phone, phone_verified, enterprise_name, tax_id, default_pickup_address, open_days, business_hours, closed_days, pickup_note FROM users WHERE user_id = {$userId} LIMIT 1");
+        $row = $result ? $result->fetch_assoc() : null;
+        return $row ? array_map(static function ($value) { return (string) $value; }, $row) : [];
+    }
+
+    /**
+     * 商家自行更新聯絡人、取貨地址、營業時間與取貨備註（搬家或營業時間改變時使用）。
+     * @return array{success: bool, message: string}
+     */
+    public function saveBusinessProfile($userId, array $input) {
+        $userId = (int) $userId;
+        $contactName = trim((string) ($input['contact_name'] ?? ''));
+        $address = trim((string) ($input['business_address'] ?? ''));
+        $hours = trim((string) ($input['business_hours'] ?? ''));
+        $note = trim((string) ($input['pickup_note'] ?? ''));
+        $closedNote = trim((string) ($input['closed_days'] ?? ''));
+        $openDays = array_values(array_unique(array_filter(
+            array_map('intval', (array) ($input['open_days'] ?? [])),
+            static function ($day) { return isset(self::WEEKDAY_LABELS[$day]); }
+        )));
+        sort($openDays);
+        $openValue = $openDays ? implode(',', $openDays) : null;
+
+        if ($contactName === '' || mb_strlen($contactName) > 100) {
+            return ['success' => false, 'message' => '請填寫聯絡人姓名（100 字以內）。'];
+        }
+        if (mb_strlen($hours) > 100 || mb_strlen($closedNote) > 100) {
+            return ['success' => false, 'message' => '營業時間與公休日請各在 100 字以內。'];
+        }
+        if (mb_strlen($note) > 255 || preg_match('/[<>]/', $hours . $note . $contactName . $closedNote)) {
+            return ['success' => false, 'message' => '取貨備註請在 255 字以內，且不可包含 < >。'];
+        }
+
+        $previous = $this->getDefaultPickupAddress($userId);
+        $hoursValue = $hours !== '' ? $hours : null;
+        $noteValue = $note !== '' ? $note : null;
+        $closedValue = $closedNote !== '' ? $closedNote : null;
+        $stmt = $this->db->prepare("UPDATE users SET full_name = ?, default_pickup_address = ?, open_days = ?, business_hours = ?, closed_days = ?, pickup_note = ? WHERE user_id = ?");
+        $stmt->bind_param('ssssssi', $contactName, $address, $openValue, $hoursValue, $closedValue, $noteValue, $userId);
+        if (!$stmt->execute()) {
+            return ['success' => false, 'message' => '儲存失敗，請稍後再試。'];
+        }
+
+        // 搬家：通知食物銀行，避免進行中的配送還去舊地址
+        if ($previous !== '' && $previous !== $address) {
+            require_once __DIR__ . '/NotificationModel.php';
+            $profile = $this->getBusinessProfile($userId);
+            $name = $profile['enterprise_name'] !== '' ? $profile['enterprise_name'] : $contactName;
+            (new NotificationModel($this->db))->notifyRole(
+                'foodbank_staff',
+                '商家更改取貨地址',
+                "商家「{$name}」已將取貨地址由「{$previous}」改為「{$address}」。已發布的配送單仍使用原地址，如有進行中的單請與商家確認。",
+                'warning'
+            );
+        }
+        return ['success' => true, 'message' => '商家資料已儲存。之後新增物資會使用新的取貨地址。'];
+    }
+
+    const URGENT_MONTHLY_LIMIT = 5;
+
+    /** 商家本月已申請的緊急運送單數（每月上限 URGENT_MONTHLY_LIMIT，避免濫用加成） */
+    public function countUrgentThisMonth($donorId) {
+        $donorId = (int) $donorId;
+        $result = $this->db->query("SELECT COUNT(*) AS total FROM donations WHERE donor_id = {$donorId} AND is_urgent = 1 AND donation_date >= DATE_FORMAT(NOW(), '%Y-%m-01')");
+        return (int) ($result ? ($result->fetch_assoc()['total'] ?? 0) : 0);
     }
 
     public function setDefaultPickupAddress($userId, $address) {
@@ -70,6 +176,12 @@ class DonationModel extends BaseModel {
                 }
             }
         }
+        foreach (['multi_stop_bonus' => 'INT NOT NULL DEFAULT 0', 'is_cold_storage' => 'TINYINT(1) NOT NULL DEFAULT 0'] as $column => $definition) {
+            $deliveryColumn = $this->db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
+            if ($deliveryColumn && $deliveryColumn->num_rows === 0) {
+                $this->db->query("ALTER TABLE deliveries ADD {$column} {$definition}");
+            }
+        }
         $userColumn = $this->db->query("SHOW COLUMNS FROM users LIKE 'default_pickup_address'");
         if ($userColumn && $userColumn->num_rows === 0) {
             $this->db->query("ALTER TABLE users ADD default_pickup_address VARCHAR(255) DEFAULT NULL");
@@ -77,6 +189,7 @@ class DonationModel extends BaseModel {
 
         $columns = [
             'revision_no' => "ALTER TABLE donations ADD revision_no INT NOT NULL DEFAULT 1",
+            'is_urgent' => "ALTER TABLE donations ADD is_urgent TINYINT(1) NOT NULL DEFAULT 0",
             'rejected_fields' => "ALTER TABLE donations ADD rejected_fields TEXT NULL",
         ];
         foreach ($columns as $column => $alterSql) {
@@ -378,6 +491,10 @@ class DonationModel extends BaseModel {
         if (!$changes) {
             return '請修改被標記的欄位後再送審。';
         }
+        $numberProblems = SpecCheckHelper::numberProblems(array_intersect_key($changes, ['quantity' => 1, 'weight_kg' => 1]));
+        if ($numberProblems) {
+            return reset($numberProblems);
+        }
 
         $sets = [];
         foreach ($changes as $field => $value) {
@@ -475,7 +592,8 @@ class DonationModel extends BaseModel {
         }
         $splitCount = max(1, (int) ($publishData['split_count'] ?? 1));
         $needInspection = !empty($publishData['need_inspection']) ? 1 : 0;
-        $rewardOptions = $publishData['reward_options'] ?? [];
+        // 獎勵一律是心意幣，不接受表單自訂（無償／物資／服務時數已取消）。
+        $rewardOptions = ['points'];
         $rewardOptions = is_array($rewardOptions) ? array_values(array_intersect(
             ['points', 'goods', 'free', 'service_hours'],
             $rewardOptions
@@ -488,7 +606,32 @@ class DonationModel extends BaseModel {
             "need_inspection = {$needInspection}",
             "reward_options = '" . $this->db->real_escape_string(json_encode($rewardOptions, JSON_UNESCAPED_UNICODE)) . "'",
         ];
+        $existingResult = $this->db->query("SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'assessed' LIMIT 1");
+        $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
+        if (!$existingDonation) {
+            return false;
+        }
+
+        // 忠信派車：由食物銀行自己載，不拆單、也不需要 GO Rider 協助檢查
+        if (($existingDonation['delivery_option'] ?? '') === 'food_bank_pickup') {
+            $splitCount = 1;
+            $needInspection = 0;
+            $updates = array_values(array_filter($updates, static function ($sql) {
+                return strpos($sql, 'split_count =') !== 0 && strpos($sql, 'need_inspection =') !== 0;
+            }));
+            $updates[] = 'split_count = 1';
+            $updates[] = 'need_inspection = 0';
+        }
+
+        // 店名與物資照片以商家送出的為準；取貨地址已在註冊時綁定，只有舊資料沒地址時才允許補填
+        $lockedFields = ['donor_name', 'photo_path'];
+        if (trim((string) ($existingDonation['donor_address'] ?? '')) !== '') {
+            $lockedFields[] = 'donor_address';
+        }
         foreach (['donor_name', 'donor_address', 'item_name', 'quantity', 'weight_kg', 'size_description', 'photo_path', 'pickup_deadline'] as $field) {
+            if (in_array($field, $lockedFields, true)) {
+                continue;
+            }
             if (array_key_exists($field, $publishData)) {
                 $value = $publishData[$field];
                 $updates[] = $value === null || $value === ''
@@ -511,14 +654,16 @@ class DonationModel extends BaseModel {
                     continue;
                 }
                 $name = trim((string) ($edit['item_name'] ?? ''));
-                $quantity = (float) ($edit['quantity'] ?? 0);
-                if ($name === '' || $quantity <= 0) {
+                $rawQuantity = trim((string) ($edit['quantity'] ?? ''));
+                $rawWeight = trim((string) ($edit['item_weight_kg'] ?? ''));
+                // 數量、重量只能是 1 以上的整數（與商家填寫時的規則相同）
+                if ($name === '' || !SpecCheckHelper::isWholeNumber($rawQuantity) || ($rawWeight !== '' && !SpecCheckHelper::isWholeNumber($rawWeight))) {
                     return false;
                 }
                 $itemEdits[(int) $itemId] = [
                     'name' => $name,
-                    'quantity' => $quantity,
-                    'weight' => is_numeric($edit['item_weight_kg'] ?? null) ? max(0, (float) $edit['item_weight_kg']) : null,
+                    'quantity' => (float) $rawQuantity,
+                    'weight' => $rawWeight !== '' ? (float) $rawWeight : null,
                 ];
             }
             if ($itemEdits) {
@@ -537,20 +682,15 @@ class DonationModel extends BaseModel {
             }
         }
 
-        $existingResult = $this->db->query("SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'assessed' LIMIT 1");
-        $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
-        if (!$existingDonation) {
-            return false;
-        }
 
         $deliveryOption = $existingDonation['delivery_option'] ?? '';
         if (!in_array($deliveryOption, ['food_bank_pickup', 'volunteer_delivery'], true)) {
             return false;
         }
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         if (!$this->db->query("UPDATE {$this->table} SET " . implode(', ', $updates) . " WHERE donation_id = {$donation_id} AND status = 'assessed'")) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
 
@@ -561,7 +701,7 @@ class DonationModel extends BaseModel {
                         quantity = " . (float) $edit['quantity'] . ", item_weight_kg = {$weightSql}
                  WHERE item_id = " . (int) $itemId . " AND donation_id = {$donation_id}"
             )) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
         }
@@ -572,10 +712,14 @@ class DonationModel extends BaseModel {
             : 'motorcycle';
         $weight = ((float) ($publishData['weight_kg'] ?? $existingDonation['weight_kg'] ?? 0)) / $splitCount;
         $distance = max(0, (float) ($existingDonation['estimated_distance_km'] ?? 0));
+        // 緊急加成：商家勾選緊急運送，且食物銀行審核時同意（預設同意，可取消）
+        $urgency = (!empty($existingDonation['is_urgent']) && !empty($publishData['urgent_approved'])) ? 'urgent' : 'normal';
+        $coldResult = $this->db->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) $donation_id . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
+        $isCold = $coldResult && $coldResult->num_rows > 0;
         $points = $deliveryMethod === 'volunteer'
-            ? max(0, DeliveryModel::calculatePoints($vehicleType, $distance, $weight, 'normal'))
+            ? max(0, DeliveryModel::calculatePoints($vehicleType, $distance, $weight, $urgency, $isCold))
             : 0;
-        $pickupAddress = trim((string) ($publishData['donor_address'] ?? $existingDonation['donor_address'] ?? ''));
+        $pickupAddress = trim((string) (($existingDonation['donor_address'] ?? '') !== '' ? $existingDonation['donor_address'] : ($publishData['donor_address'] ?? '')));
         if ($pickupAddress === '') {
             $pickupAddress = (string) ($publishData['donor_name'] ?? $existingDonation['donor_name'] ?? '商家取貨地點');
         }
@@ -601,7 +745,7 @@ class DonationModel extends BaseModel {
                     "INSERT INTO donation_allocations (donation_id, allocation_number, sub_order_number, weight_kg, quantity, unit, status)
                      VALUES ({$donation_id}, {$taskNumber}, '{$subOrderNumber}', {$weight}, {$allocationQuantity}, '{$unit}', 'pending')"
                 )) {
-                    $this->db->rollback();
+                    Transaction::rollback($this->db);
                     return false;
                 }
                 $allocationId = (int) $this->db->insert_id;
@@ -616,7 +760,7 @@ class DonationModel extends BaseModel {
                     if (!$this->db->query(
                         "INSERT INTO donation_allocation_items (allocation_id, donation_item_id, quantity) VALUES ({$allocationId}, {$donationItemId}, {$portion})"
                     )) {
-                        $this->db->rollback();
+                        Transaction::rollback($this->db);
                         return false;
                     }
                 }
@@ -625,15 +769,26 @@ class DonationModel extends BaseModel {
             $allocationColumn = $allocationId !== null ? ", allocation_id" : '';
             $allocationValue = $allocationId !== null ? ", {$allocationId}" : '';
             $taskSql = "INSERT INTO deliveries
-                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, points, pickup_address, delivery_address, status, item_category, item_description)
-                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, 'normal', {$points}, '{$pickupAddress}', '忠信食物銀行', 'open', '{$itemCategory}', '{$itemDescription}')";
+                (donation_id{$allocationColumn}, delivery_method, vehicle_type, total_distance_km, weight_kg, urgency, is_cold_storage, points, pickup_address, delivery_address, status, item_category, item_description)
+                VALUES ({$donation_id}{$allocationValue}, '{$deliveryMethod}', '{$vehicleType}', {$distance}, {$weight}, '{$urgency}', " . ($isCold ? 1 : 0) . ", {$points}, '{$pickupAddress}', '忠信食物銀行', '" . ($deliveryMethod === 'food_bank' ? 'claimed' : 'open') . "', '{$itemCategory}', '{$itemDescription}')";
             if (!$this->db->query($taskSql)) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
         }
 
-        $this->db->commit();
+        Transaction::commit($this->db);
+        if ($deliveryMethod === 'food_bank' && (int) ($existingDonation['donor_id'] ?? 0) > 0) {
+            require_once __DIR__ . '/NotificationModel.php';
+            $itemLabel = trim((string) ($publishData['item_name'] ?? $existingDonation['item_name'] ?? ''));
+            (new NotificationModel($this->db))->notifyOnce(
+                (int) $existingDonation['donor_id'],
+                '忠信食物銀行已安排派車',
+                '您捐贈的物資' . ($itemLabel !== '' ? "「{$itemLabel}」" : '') . '已通過審核，將由忠信食物銀行派車前往取貨，請準備好物資。',
+                'success',
+                "foodbank_dispatch:{$donation_id}"
+            );
+        }
         if ($deliveryMethod === 'volunteer') {
             require_once __DIR__ . '/NotificationModel.php';
             $notificationModel = new NotificationModel($this->db);
@@ -712,21 +867,27 @@ class DonationModel extends BaseModel {
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';
         $sql = "SELECT n.donation_id, n.order_number, n.donor_name, n.item_name, n.quantity, n.unit,
                        n.donation_date, n.status AS donation_status, n.current_status,
+                       n.donor_address, n.delivery_address, n.pickup_deadline, n.delivery_date, n.delivery_time,
+                       MAX(ud.phone) AS donor_phone, MAX(ud.open_days) AS donor_open_days, MAX(ud.business_hours) AS donor_business_hours,
+                       MAX(ud.closed_days) AS donor_closed_days, MAX(ud.pickup_note) AS donor_pickup_note,
                        COUNT(d.delivery_id) AS delivery_count,
                        GROUP_CONCAT(d.delivery_id ORDER BY d.delivery_id) AS delivery_ids,
-                       GROUP_CONCAT(DISTINCT CONCAT(uv.full_name, '：', COALESCE(NULLIF(uv.phone, ''), '未提供電話')) SEPARATOR '；') AS volunteer_contacts,
+                       GROUP_CONCAT(CONCAT(d.delivery_id, ':', d.delivery_method, ':', COALESCE(d.foodbank_vehicle, ''), ':', d.status) ORDER BY d.delivery_id) AS delivery_meta,
+                       GROUP_CONCAT(DISTINCT CASE WHEN d.delivery_method = 'food_bank' THEN '忠信食物銀行（忠信派車）' ELSE CONCAT(uv.full_name, '：', COALESCE(NULLIF(uv.phone, ''), '未提供電話')) END SEPARATOR '；') AS volunteer_contacts,
                        SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) AS completed_delivery_count,
                        MAX(d.status) AS latest_delivery_status,
                        CASE
                            WHEN n.status = 'rejected' THEN 'rejected'
-                           WHEN COUNT(d.delivery_id) > 0 AND SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) = COUNT(d.delivery_id) THEN 'completed'
-                           WHEN COUNT(d.delivery_id) > 0 AND SUM(CASE WHEN d.status IN ('claimed', 'picked_up', 'exception') THEN 1 ELSE 0 END) > 0 THEN 'in_transit'
+                           WHEN SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) > 0
+                                AND SUM(CASE WHEN d.status = 'delivered' THEN 1 ELSE 0 END) = SUM(CASE WHEN d.status <> 'cancelled' THEN 1 ELSE 0 END) THEN 'completed'
+                           WHEN SUM(CASE WHEN d.status IN ('claimed', 'arrived_pickup', 'picked_up', 'exception') THEN 1 ELSE 0 END) > 0 THEN 'in_transit'
                            WHEN n.status IN ('pending', 'assessed') THEN 'pending'
                            ELSE 'processing'
                        END AS order_status
                 FROM donations n
                 LEFT JOIN deliveries d ON d.donation_id = n.donation_id
                 LEFT JOIN users uv ON uv.user_id = d.volunteer_id AND d.delivery_method = 'volunteer'
+                LEFT JOIN users ud ON ud.user_id = n.donor_id
                 {$where}
                 GROUP BY n.donation_id
                 {$having}

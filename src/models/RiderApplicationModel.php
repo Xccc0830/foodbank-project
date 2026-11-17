@@ -24,6 +24,13 @@ class RiderApplicationModel extends BaseModel {
         return in_array('rider.accept_task', $permissions, true);
     }
 
+    /** 身分證驗證已通過（成為 GO Rider 的前提） */
+    public function isIdVerified($userId) {
+        $userId = (int) $userId;
+        $rows = $this->query("SELECT id_verify_status FROM users WHERE user_id = {$userId} LIMIT 1");
+        return ($rows[0]['id_verify_status'] ?? 'none') === 'approved';
+    }
+
     public function getLatestForUser($userId) {
         $userId = (int) $userId;
         $rows = $this->query("SELECT * FROM rider_applications WHERE user_id = {$userId} ORDER BY application_id DESC LIMIT 1");
@@ -70,6 +77,9 @@ class RiderApplicationModel extends BaseModel {
         if ($this->isRider($userId)) {
             return ['success' => false, 'message' => '您已具備 GO Rider 資格。'];
         }
+        if (!$this->isIdVerified($userId)) {
+            return ['success' => false, 'message' => '申請 GO Rider 前，請先到「身分驗證」完成身分證驗證並通過審核。'];
+        }
         $latest = $this->getLatestForUser($userId);
         if ($latest && $latest['status'] === 'pending') {
             return ['success' => false, 'message' => '您已有申請正在審核中。'];
@@ -77,7 +87,7 @@ class RiderApplicationModel extends BaseModel {
 
         $pathEscaped = $this->db->real_escape_string($licensePhotoPath);
         $vehicleEscaped = $this->db->real_escape_string($vehicleType);
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         $saved = $this->db->query(
             "INSERT INTO rider_applications (user_id, vehicle_type, license_photo_path)
              VALUES ({$userId}, '{$vehicleEscaped}', '{$pathEscaped}')"
@@ -88,10 +98,10 @@ class RiderApplicationModel extends BaseModel {
              ON DUPLICATE KEY UPDATE agreed_disclaimer = 1, agreed_mutual_aid = 1, video_watched = 1, completed_at = NOW()"
         );
         if (!$consented) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return ['success' => false, 'message' => '申請送出失敗，請稍後再試。'];
         }
-        $this->db->commit();
+        Transaction::commit($this->db);
 
         (new NotificationModel($this->db))->notifyRole(
             'foodbank_staff',
@@ -114,25 +124,25 @@ class RiderApplicationModel extends BaseModel {
         $notesSql = $this->nullableText($notes);
         $userId = (int) $application['user_id'];
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         $updated = $this->db->query(
             "UPDATE rider_applications
              SET status = 'approved', reviewed_by = {$reviewerId}, reviewed_at = NOW(), review_notes = {$notesSql}
              WHERE application_id = {$applicationId} AND status = 'pending'"
         );
         if (!$updated || $this->db->affected_rows !== 1) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
 
         $permissionModel = new PermissionModel();
         foreach (self::RIDER_PERMISSIONS as $permissionKey) {
             if (!$permissionModel->grantOverride($userId, $permissionKey)) {
-                $this->db->rollback();
+                Transaction::rollback($this->db);
                 return false;
             }
         }
-        $this->db->commit();
+        Transaction::commit($this->db);
 
         (new NotificationModel($this->db))->notify(
             $userId,

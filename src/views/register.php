@@ -10,6 +10,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php include __DIR__ . '/partials/tab_session.php'; ?>
     <title>申請帳號 | <?php echo htmlspecialchars(APP_NAME); ?></title>
     <link rel="icon" type="image/jpeg" href="<?php echo htmlspecialchars(APP_URL . '/assets/images/foundation-logo.jpg'); ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,6 +38,7 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
                 <div class="form-group"><label for="member_type">會員類型</label><select id="member_type" name="member_type" required><option value="general">一般會員（公益活動、可另外申請 GO Rider）</option><option value="enterprise">企業會員（活動報名、剩餘物資捐贈）</option></select></div>
                 <div class="form-group" id="enterprise-name-field" hidden><label for="enterprise_name">企業／組織名稱</label><input id="enterprise_name" name="enterprise_name" maxlength="150" placeholder="輸入企業或組織名稱"></div>
                 <div class="form-group" id="enterprise-tax-field" hidden><label for="tax_id">統一編號（商家身分認證）</label><input id="tax_id" name="tax_id" inputmode="numeric" pattern="\d{8}" maxlength="8" placeholder="8 碼統一編號"></div>
+                <div class="form-group" id="enterprise-address-field" hidden><label for="business_address">商家地址（日後捐贈物資的固定取貨地址）</label><input id="business_address" name="business_address" maxlength="255" placeholder="例：台北市信義區○○路 1 號"></div>
                 <div class="form-group" id="enterprise-referral-field" hidden>
                     <label for="referral_source">從何得知此系統（選填）</label>
                     <select id="referral_source" name="referral_source">
@@ -52,14 +54,16 @@ $registerCssVersion = file_exists($registerCssPath) ? filemtime($registerCssPath
     </main>
     <script>
         const memberType = document.getElementById('member_type');
-        const enterpriseFields = ['enterprise-name-field', 'enterprise-tax-field', 'enterprise-referral-field'].map(function (id) { return document.getElementById(id); });
+        const enterpriseFields = ['enterprise-name-field', 'enterprise-tax-field', 'enterprise-address-field', 'enterprise-referral-field'].map(function (id) { return document.getElementById(id); });
         const enterpriseName = document.getElementById('enterprise_name');
         const taxId = document.getElementById('tax_id');
+        const businessAddress = document.getElementById('business_address');
         function updateEnterpriseField() {
             const isEnterprise = memberType.value === 'enterprise';
             enterpriseFields.forEach(function (field) { field.hidden = !isEnterprise; });
             enterpriseName.required = isEnterprise;
             taxId.required = isEnterprise;
+            businessAddress.required = isEnterprise;
         }
         memberType.addEventListener('change', updateEnterpriseField);
         updateEnterpriseField();

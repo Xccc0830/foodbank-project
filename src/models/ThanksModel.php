@@ -13,6 +13,9 @@ class ThanksModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
+        if (!schemaChecksNeeded()) {
+            return;
+        }
         $this->db->query(
             "CREATE TABLE IF NOT EXISTS thanks_messages (
                 thanks_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,

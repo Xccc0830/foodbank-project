@@ -9,6 +9,7 @@ $verifyCssVersion = file_exists($verifyCssPath) ? filemtime($verifyCssPath) : ti
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?php include __DIR__ . '/partials/tab_session.php'; ?>
     <title>驗證手機號碼 | <?php echo htmlspecialchars(APP_NAME); ?></title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo htmlspecialchars(APP_URL . '/assets/css/style.css?v=' . $verifyCssVersion); ?>">

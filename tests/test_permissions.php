@@ -12,7 +12,7 @@ function oldRolePages($role, $memberType) {
     $rolePages = [
         'foodbank_staff' => ['dashboard', 'order_tracking', 'donation_materials_review', 'deliveries', 'news', 'inventory', 'item_categories', 'rewards', 'settings', 'users', 'rider_review', 'activities', 'id_verification', 'carbon_report',         'reports', 'notifications', 'certificate', 'activity_certificate', 'merchant_directory'],
         'member' => $memberType === 'enterprise'
-            ? ['dashboard', 'order_tracking', 'news', 'activities', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate', 'merchant_directory', 'merchant_rules']
+            ? ['dashboard', 'order_tracking', 'news', 'activities', 'rewards', 'notifications', 'donation_materials', 'carbon_report', 'certificate', 'activity_certificate', 'settings', 'merchant_directory', 'merchant_rules']
             : ($memberType === 'general'
                 ? ['dashboard', 'rider_application', 'id_verification', 'news', 'activities', 'rewards', 'reports', 'notifications', 'certificate', 'activity_certificate', 'merchant_directory']
                 : ['dashboard']),

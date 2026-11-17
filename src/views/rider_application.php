@@ -55,6 +55,11 @@ $vehicleLabels = ['motorcycle' => '機車', 'car' => '汽車', 'both' => '機車
     <div class="card"><div class="card-body">
         <p><i class="fas fa-hourglass-half"></i> 您的申請已於 <?php echo htmlspecialchars($latestApplication['created_at']); ?> 送出（<?php echo htmlspecialchars($vehicleLabels[$latestApplication['vehicle_type']] ?? ''); ?>），正在等待食物銀行審核。</p>
     </div></div>
+<?php elseif (!$riderModel->isIdVerified($currentUserId)): ?>
+    <div class="card"><div class="card-body">
+        <p><i class="fas fa-fingerprint"></i> 成為 GO Rider 前，需要先通過身分證驗證。</p>
+        <a class="btn btn-primary" href="?page=id_verification">前往身分驗證</a>
+    </div></div>
 <?php else: ?>
     <?php if ($latestApplication && $latestApplication['status'] === 'rejected'): ?>
         <div class="alert alert-error">
@@ -87,7 +92,7 @@ $vehicleLabels = ['motorcycle' => '機車', 'car' => '汽車', 'both' => '機車
                     <input id="licensePhoto" type="file" name="license_photo" accept="image/png,image/jpeg,image/webp" required>
                 </div>
                 <label><input type="checkbox" name="agreed_disclaimer" value="1" required> 我已閱讀並同意《GO Rider 免責聲明》，了解配送過程中的風險由本人自行承擔一般注意義務。</label>
-                <label><input type="checkbox" name="agreed_mutual_aid" value="1" required> 我同意《GO Rider 互助條款》，了解本平台為公益互助性質，不具僱傭關係，僅提供興毅幣作為回饋。</label>
+                <label><input type="checkbox" name="agreed_mutual_aid" value="1" required> 我同意《GO Rider 互助條款》，了解本平台為公益互助性質，不具僱傭關係，僅提供心意幣作為回饋。</label>
                 <label><input type="checkbox" id="videoWatchedCheckbox" name="video_watched" value="1" required disabled> 我已完整觀看食安運送短片。</label>
                 <button class="btn btn-primary" type="submit">送出申請</button>
             </form>

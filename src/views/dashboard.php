@@ -95,14 +95,27 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
     <div class="card">
         <div class="card-header"><h2>企業廣告</h2><p>最新刊登的廣告</p></div>
         <div class="card-body">
+            <?php
+            // Demo 廣告：僅供預覽效果，資料庫沒有廣告時顯示
+            if (!$homeAds) {
+                $homeAds = AdvertisementModel::demoAds();
+            }
+            ?>
             <?php if ($homeAds): ?>
-                <?php foreach ($homeAds as $homeAd): ?>
-                    <div class="mb-20">
-                        <strong><?php echo htmlspecialchars($homeAd['title']); ?></strong>
-                        <p><?php echo htmlspecialchars(mb_strimwidth($homeAd['content'], 0, 80, '…')); ?></p>
-                        <small><?php echo htmlspecialchars($homeAd['advertiser_name'] ?? ''); ?></small>
+                <?php $adIcons = ['fa-bowl-rice', 'fa-hand-holding-heart', 'fa-truck-fast']; ?>
+                <div class="fancy-ad-list">
+                <?php foreach ($homeAds as $adIndex => $homeAd): ?>
+                    <div class="fancy-ad fancy-ad-<?php echo $adIndex % 3; ?>">
+                        <div class="fancy-ad-icon"><i class="fas <?php echo $adIcons[$adIndex % 3]; ?>"></i></div>
+                        <div class="fancy-ad-text">
+                            <span class="fancy-ad-badge">AD</span>
+                            <strong><?php echo htmlspecialchars($homeAd['title']); ?></strong>
+                            <p><?php echo htmlspecialchars(mb_strimwidth($homeAd['content'], 0, 80, '…')); ?></p>
+                            <small><i class="fas fa-building"></i> <?php echo htmlspecialchars($homeAd['advertiser_name'] ?? ''); ?></small>
+                        </div>
                     </div>
                 <?php endforeach; ?>
+                </div>
                 <a href="?page=news#ads" class="btn btn-secondary btn-sm">更多廣告</a>
             <?php else: ?>
                 <div class="empty-state"><i class="fas fa-rectangle-ad"></i><p>目前沒有刊登中的廣告</p></div>
@@ -150,7 +163,7 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
     <div class="card-body">
         <?php if ($dashboardRole === 'member' && !$isEnterpriseMember): ?>
             <?php if ($authService->can('rider.accept_task')): ?>
-                <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄興毅幣。</p>
+                <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄心意幣。</p>
                 <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
             <?php else: ?>
                 <h2>你的公益任務</h2><p>瀏覽並參加公益活動；想協助運送物資，可以申請成為 GO Rider。</p>
@@ -159,7 +172,7 @@ while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc(
             <?php endif; ?>
         <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
             <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
-            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理興毅幣兌換</a>
+            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理心意幣兌換</a>
         <?php elseif ($isEnterpriseMember): ?>
             <h2>企業惜食行動</h2><p>報名公益活動，也可將企業剩餘食物或物資捐贈給食物銀行。</p>
             <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>

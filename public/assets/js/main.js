@@ -9,6 +9,8 @@
         initializeEventListeners();
         initializeSessionGuard();
         initializeSpecCheck();
+        initializeCategorySuggest();
+        initializeAppModals();
         initializeNoReloadForms();
         initializeSidebarToggle();
         initializeDeliveryStatusTracking();
@@ -16,6 +18,7 @@
         initializeNotifications();
         initializeMaterialDonationDistanceEstimate();
         initializeDriverTripCard();
+        initializeRiderLocationButtons();
         injectRuntimeStyles();
     });
 
@@ -109,6 +112,19 @@
                     exception: { title: '配送狀況處理中', message: '配送遇到狀況，食物銀行人員正在協助處理。', step: 1, progress: 36 },
                     cancelled: { title: '配送任務已取消', message: '此配送任務已取消。', step: 0, progress: 0 }
                 };
+                // 忠信派車：由忠信食物銀行自己載，不經 GO Rider 接單
+                if (result.delivery_method === 'food_bank') {
+                    statusDetails.open = { title: '忠信食物銀行派車中', message: '忠信食物銀行已安排派車，將前往店家取貨。', step: 1, progress: 40 };
+                    statusDetails.claimed = statusDetails.open;
+                    const riderButton = card.querySelector('[data-rider-location]');
+                    if (riderButton) {
+                        riderButton.hidden = true;
+                    }
+                    const dispatchStep = card.querySelectorAll('.customer-progress-step')[1];
+                    if (dispatchStep) {
+                        dispatchStep.textContent = '忠信派車';
+                    }
+                }
                 const currentStatus = statusDetails[result.status] || statusDetails.open;
                 status.textContent = currentStatus.message;
                 if (statusTitle) {
@@ -148,7 +164,12 @@
                     courierName.textContent = result.courier_name || (result.status === 'open' ? '等待配送員接單' : '配送夥伴');
                 }
                 if (courierVehicle) {
-                    courierVehicle.textContent = result.vehicle_type === 'car' ? '汽車配送' : (result.vehicle_type === 'motorcycle' ? '機車配送' : '配送夥伴');
+                    if (result.delivery_method === 'food_bank') {
+                        // 忠信派車：顯示食物銀行選的車種（冷凍車、小貨車…）
+                        courierVehicle.textContent = result.foodbank_vehicle_label ? result.foodbank_vehicle_label + '配送' : '車種待安排';
+                    } else {
+                        courierVehicle.textContent = result.vehicle_type === 'car' ? '汽車配送' : (result.vehicle_type === 'motorcycle' ? '機車配送' : '配送夥伴');
+                    }
                 }
                 if (courierAvatar) {
                     const initials = result.courier_name ? Array.from(result.courier_name.trim())[0] : '';
@@ -331,6 +352,29 @@
         });
     }
 
+    // 食物銀行／商家：點「騎手位置」查看騎手最新位置（在新分頁開啟 Google 地圖）
+    function initializeRiderLocationButtons() {
+        document.addEventListener('click', function (event) {
+            const button = event.target.closest ? event.target.closest('[data-rider-location]') : null;
+            if (!button) {
+                return;
+            }
+            const mapWindow = window.open('', '_blank');
+            fetch('?action=rider_location&delivery_id=' + encodeURIComponent(button.dataset.deliveryId), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (result) {
+                    if (!result.found) {
+                        if (mapWindow) { mapWindow.close(); }
+                        window.alert('目前沒有 GO Rider 的最新位置（GO Rider 尚未開始運送，或超過 10 分鐘沒有更新）。');
+                        return;
+                    }
+                    const url = 'https://www.google.com/maps?q=' + result.lat + ',' + result.lon;
+                    if (mapWindow) { mapWindow.location = url; } else { window.location.href = url; }
+                })
+                .catch(function () { if (mapWindow) { mapWindow.close(); } });
+        });
+    }
+
     function initializeDriverTripCard() {
         const card = document.querySelector('[data-driver-trip]');
         if (!card) {
@@ -349,6 +393,72 @@
                     themeIcon.classList.toggle('fa-sun', nextTheme === 'light');
                 }
             });
+        }
+
+        // 用手機定位算出離目前目的地的剩餘距離與時間（地址換算與路線由後端處理）
+        const etaBox = card.querySelector('[data-trip-eta]');
+        const etaText = card.querySelector('[data-trip-eta-text]');
+        if (etaBox && etaText && navigator.geolocation) {
+            let lastRequestAt = 0;
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const routeBox = document.querySelector('[data-route-plan]');
+            let lastShareAt = 0;
+            let lastRouteAt = 0;
+            // 把位置回傳給後端（每 15 秒一次），食物銀行與商家才看得到騎手在哪
+            const shareLocation = function (position) {
+                if (Date.now() - lastShareAt < 15000 || !csrfMeta) {
+                    return;
+                }
+                lastShareAt = Date.now();
+                const body = new URLSearchParams({ csrf_token: csrfMeta.content, lat: position.coords.latitude, lon: position.coords.longitude });
+                fetch('?action=rider_location_update', { method: 'POST', body: body, credentials: 'same-origin' }).catch(function () {});
+            };
+            // 多站時依目前位置排出建議順序（每 2 分鐘更新一次）
+            const refreshRoute = function (position) {
+                if (!routeBox || Date.now() - lastRouteAt < 120000) {
+                    return;
+                }
+                lastRouteAt = Date.now();
+                const params = new URLSearchParams({ action: 'route_plan', lat: position.coords.latitude, lon: position.coords.longitude });
+                fetch('?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (result) {
+                        const list = routeBox.querySelector('[data-route-plan-list]');
+                        list.textContent = '';
+                        (result.route || []).forEach(function (stop) {
+                            const item = document.createElement('li');
+                            item.textContent = (stop.type === 'pickup' ? '取貨：' : '送達：') + stop.address + '（單 #' + stop.delivery_id + (stop.distance_km !== null ? '，約 ' + stop.distance_km + ' 公里' : '') + '）';
+                            list.appendChild(item);
+                        });
+                        routeBox.hidden = !(result.route || []).length;
+                    })
+                    .catch(function () {});
+            };
+            const updateEta = function (position) {
+                shareLocation(position);
+                refreshRoute(position);
+                const now = Date.now();
+                if (now - lastRequestAt < 60000) {
+                    return;
+                }
+                lastRequestAt = now;
+                const params = new URLSearchParams({
+                    action: 'calculate_distance',
+                    origin: position.coords.latitude + ',' + position.coords.longitude,
+                    destination: etaBox.dataset.destination
+                });
+                fetch('?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (result) {
+                        if (result.success) {
+                            etaText.textContent = '距離目的地約 ' + result.distance_text + '，預計 ' + result.duration_text + '（' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) + ' 更新）';
+                        }
+                    })
+                    .catch(function () { /* 失敗就維持原本文字 */ });
+            };
+            navigator.geolocation.watchPosition(updateEta, function () {
+                etaText.textContent = '未允許定位，無法顯示剩餘距離';
+            }, { enableHighAccuracy: false, maximumAge: 30000 });
         }
 
         const sheetToggle = card.querySelector('[data-sheet-toggle]');
@@ -490,9 +600,149 @@
         });
     }
 
+    // 通用小視窗：按鈕加 data-modal-open="視窗 id" 開啟；點關閉鈕、背景或按 Esc 關閉
+    function initializeAppModals() {
+        document.addEventListener('click', function (event) {
+            const opener = event.target.closest ? event.target.closest('[data-modal-open]') : null;
+            if (opener) {
+                const modal = document.getElementById(opener.dataset.modalOpen);
+                if (modal) {
+                    modal.hidden = false;
+                    modal.dispatchEvent(new CustomEvent('app-modal-open', { detail: { opener: opener } }));
+                    const firstField = modal.querySelector('input:not([type="hidden"]):not([disabled]), select, textarea');
+                    if (firstField) {
+                        firstField.focus();
+                    }
+                }
+                return;
+            }
+            const overlay = event.target.closest ? event.target.closest('.app-modal-overlay') : null;
+            if (overlay && (event.target === overlay || event.target.closest('[data-modal-close]'))) {
+                overlay.hidden = true;
+            }
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                document.querySelectorAll('.app-modal-overlay:not([hidden])').forEach(function (modal) { modal.hidden = true; });
+            }
+        });
+    }
+
+    // 物資分類自動判斷：輸入物資名稱後自動選分類（商家物資表單、食物銀行入庫都適用）。
+    // 只在分類還沒選、或目前是上次自動選的值時才改，使用者自己選過的不會被蓋掉。
+    function initializeCategorySuggest() {
+        const pairs = [
+            { name: 'input[name="item_name[]"]', select: function (input) { const row = input.closest('.material-item-row'); return row && row.querySelector('select[name="item_category[]"]'); } },
+            { name: '#stock-item-name', select: function () { return document.getElementById('stock-item-category'); } }
+        ];
+        const timers = new WeakMap();
+
+        function hintFor(select) {
+            let hint = select.parentElement.querySelector('.category-suggest-hint');
+            if (!hint) {
+                hint = document.createElement('small');
+                hint.className = 'category-suggest-hint';
+                select.insertAdjacentElement('afterend', hint);
+            }
+            return hint;
+        }
+
+        function suggest(input, select) {
+            const name = input.value.trim();
+            const autoValue = select.dataset.autoValue || '';
+            if (!name) {
+                const emptyHint = select.parentElement.querySelector('.category-suggest-hint');
+                if (emptyHint) {
+                    emptyHint.textContent = '';
+                }
+                return;
+            }
+            if (select.value !== '' && select.value !== autoValue) {
+                return;
+            }
+            fetch('?action=category_suggest&item_name=' + encodeURIComponent(name), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (result) {
+                    const currentAuto = select.dataset.autoValue || '';
+                    if (select.value !== '' && select.value !== currentAuto) {
+                        return;
+                    }
+                    if (!result.found) {
+                        // 判斷不出來：清掉上次自動選的分類，讓使用者自己選
+                        if (currentAuto !== '') {
+                            select.value = '';
+                            delete select.dataset.autoValue;
+                        }
+                        hintFor(select).textContent = '無法自動判斷分類，請手動選擇';
+                        return;
+                    }
+                    const option = Array.prototype.find.call(select.options, function (opt) {
+                        return !opt.disabled && (opt.value === String(result.category_id) || opt.textContent.trim() === result.category_name);
+                    });
+                    if (!option) {
+                        return;
+                    }
+                    select.value = option.value;
+                    select.dataset.autoValue = option.value;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                    hintFor(select).textContent = (result.source === 'ai' ? 'AI 判斷' : '系統判斷') + '為「' + result.category_name + '」，可手動更改';
+                })
+                .catch(function () { /* 判斷失敗就讓使用者自己選 */ });
+        }
+
+        document.addEventListener('input', function (event) {
+            pairs.forEach(function (pair) {
+                if (!event.target.matches || !event.target.matches(pair.name)) {
+                    return;
+                }
+                const select = pair.select(event.target);
+                if (!select) {
+                    return;
+                }
+                window.clearTimeout(timers.get(event.target));
+                timers.set(event.target, window.setTimeout(function () { suggest(event.target, select); }, 500));
+            });
+        });
+        // 選到分類（自動或手動）時，保存方式跟著帶入分類的建議值；使用者自己改過保存方式就不再覆蓋
+        document.addEventListener('change', function (event) {
+            const target = event.target;
+            if (target.matches && target.matches('select[name="item_storage[]"]')) {
+                if (target.value !== (target.dataset.autoValue || '')) {
+                    target.dataset.manual = '1';
+                }
+                return;
+            }
+            if (!target.matches || !target.matches('select[name="item_category[]"]')) {
+                return;
+            }
+            const row = target.closest('.material-item-row');
+            const storage = row && row.querySelector('select[name="item_storage[]"]');
+            const option = target.options[target.selectedIndex];
+            const suggested = option ? option.dataset.storage : '';
+            if (!storage || !suggested || storage.dataset.manual === '1') {
+                return;
+            }
+            storage.value = suggested;
+            storage.dataset.autoValue = suggested;
+            storage.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        document.addEventListener('change', function (event) {
+            const select = event.target;
+            if (select.matches && select.matches('select[name="item_category[]"], #stock-item-category') && select.value !== (select.dataset.autoValue || '')) {
+                delete select.dataset.autoValue;
+                const hint = select.parentElement.querySelector('.category-suggest-hint');
+                if (hint) {
+                    hint.textContent = '';
+                }
+            }
+        });
+    }
+
     // 物資規格防呆：欄位改完後向後端檢查，在該筆物資下方顯示黃色提醒（只提醒，不擋送出）。
     function initializeSpecCheck() {
-        const watched = ['item_name[]', 'item_quantity[]', 'item_unit[]', 'item_weight_kg[]', 'item_expiry_date[]', 'item_storage[]'];
+        const watched = ['item_name[]', 'item_quantity[]', 'item_unit[]', 'item_weight_kg[]', 'item_length_cm[]', 'item_width_cm[]', 'item_height_cm[]', 'item_expiry_date[]', 'item_storage[]'];
+        const numberLabels = { 'item_quantity[]': '數量', 'item_weight_kg[]': '總重量', 'item_length_cm[]': '長', 'item_width_cm[]': '寬', 'item_height_cm[]': '高' };
         const timers = new WeakMap();
 
         function valueOf(row, name) {
@@ -508,7 +758,18 @@
                 quantity: valueOf(row, 'item_quantity[]'),
                 unit: valueOf(row, 'item_unit[]'),
                 weight_kg: valueOf(row, 'item_weight_kg[]'),
+                length_cm: valueOf(row, 'item_length_cm[]'),
+                width_cm: valueOf(row, 'item_width_cm[]'),
+                height_cm: valueOf(row, 'item_height_cm[]'),
                 expiry_date: valueOf(row, 'item_expiry_date[]')
+            });
+            // 像「1/2」這種瀏覽器看不懂的數字，送到後端會變成空白，所以在這裡先提醒。
+            const unreadable = [];
+            Object.keys(numberLabels).forEach(function (name) {
+                const field = row.querySelector('[name="' + name + '"]');
+                if (field && field.validity && field.validity.badInput) {
+                    unreadable.push({ level: 'error', message: numberLabels[name] + '只能填數字（不能填分數或文字）。' });
+                }
             });
             fetch('?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                 .then(function (response) { return response.json(); })
@@ -520,10 +781,8 @@
                         row.appendChild(box);
                     }
                     box.textContent = '';
-                    const lines = [];
-                    if (result.category) {
-                        lines.push({ level: 'info', message: '系統判斷分類：' + result.category });
-                    }
+                    // 分類由「物資類別」欄位自動判斷並顯示，這裡只列數字、重量、期限等提醒，避免兩套分類名稱互相矛盾。
+                    const lines = unreadable.slice();
                     (result.warnings || []).forEach(function (w) { lines.push(w); });
                     lines.forEach(function (line) {
                         const p = document.createElement('p');
@@ -1121,47 +1380,103 @@
         }
     }
 
-    function showNotification(message, type) {
-        const notificationType = type || 'info';
-        const notification = document.createElement('div');
-        notification.className = 'notification notification-' + notificationType;
-        notification.textContent = message;
+    // 右上角的提示訊息：多則時由上往下排成一疊，不會互相重疊；最多同時顯示 4 則，其餘合併成「還有 N 則」。
+    const TOAST_LIMIT = 4;
+    const TOAST_COLORS = {
+        success: ['#10B981', '#FFFFFF'],
+        error: ['#EF4444', '#FFFFFF'],
+        warning: ['#F59E0B', '#111827'],
+        info: ['#3B82F6', '#FFFFFF']
+    };
 
-        notification.style.cssText = [
-            'position:fixed',
-            'top:20px',
-            'right:20px',
-            'padding:12px 16px',
-            'border-radius:8px',
-            'z-index:3000',
-            'font-size:13px',
-            'font-weight:600',
-            'box-shadow:0 10px 24px rgba(0,0,0,0.15)',
-            'animation:slideInToast .2s ease-out'
-        ].join(';');
-
-        if (notificationType === 'success') {
-            notification.style.backgroundColor = '#10B981';
-            notification.style.color = '#FFFFFF';
-        } else if (notificationType === 'error') {
-            notification.style.backgroundColor = '#EF4444';
-            notification.style.color = '#FFFFFF';
-        } else if (notificationType === 'warning') {
-            notification.style.backgroundColor = '#F59E0B';
-            notification.style.color = '#111827';
-        } else {
-            notification.style.backgroundColor = '#3B82F6';
-            notification.style.color = '#FFFFFF';
+    function toastStack() {
+        let stack = document.getElementById('toastStack');
+        if (!stack) {
+            stack = document.createElement('div');
+            stack.id = 'toastStack';
+            stack.className = 'toast-stack';
+            stack.setAttribute('role', 'status');
+            stack.setAttribute('aria-live', 'polite');
+            document.body.appendChild(stack);
         }
+        return stack;
+    }
 
-        document.body.appendChild(notification);
-
+    function removeToast(toast) {
+        if (!toast.isConnected || toast.dataset.leaving) {
+            return;
+        }
+        toast.dataset.leaving = '1';
+        toast.style.animation = 'slideOutToast .2s ease-in forwards';
         setTimeout(function () {
-            notification.style.animation = 'slideOutToast .2s ease-in';
-            setTimeout(function () {
-                notification.remove();
-            }, 200);
-        }, 2500);
+            toast.remove();
+            updateToastOverflow();
+        }, 200);
+    }
+
+    function updateToastOverflow() {
+        const stack = document.getElementById('toastStack');
+        if (!stack) {
+            return;
+        }
+        const overflow = stack.querySelector('.toast-overflow');
+        // 前面的訊息關掉後，把排隊中的訊息補上來
+        const visible = stack.querySelectorAll('.toast:not([hidden]):not([data-leaving])').length;
+        Array.prototype.slice.call(stack.querySelectorAll('.toast[hidden]'), 0, Math.max(0, TOAST_LIMIT - visible)).forEach(function (toast) {
+            toast.hidden = false;
+            scheduleToastRemoval(toast);
+        });
+        const stillHidden = stack.querySelectorAll('.toast[hidden]').length;
+        if (overflow) {
+            overflow.hidden = stillHidden === 0;
+            overflow.textContent = '還有 ' + stillHidden + ' 則新通知';
+        }
+        if (!stack.querySelector('.toast')) {
+            stack.remove();
+        }
+    }
+
+    function scheduleToastRemoval(toast) {
+        setTimeout(function () { removeToast(toast); }, 4000);
+    }
+
+    function showNotification(message, type) {
+        const notificationType = TOAST_COLORS[type] ? type : 'info';
+        const stack = toastStack();
+        const toast = document.createElement('div');
+        toast.className = 'toast notification notification-' + notificationType;
+        toast.style.backgroundColor = TOAST_COLORS[notificationType][0];
+        toast.style.color = TOAST_COLORS[notificationType][1];
+
+        const text = document.createElement('span');
+        text.className = 'toast-text';
+        text.textContent = message;
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'toast-close';
+        close.setAttribute('aria-label', '關閉通知');
+        close.textContent = '×';
+        close.addEventListener('click', function () { removeToast(toast); });
+        toast.appendChild(text);
+        toast.appendChild(close);
+
+        let overflow = stack.querySelector('.toast-overflow');
+        if (!overflow) {
+            overflow = document.createElement('a');
+            overflow.className = 'toast-overflow';
+            overflow.href = '?page=notifications';
+            overflow.hidden = true;
+            stack.appendChild(overflow);
+        }
+        stack.insertBefore(toast, overflow);
+
+        const visible = stack.querySelectorAll('.toast:not([hidden]):not([data-leaving])').length;
+        if (visible > TOAST_LIMIT) {
+            toast.hidden = true;
+        } else {
+            scheduleToastRemoval(toast);
+        }
+        updateToastOverflow();
     }
 
     function exportToCSV(filename) {
@@ -1275,6 +1590,61 @@
                 margin-top: 12px;
             }
 
+            .toast-stack {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 3000;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 10px;
+                width: min(360px, calc(100vw - 32px));
+                pointer-events: none;
+            }
+            .toast-stack .toast {
+                display: flex;
+                align-items: flex-start;
+                gap: 10px;
+                width: 100%;
+                padding: 12px 14px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                line-height: 1.5;
+                box-shadow: 0 10px 24px rgba(0,0,0,0.15);
+                animation: slideInToast .2s ease-out;
+                pointer-events: auto;
+                overflow-wrap: anywhere;
+            }
+            .toast-stack .toast[hidden] { display: none; }
+            .toast-stack .toast-text { flex: 1; }
+            .toast-stack .toast-close {
+                flex: 0 0 auto;
+                padding: 0 2px;
+                border: 0;
+                background: transparent;
+                color: inherit;
+                font-size: 18px;
+                line-height: 1;
+                cursor: pointer;
+                opacity: .8;
+            }
+            .toast-stack .toast-close:hover { opacity: 1; }
+            .toast-stack .toast-overflow {
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: #1e293b;
+                color: #fff;
+                font-size: 12px;
+                font-weight: 600;
+                text-decoration: none;
+                pointer-events: auto;
+            }
+            .toast-stack .toast-overflow[hidden] { display: none; }
+            @media (max-width: 600px) {
+                .toast-stack { top: 12px; right: 16px; }
+            }
             @keyframes slideInToast {
                 from { transform: translateY(-8px); opacity: 0; }
                 to { transform: translateY(0); opacity: 1; }

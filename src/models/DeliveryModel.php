@@ -1,6 +1,6 @@
 <?php
 /**
- * 配送任務與興毅幣模型
+ * 配送任務與心意幣模型
  */
 
 require_once __DIR__ . '/BaseModel.php';
@@ -10,11 +10,44 @@ class DeliveryModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
-        $this->ensureDeliveryMethodColumn();
-        $this->ensureExceptionResponseColumns();
-        $this->ensurePickupPhotoColumn();
-        $this->ensureArrivalWindowColumns();
-        $this->ensureArrivedPickupSupport();
+        if (schemaChecksNeeded()) {
+            $this->ensureDeliveryMethodColumn();
+            $this->ensureExceptionResponseColumns();
+            $this->ensurePickupPhotoColumn();
+            $this->ensureArrivalWindowColumns();
+            $this->ensureArrivedPickupSupport();
+            $this->ensureFoodbankVehicleColumn();
+        }
+    }
+
+    /** 忠信派車可選的車種（GO Rider 派車仍用 vehicle_type 的機車／汽車） */
+    public const FOODBANK_VEHICLES = [
+        'motorcycle' => '機車',
+        'car' => '汽車',
+        'small_truck' => '小貨車',
+        'refrigerated_truck' => '冷藏車',
+        'frozen_truck' => '冷凍車',
+    ];
+
+    private function ensureFoodbankVehicleColumn() {
+        $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE 'foodbank_vehicle'");
+        if ($result && $result->num_rows === 0) {
+            $this->db->query("ALTER TABLE deliveries ADD foodbank_vehicle VARCHAR(30) DEFAULT NULL COMMENT '忠信派車的車種' AFTER vehicle_type");
+        }
+    }
+
+    /**
+     * 食物銀行為忠信派車的配送單指定車種；只能改還沒送達的忠信派車單。
+     * @param int|null $donationId 指定時改這張捐贈單底下所有忠信派車配送單
+     */
+    public function setFoodbankVehicle($deliveryId, $vehicle, $donationId = null) {
+        if (!isset(self::FOODBANK_VEHICLES[$vehicle])) {
+            return false;
+        }
+        $where = $donationId !== null ? 'donation_id = ' . (int) $donationId : 'delivery_id = ' . (int) $deliveryId;
+        $stmt = $this->db->prepare("UPDATE deliveries SET foodbank_vehicle = ? WHERE {$where} AND delivery_method = 'food_bank' AND status NOT IN ('delivered', 'cancelled')");
+        $stmt->bind_param('s', $vehicle);
+        return $stmt->execute();
     }
 
     private function ensureArrivedPickupSupport() {
@@ -27,7 +60,10 @@ class DeliveryModel extends BaseModel {
         }
         $columns = [
             'arrived_pickup_at' => "ALTER TABLE deliveries ADD arrived_pickup_at DATETIME DEFAULT NULL",
+            'arrived_dropoff_at' => "ALTER TABLE deliveries ADD arrived_dropoff_at DATETIME DEFAULT NULL",
             'received_confirmed_by' => "ALTER TABLE deliveries ADD received_confirmed_by INT DEFAULT NULL",
+            'multi_stop_bonus' => "ALTER TABLE deliveries ADD multi_stop_bonus INT NOT NULL DEFAULT 0",
+            'is_cold_storage' => "ALTER TABLE deliveries ADD is_cold_storage TINYINT(1) NOT NULL DEFAULT 0",
         ];
         foreach ($columns as $column => $alterSql) {
             $result = $this->db->query("SHOW COLUMNS FROM deliveries LIKE '{$column}'");
@@ -82,7 +118,7 @@ class DeliveryModel extends BaseModel {
     }
 
     public function getAllDeliveries() {
-        $sql = "SELECT d.*, n.order_number, n.donor_name, n.notes AS donation_notes, donor.phone AS donor_phone,
+        $sql = "SELECT d.*, n.order_number, n.donor_name, n.notes AS donation_notes, donor.phone AS donor_phone, donor.business_hours AS donor_business_hours, donor.open_days AS donor_open_days, donor.closed_days AS donor_closed_days, donor.pickup_note AS donor_pickup_note,
                        u.full_name AS volunteer_name, u.phone AS volunteer_phone
                 FROM deliveries d
                 LEFT JOIN donations n ON n.donation_id = d.donation_id
@@ -162,8 +198,9 @@ class DeliveryModel extends BaseModel {
             : "(d.volunteer_id = {$userId} OR n.donor_id = {$userId})";
         $result = $this->db->query(
             "SELECT d.delivery_id, d.status, d.pickup_address, d.delivery_address,
-                    u.full_name AS courier_name,
-                    d.vehicle_type, d.estimated_arrival_start, d.estimated_arrival_end,
+                    CASE WHEN d.delivery_method = 'food_bank' THEN '忠信食物銀行' ELSE u.full_name END AS courier_name,
+                    d.delivery_method,
+                    d.vehicle_type, d.foodbank_vehicle, d.estimated_arrival_start, d.estimated_arrival_end,
                     n.delivery_date, n.delivery_time,
                     (
                         SELECT COUNT(*)
@@ -183,6 +220,9 @@ class DeliveryModel extends BaseModel {
             return false;
         }
         $tracking = $result->fetch_assoc();
+        if ($tracking) {
+            $tracking['foodbank_vehicle_label'] = self::FOODBANK_VEHICLES[$tracking['foodbank_vehicle'] ?? ''] ?? '';
+        }
         return $tracking ?: null;
     }
 
@@ -246,7 +286,8 @@ class DeliveryModel extends BaseModel {
             $data['vehicle_type'],
             (float) $data['total_distance_km'],
             (float) $data['weight_kg'],
-            $data['urgency']
+            $data['urgency'],
+            !empty($data['is_cold_storage'])
         ));
         $deliveryId = $this->insert($data);
         if (!$deliveryId) {
@@ -273,16 +314,20 @@ class DeliveryModel extends BaseModel {
     public function getDonationDeliveryProgress($donationId) {
         $donationId = (int) $donationId;
         $result = $this->db->query("SELECT COUNT(*) AS total_tasks,
-                           SUM(CASE WHEN volunteer_id IS NOT NULL THEN 1 ELSE 0 END) AS accepted_tasks,
-                           SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS completed_tasks
+                           SUM(CASE WHEN volunteer_id IS NOT NULL OR delivery_method = 'food_bank' THEN 1 ELSE 0 END) AS accepted_tasks,
+                           SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS completed_tasks,
+                           SUM(CASE WHEN " . self::COMPLETABLE_CONDITION . " THEN 1 ELSE 0 END) AS completable_tasks,
+                           MAX(delivery_method = 'food_bank') AS is_food_bank
                                     FROM deliveries
                                     WHERE donation_id = {$donationId}
-                                      AND delivery_method = 'volunteer'");
+                                      AND delivery_method IN ('volunteer', 'food_bank')");
         $progress = $result ? $result->fetch_assoc() : null;
         return [
             'total_tasks' => (int) ($progress['total_tasks'] ?? 0),
             'accepted_tasks' => (int) ($progress['accepted_tasks'] ?? 0),
             'completed_tasks' => (int) ($progress['completed_tasks'] ?? 0),
+            'completable_tasks' => (int) ($progress['completable_tasks'] ?? 0), // 可確認收貨（已取貨）的單數
+            'is_food_bank' => !empty($progress['is_food_bank']),
         ];
     }
 
@@ -291,93 +336,38 @@ class DeliveryModel extends BaseModel {
         $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
                        n.quantity, n.unit, n.weight_kg AS published_weight_kg,
                        n.size_description, n.photo_path, n.pickup_deadline,
-                       n.estimated_distance_km, n.estimated_duration_minutes
+                       n.estimated_distance_km, n.estimated_duration_minutes,
+                       n.delivery_date, n.delivery_time,
+                       u.full_name AS volunteer_name, u.phone AS volunteer_phone
                 FROM deliveries d
                 INNER JOIN donations n ON n.donation_id = d.donation_id
+                LEFT JOIN users u ON u.user_id = d.volunteer_id
                 WHERE n.donor_id = {$donorId}
                   AND n.status = 'published'
-                  AND d.delivery_method = 'volunteer'
+                  AND d.delivery_method IN ('volunteer', 'food_bank')
                   AND d.status IN ('open', 'claimed', 'arrived_pickup', 'picked_up')
                 ORDER BY n.published_at DESC, d.delivery_id ASC";
         return $this->enrichTasksWithItemSummary($this->query($sql));
     }
 
-    public function completeDonationDeliveries($donationId) {
+    /**
+     * 食物銀行確認這張物資的配送單都已收到貨：逐張走正式的完成流程
+     * （入帳心意幣與加給、通知商家到貨）。忠信派車的單也一併完成。
+     */
+    public function completeDonationDeliveries($donationId, $confirmedBy = null) {
         $donationId = (int) $donationId;
-        $result = $this->db->query("SELECT delivery_id, volunteer_id, points FROM deliveries WHERE donation_id = {$donationId} AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
+        $result = $this->db->query(
+            "SELECT delivery_id FROM deliveries WHERE donation_id = {$donationId} AND " . self::COMPLETABLE_CONDITION
+        );
         if (!$result || $result->num_rows === 0) {
             return false;
         }
-
-        $this->db->begin_transaction();
-        try {
-            while ($delivery = $result->fetch_assoc()) {
-                $deliveryId = (int) $delivery['delivery_id'];
-                $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
-                $volunteerId = (int) ($delivery['volunteer_id'] ?? 0);
-                if ($volunteerId > 0) {
-                    $points = (int) ($delivery['points'] ?? 0);
-                    $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
-                }
-            }
-            $this->db->commit();
-            return true;
-        } catch (Throwable $exception) {
-            $this->db->rollback();
-            return false;
+        $completedAny = false;
+        while ($delivery = $result->fetch_assoc()) {
+            $completedAny = $this->finalizeDeliveryCompletion((int) $delivery['delivery_id'], $confirmedBy) || $completedAny;
         }
+        return $completedAny;
     }
-
-        public function getMaterialTransportTasks() {
-                $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
-                                             n.quantity, n.unit, n.weight_kg AS published_weight_kg,
-                                             n.size_description, n.photo_path, n.pickup_deadline,
-                                             n.need_inspection, n.inspection_notes, n.reward_options,
-                                             n.split_count
-                                FROM deliveries d
-                                INNER JOIN donations n ON n.donation_id = d.donation_id
-                                WHERE n.status = 'published'
-                                    AND d.delivery_method = 'volunteer'
-                                    AND d.status IN ('open', 'claimed', 'arrived_pickup')
-                                ORDER BY n.published_at DESC, d.delivery_id ASC";
-                return $this->enrichTasksWithItemSummary($this->query($sql));
-        }
-
-        public function getMaterialTransportTask($deliveryId) {
-                $deliveryId = (int) $deliveryId;
-                $result = $this->db->query("SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
-                                                                                     n.quantity, n.unit, n.weight_kg AS published_weight_kg,
-                                                                                     n.size_description, n.photo_path, n.pickup_deadline,
-                                                                                     n.need_inspection, n.inspection_notes, n.reward_options,
-                                                                                     n.split_count, n.status AS donation_status
-                                                                        FROM deliveries d
-                                                                        INNER JOIN donations n ON n.donation_id = d.donation_id
-                                                                        WHERE d.delivery_id = {$deliveryId}
-                                                                            AND n.status = 'published'
-                                                                            AND d.delivery_method = 'volunteer'
-                                                                        LIMIT 1");
-                $row = $result ? $result->fetch_assoc() : null;
-                if (!$row) {
-                        return null;
-                }
-                $enriched = $this->enrichTasksWithItemSummary([$row]);
-                return $enriched[0] ?? $row;
-        }
-
-            public function getMaterialTransportHistoryTasks($volunteerId) {
-                $volunteerId = (int) $volunteerId;
-                $sql = "SELECT d.*, n.donor_name, n.donor_address, n.donation_type, n.item_name,
-                                 n.quantity, n.unit, n.weight_kg AS published_weight_kg,
-                                 n.size_description, n.photo_path, n.pickup_deadline
-                        FROM deliveries d
-                        INNER JOIN donations n ON n.donation_id = d.donation_id
-                        WHERE n.status = 'published'
-                            AND d.delivery_method = 'volunteer'
-                            AND d.volunteer_id = {$volunteerId}
-                            AND d.status = 'delivered'
-                        ORDER BY d.delivered_at DESC, d.delivery_id DESC";
-                return $this->enrichTasksWithItemSummary($this->query($sql));
-            }
 
     /**
      * 補上物資件數與長寬高摘要，供 Rider 任務卡片/詳情顯示。
@@ -405,7 +395,8 @@ class DeliveryModel extends BaseModel {
             foreach ($this->query(
                 "SELECT ai.allocation_id, COUNT(*) AS item_count,
                         MAX(di.length_cm) AS max_length_cm, MAX(di.width_cm) AS max_width_cm, MAX(di.height_cm) AS max_height_cm,
-                        SUM(di.item_weight_kg) AS total_item_weight_kg
+                        SUM(di.item_weight_kg) AS total_item_weight_kg,
+                        MAX(FIELD(di.storage_condition, 'room', 'chilled', 'frozen')) AS storage_level
                  FROM donation_allocation_items ai
                  JOIN donation_items di ON di.item_id = ai.donation_item_id
                  WHERE ai.allocation_id IN ({$ids})
@@ -421,7 +412,8 @@ class DeliveryModel extends BaseModel {
             foreach ($this->query(
                 "SELECT donation_id, COUNT(*) AS item_count,
                         MAX(length_cm) AS max_length_cm, MAX(width_cm) AS max_width_cm, MAX(height_cm) AS max_height_cm,
-                        SUM(item_weight_kg) AS total_item_weight_kg
+                        SUM(item_weight_kg) AS total_item_weight_kg,
+                        MAX(FIELD(storage_condition, 'room', 'chilled', 'frozen')) AS storage_level
                  FROM donation_items
                  WHERE donation_id IN ({$ids})
                  GROUP BY donation_id"
@@ -439,11 +431,19 @@ class DeliveryModel extends BaseModel {
             $row['max_width_cm'] = $summary['max_width_cm'] ?? null;
             $row['max_height_cm'] = $summary['max_height_cm'] ?? null;
             $row['total_item_weight_kg'] = $summary['total_item_weight_kg'] ?? null;
+            $row['storage_level'] = (int) ($summary['storage_level'] ?? 1);
         }
         unset($row);
 
         return $rows;
     }
+
+    /**
+     * 可以「確認收貨」的配送單：
+     * GO Rider 的單必須已取貨（拍照）才能確認；忠信派車的單沒有騎手取貨步驟，進行中即可確認。
+     */
+    const COMPLETABLE_CONDITION = "((delivery_method = 'food_bank' AND status IN ('open', 'claimed', 'arrived_pickup', 'picked_up'))
+        OR (COALESCE(delivery_method, 'volunteer') <> 'food_bank' AND status = 'picked_up'))";
 
     public function canManageDelivery($deliveryId, $userId, $userRole) {
         if ($userRole !== 'foodbank_staff') {
@@ -452,12 +452,16 @@ class DeliveryModel extends BaseModel {
 
         $deliveryId = (int) $deliveryId;
         $userId = (int) $userId;
-        $result = $this->db->query("SELECT created_by FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
+        $result = $this->db->query("SELECT created_by, status FROM deliveries WHERE delivery_id = {$deliveryId} LIMIT 1");
         if (!$result || $result->num_rows === 0) {
             return false;
         }
 
         $delivery = $result->fetch_assoc();
+        // 已配達的單心意幣已入帳，不能再編輯或刪除（避免狀態被改回待接單而重複發幣）
+        if ($delivery['status'] === 'delivered') {
+            return false;
+        }
         return (int) ($delivery['created_by'] ?? 0) === $userId
             || $userRole === 'foodbank_staff';
     }
@@ -496,13 +500,13 @@ class DeliveryModel extends BaseModel {
         }
 
         $sql = "UPDATE deliveries SET donation_id = {$donationValue}, delivery_method = '{$deliveryMethod}', vehicle_type = '{$vehicleType}', total_distance_km = {$distance}, weight_kg = {$weight}, urgency = '{$urgency}', status = '{$status}', points = {$points}, pickup_address = '{$pickupAddress}', delivery_address = '{$deliveryAddress}', updated_at = NOW() WHERE delivery_id = {$deliveryId} LIMIT 1";
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         $updated = $this->db->query($sql);
         if (!$updated) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
-        return $this->db->commit();
+        return Transaction::commit($this->db);
     }
 
     public function updateException($deliveryId, $userId, $userRole, $notes, $response) {
@@ -560,7 +564,10 @@ class DeliveryModel extends BaseModel {
     public function claimDelivery($deliveryId, $volunteerId) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;
-        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed' WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'open'");
+        // 順路加給：接單時手上已有幾張進行中的配送單，每多一站 +1 心意幣（最多 +3）
+        $activeResult = $this->db->query("SELECT COUNT(*) AS active_count FROM deliveries WHERE volunteer_id = {$volunteerId} AND delivery_method = 'volunteer' AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
+        $stopBonus = min(3, (int) ($activeResult ? ($activeResult->fetch_assoc()['active_count'] ?? 0) : 0));
+        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed', multi_stop_bonus = {$stopBonus} WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'open'");
         if ($updated && $this->db->affected_rows > 0) {
             $notifiedCount = $this->notifyUsersByRoles(
                 ['foodbank_staff'],
@@ -576,13 +583,6 @@ class DeliveryModel extends BaseModel {
         return $updated && $this->db->affected_rows === 1;
     }
 
-    public function cancelClaimedDelivery($deliveryId, $volunteerId) {
-        $deliveryId = (int) $deliveryId;
-        $volunteerId = (int) $volunteerId;
-        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = NULL, status = 'open', updated_at = NOW() WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'claimed' AND volunteer_id = {$volunteerId}");
-        return $updated && $this->db->affected_rows === 1;
-    }
-
     /**
      * 騎手按「已到店取貨」：已接單 → 已到店。之後必須上傳取貨照片才能完成取件。
      */
@@ -594,6 +594,21 @@ class DeliveryModel extends BaseModel {
             return false;
         }
         $this->notifyDonor($deliveryId, 'GO Rider 已到店', "配送任務 #{$deliveryId} 的 GO Rider 已抵達店家，準備取貨。", 'info');
+        return true;
+    }
+
+    /**
+     * GO Rider 回報已送達食物銀行：記下實際送達時間（用來判斷「準時送達 +1」），
+     * 狀態仍是已取貨，等食物銀行確認收貨後心意幣才入帳。
+     */
+    public function markArrivedAtDropoff($deliveryId, $volunteerId) {
+        $deliveryId = (int) $deliveryId;
+        $volunteerId = (int) $volunteerId;
+        $this->db->query("UPDATE deliveries SET arrived_dropoff_at = NOW(), updated_at = NOW() WHERE delivery_id = {$deliveryId} AND volunteer_id = {$volunteerId} AND delivery_method = 'volunteer' AND status = 'picked_up' AND arrived_dropoff_at IS NULL");
+        if ($this->db->affected_rows !== 1) {
+            return false;
+        }
+        $this->notifyUsersByRoles(['foodbank_staff'], 'GO Rider 已送達', "配送任務 #{$deliveryId} 的 GO Rider 已回報送達食物銀行，請清點物資並確認收貨。", 'info');
         return true;
     }
 
@@ -718,47 +733,22 @@ class DeliveryModel extends BaseModel {
         return true;
     }
 
-    public function updateDeliveryStatus($deliveryId, $status, $volunteerId = null) {
-        $deliveryId = (int) $deliveryId;
-        $validStatuses = ['waiting_pickup', 'collected', 'in_transit', 'delivered'];
-
-        if (!in_array($status, $validStatuses, true)) {
-            return false;
-        }
-
-        $statusUpdateFields = '';
-        switch ($status) {
-            case 'collected':
-                $statusUpdateFields = ", collected_at = NOW()";
-                break;
-            case 'in_transit':
-                $statusUpdateFields = ", transit_at = NOW()";
-                break;
-            case 'delivered':
-                $statusUpdateFields = ", delivered_at = NOW()";
-                break;
-        }
-
-        $sql = "UPDATE deliveries SET status = '{$status}'{$statusUpdateFields}, updated_at = NOW() WHERE delivery_id = {$deliveryId}";
-        return $this->db->query($sql);
-    }
-
     public function completeDelivery($deliveryId, $confirmedBy = null) {
         return $this->finalizeDeliveryCompletion($deliveryId, $confirmedBy);
     }
 
     private function finalizeDeliveryCompletion($deliveryId, $confirmedBy = null) {
         $deliveryId = (int) $deliveryId;
-        $ownerCondition = " AND status IN ('claimed', 'arrived_pickup', 'picked_up', 'in_transit')";
+        $ownerCondition = ' AND ' . self::COMPLETABLE_CONDITION;
 
-        $result = $this->db->query("SELECT volunteer_id, points FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
+        $result = $this->db->query("SELECT volunteer_id, points, multi_stop_bonus, delivery_method, estimated_arrival_end, arrived_dropoff_at FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
 
         if (!$delivery) {
             return false;
         }
 
-        $this->db->begin_transaction();
+        Transaction::begin($this->db);
         try {
             $confirmedSql = $confirmedBy ? (int) $confirmedBy : 'NULL';
             $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), received_confirmed_by = {$confirmedSql} WHERE delivery_id = {$deliveryId}{$ownerCondition}");
@@ -767,17 +757,37 @@ class DeliveryModel extends BaseModel {
             }
             $volunteerId = (int) $delivery['volunteer_id'];
             $points = (int) $delivery['points'];
-            if ($volunteerId > 0) {
-                $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '完成惜食配送')");
+            $bonusNotes = [];
+            // 加給只發給 GO Rider（食物銀行自行配送的單 points 為 0，不發幣）
+            if ($volunteerId > 0 && $points > 0) {
+                // 準時與否看騎手回報送達的時間；騎手沒按「我已送達」時，才用食物銀行確認的時間
+                $arrivedAt = !empty($delivery['arrived_dropoff_at']) ? strtotime($delivery['arrived_dropoff_at']) : time();
+                if (!empty($delivery['estimated_arrival_end']) && strtotime($delivery['estimated_arrival_end']) >= $arrivedAt) {
+                    $points += 1;
+                    $bonusNotes[] = '準時送達 +1';
+                }
+                if ((int) $delivery['multi_stop_bonus'] > 0) {
+                    $points += (int) $delivery['multi_stop_bonus'];
+                    $bonusNotes[] = '順路配送 +' . (int) $delivery['multi_stop_bonus'];
+                }
+                $earnedBefore = $this->db->query("SELECT 1 FROM point_transactions WHERE user_id = {$volunteerId} AND transaction_type = 'earned' AND delivery_id <> {$deliveryId} LIMIT 1");
+                if ($earnedBefore && $earnedBefore->num_rows === 0) {
+                    $points += 3;
+                    $bonusNotes[] = '首次配送 +3';
+                }
             }
-            $this->db->commit();
+            if ($volunteerId > 0) {
+                $description = $this->db->real_escape_string('完成惜食配送' . ($bonusNotes ? '（' . implode('、', $bonusNotes) . '）' : ''));
+                $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '{$description}')");
+            }
+            Transaction::commit($this->db);
             $this->notifyDonorDelivered($deliveryId);
             if ($volunteerId > 0) {
-                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚興毅幣。", 'success');
+                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚心意幣。", 'success');
             }
             return true;
         } catch (Throwable $exception) {
-            $this->db->rollback();
+            Transaction::rollback($this->db);
             return false;
         }
     }
@@ -818,40 +828,27 @@ class DeliveryModel extends BaseModel {
         return $notifiedCount;
     }
 
-    public static function calculatePoints($vehicle, $distance, $weight, $urgency) {
-        $isCar = $vehicle === 'car';
-        $points = $isCar ? 10 : 5;
+    /**
+     * 心意幣 = 基本（車型）+ 重量 + 距離 + 緊急 + 冷藏冷凍。
+     * 準時、新手、順路加給在接單／完成配送時另外計算（見 finalizeDeliveryCompletion）。
+     */
+    public static function calculatePoints($vehicle, $distance, $weight, $urgency, $coldStorage = false) {
+        $points = $vehicle === 'car' ? 5 : 3;
 
-        if ($distance <= 2) {
-            $points += $isCar ? 5 : 3;
-        } elseif ($distance <= 4) {
-            $points += $isCar ? 8 : 5;
-        } elseif ($distance <= 6) {
-            $points += $isCar ? 11 : 7;
-        } elseif ($distance <= 8) {
-            $points += $isCar ? 14 : 10;
-        } elseif ($distance <= 10) {
-            $points += $isCar ? 17 : 13;
-        } else {
-            $points += $isCar ? 20 : 15;
+        // 重量：每 5 公斤一級，每級 +3，最多 +15
+        $points += $weight > 0 ? min(15, 3 * (int) ceil($weight / 5)) : 0;
+
+        if ($distance > 10) {
+            $points += 6;
+        } elseif ($distance > 5) {
+            $points += 4;
+        } elseif ($distance > 2) {
+            $points += 2;
         }
 
-        if ($weight <= 5) {
-            $points += $isCar ? 2 : 0;
-        } elseif ($weight <= 10) {
-            $points += $isCar ? 5 : 3;
-        } elseif ($weight <= 20) {
-            $points += $isCar ? 8 : 6;
-        } else {
-            $points += $isCar ? 12 : 10;
-        }
+        $points += ['urgent' => 4, 'priority' => 2][$urgency] ?? 0;
+        $points += $coldStorage ? 2 : 0;
 
-        $urgencyPoints = [
-            'normal' => $isCar ? 3 : 0,
-            'priority' => $isCar ? 6 : 3,
-            'urgent' => $isCar ? 10 : 6,
-        ];
-
-        return $points + ($urgencyPoints[$urgency] ?? 0);
+        return $points;
     }
 }

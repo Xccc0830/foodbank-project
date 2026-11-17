@@ -3,6 +3,9 @@
  * Database and application configuration.
  */
 
+// 網站、測試、示範資料程式都用台灣時間（指令列的 PHP 預設時區可能不是台灣，會讓時間差好幾小時）
+date_default_timezone_set('Asia/Taipei');
+
 if (!defined('APP_NAME')) {
     define('APP_NAME', getenv('APP_NAME') ?: '食物銀行管理系統');
 }
@@ -37,6 +40,14 @@ if (file_exists(__DIR__ . '/local.php')) {
 }
 if (!defined('GOOGLE_MAPS_API_KEY')) {
     define('GOOGLE_MAPS_API_KEY', getenv('GOOGLE_MAPS_API_KEY') ?: '');
+}
+
+// AI 物資比對（Claude API）。沒有金鑰時自動只用規則比對。金鑰請放環境變數或 config/local.php，不要提交到 git。
+if (!defined('ANTHROPIC_API_KEY')) {
+    define('ANTHROPIC_API_KEY', getenv('ANTHROPIC_API_KEY') ?: '');
+}
+if (!defined('ANTHROPIC_MODEL')) {
+    define('ANTHROPIC_MODEL', getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-5-5');
 }
 
 if (!defined('DB_HOST')) {

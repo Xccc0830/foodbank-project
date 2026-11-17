@@ -34,14 +34,19 @@ $deliveryTotal = array_sum($deliveryStats);
 $matchRate = $deliveryTotal > 0 ? round($deliveryStats['delivered'] / $deliveryTotal * 100, 1) : 0;
 
 $volunteerRanking = [];
+// 配送次數與心意幣分開算，避免兩張表一起 JOIN 時心意幣被乘上配送次數。
+// 食物銀行人員看「查詢期間」內的排行；GO Rider 沒有期間篩選，看全部累積。
+$rankingDeliveryPeriod = $isVolunteer ? '' : " AND d.delivered_at BETWEEN '{$startDateEscaped} 00:00:00' AND '{$endDateEscaped} 23:59:59'";
+$rankingPointsPeriod = $isVolunteer ? '' : " AND pt.created_at BETWEEN '{$startDateEscaped} 00:00:00' AND '{$endDateEscaped} 23:59:59'";
 $result = $connection->query(
-    "SELECT u.full_name, COUNT(DISTINCT d.delivery_id) AS delivery_count, GREATEST(COALESCE(SUM(pt.points), 0), 0) AS total_points
+    "SELECT u.full_name,
+            (SELECT COUNT(*) FROM deliveries d
+              WHERE d.volunteer_id = u.user_id AND d.delivery_method = 'volunteer' AND d.status = 'delivered'{$rankingDeliveryPeriod}) AS delivery_count,
+            GREATEST(COALESCE((SELECT SUM(pt.points) FROM point_transactions pt
+              WHERE pt.user_id = u.user_id AND pt.transaction_type = 'earned'{$rankingPointsPeriod}), 0), 0) AS total_points
      FROM users u
-     LEFT JOIN deliveries d ON d.volunteer_id = u.user_id AND d.status = 'delivered'
-     LEFT JOIN point_transactions pt ON pt.user_id = u.user_id AND pt.transaction_type = 'earned'
-    WHERE u.role = 'member' AND u.member_type = 'general'
-     GROUP BY u.user_id
-     ORDER BY total_points DESC
+     WHERE u.role = 'member' AND u.member_type = 'general'
+     ORDER BY total_points DESC, delivery_count DESC
      LIMIT 10"
 );
 if ($result) {
@@ -55,7 +60,7 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
     header('Content-Disposition: attachment; filename="volunteer_ranking.csv"');
     $output = fopen('php://output', 'w');
     fwrite($output, "\xEF\xBB\xBF");
-    fputcsv($output, ['GO Rider 姓名', '完成配送次數', '累積興毅幣']);
+    fputcsv($output, ['GO Rider 姓名', '完成配送次數（' . $startDate . ' ~ ' . $endDate . '）', '心意幣（' . $startDate . ' ~ ' . $endDate . '）']);
     foreach ($volunteerRanking as $row) {
         fputcsv($output, [$row['full_name'], $row['delivery_count'], $row['total_points']]);
     }
@@ -67,17 +72,22 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="view-header">
     <div>
         <h1 class="view-title"><?php echo $isVolunteer ? '榮譽榜' : '數據分析'; ?></h1>
-        <p class="view-subtitle"><?php echo $isVolunteer ? '查看一般會員興毅幣與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與會員排行'; ?></p>
+        <p class="view-subtitle"><?php echo $isVolunteer ? '查看一般會員心意幣與完成配送排行' : '查詢指定期間的物資流動、任務媒合率與會員排行'; ?></p>
     </div>
 </div>
 <?php if (!$isVolunteer): ?>
 <div class="card">
     <div class="card-body">
-        <form method="get" class="toolbar-row compact">
+        <form method="get" class="filter-bar">
             <input type="hidden" name="page" value="reports">
-            <div class="form-group"><label>開始日期</label><input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>"></div>
-            <div class="form-group"><label>結束日期</label><input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>"></div>
-            <button class="btn btn-primary" type="submit">查詢</button>
+            <span class="filter-label">查詢期間</span>
+            <div class="filter-dates">
+                <i class="far fa-calendar" aria-hidden="true"></i>
+                <input type="date" name="start_date" value="<?php echo htmlspecialchars($startDate); ?>" aria-label="開始日期">
+                <span class="filter-dates-sep">至</span>
+                <input type="date" name="end_date" value="<?php echo htmlspecialchars($endDate); ?>" aria-label="結束日期">
+            </div>
+            <button class="btn btn-primary btn-sm filter-submit" type="submit"><i class="fas fa-magnifying-glass" aria-hidden="true"></i> 查詢</button>
         </form>
     </div>
 </div>
@@ -95,14 +105,14 @@ if (!$isVolunteer && ($_GET['export'] ?? '') === 'volunteers_csv') {
 <div class="card mt-32">
     <div class="card-header">
         <div class="toolbar-row">
-            <div><h2>GO Rider 派車排行</h2><p class="toolbar-meta">依累積興毅幣排序</p></div>
+            <div><h2>GO Rider 派車排行</h2><p class="toolbar-meta"><?php echo $isVolunteer ? '依累積心意幣排序' : '依查詢期間（' . htmlspecialchars($startDate) . ' ~ ' . htmlspecialchars($endDate) . '）賺得的心意幣排序'; ?></p></div>
             <?php if (!$isVolunteer): ?><div class="toolbar-actions"><a class="btn btn-secondary btn-sm" href="?page=reports&amp;start_date=<?php echo urlencode($startDate); ?>&amp;end_date=<?php echo urlencode($endDate); ?>&amp;export=volunteers_csv"><i class="fas fa-download"></i> 匯出 CSV</a></div><?php endif; ?>
         </div>
     </div>
     <div class="card-body">
         <?php if ($volunteerRanking): ?>
             <table class="data-table ranking-table">
-                <thead><tr><th>排名</th><th>GO Rider</th><th>完成配送次數</th><th>累積興毅幣</th></tr></thead>
+                <thead><tr><th>排名</th><th>GO Rider</th><th>完成配送次數</th><th>累積心意幣</th></tr></thead>
                 <tbody>
                 <?php foreach ($volunteerRanking as $index => $row): ?>
                     <?php $pos = $index + 1; $rankClass = $pos <= 3 ? 'rank-' . $pos : ''; ?>

@@ -917,12 +917,25 @@ body {
 
 .data-table.categories-table th:nth-child(2),
 .data-table.categories-table td:nth-child(2) {
-    min-width: 180px;
+    min-width: 140px;
+    white-space: normal;
 }
 
-.data-table.categories-table th:nth-child(4),
-.data-table.categories-table td:nth-child(4) {
-    min-width: 72px;
+.data-table.categories-table th:nth-child(3),
+.data-table.categories-table td:nth-child(3) {
+    min-width: 200px;
+    max-width: 260px;
+    white-space: normal;
+}
+
+.data-table.categories-table td.category-profile-cell { font-size: 13px; line-height: 1.5; }
+.data-table.categories-table td.category-profile-cell small { color: #64748b; }
+
+.data-table.categories-table th:nth-child(5),
+.data-table.categories-table td:nth-child(5),
+.data-table.categories-table th:nth-child(6),
+.data-table.categories-table td:nth-child(6) {
+    min-width: 64px;
     text-align: center;
 }
 
@@ -3119,4 +3132,254 @@ body {
 .card-body:has(> .data-table-wrapper),
 .data-table-wrapper {
     overflow-x: auto;
+}
+
+.publish-summary { margin: 12px 0; padding: 12px 16px; border-radius: 10px; background: var(--bg-secondary, #f7f9fc); }
+.publish-summary-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.publish-summary .donation-photos img { max-width: 120px; max-height: 120px; border-radius: 8px; margin-right: 8px; object-fit: cover; }
+
+[data-volunteer-only][hidden] { display: none !important; }
+
+.closed-days-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; }
+.closed-day-option { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
+
+/* 物資明細表：欄位內容橫向顯示不換行，太寬時整張表可左右捲動 */
+.data-table.donation-items-table { width: auto; min-width: 100%; table-layout: auto; }
+.data-table.donation-items-table th,
+.data-table.donation-items-table td {
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
+}
+
+.publish-summary { margin: 12px 0; padding: 12px 16px; border-radius: 10px; background: var(--bg-secondary, #f7f9fc); }
+.publish-summary-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.publish-summary .donation-photos img { max-width: 120px; max-height: 120px; border-radius: 8px; margin-right: 8px; object-fit: cover; }
+
+[data-volunteer-only][hidden] { display: none !important; }
+
+.closed-days-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 6px; }
+.closed-day-option { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
+
+/* ===== 按鈕間距：相鄰的小按鈕不再貼在一起 ===== */
+.btn-group,
+.inline-action-group,
+.toolbar-actions,
+.login-roles,
+.modal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.delivery-action-stack { gap: 12px; row-gap: 12px; }
+.inline-action-group { display: inline-flex; }
+.inline-form { display: inline-block; margin: 0; }
+
+/* 表格「操作」欄裡的多個按鈕／表單：右側與下方留間距（直向或橫向排列都適用） */
+.data-table td > .btn:not(:last-child),
+.data-table td > form:not(:last-child),
+.data-table td > a.btn:not(:last-child) { margin-right: 10px; margin-bottom: 10px; }
+
+/* 卡片、表單裡相鄰的按鈕 */
+.card-body > .btn + .btn,
+.card-header .btn + .btn { margin-left: 12px; }
+
+/* 騎手配送卡片：地圖小視窗與開始導航之間要有間距 */
+.driver-trip-map > .driver-navigate-btn + .driver-navigate-btn { margin-top: 14px; }
+.driver-trip-action-form + .delivery-action-form,
+.driver-trip-action-form + .driver-trip-action-form { margin-top: 14px; }
+
+.category-suggest-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--text-secondary, #6b7280); }
+
+/* 通用小視窗（配送任務頁的發布表單、獎勵機制） */
+.app-modal-overlay { position: fixed; inset: 0; z-index: 9000; background: rgba(15, 23, 42, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.app-modal-overlay[hidden] { display: none; }
+.app-modal { width: min(640px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: var(--bg-primary, #fff); border-radius: 14px; box-shadow: 0 20px 48px rgba(15, 23, 42, .3); }
+.app-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--gray-200, #e5e7eb); }
+.app-modal-header h2 { margin: 0 0 4px; font-size: 20px; }
+.app-modal-header p { margin: 0; color: var(--text-secondary, #6b7280); font-size: 13px; }
+.app-modal-body { padding: 20px 24px 24px; }
+
+/* 配送進度總覽（參考訂單追蹤的配色：綠色進度、灰色未到） */
+.delivery-flow-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.delivery-flow { list-style: none; margin: 0; padding: 8px 0 4px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
+.delivery-flow-step { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 0 8px; }
+.delivery-flow-step::before { content: ""; position: absolute; top: 26px; left: calc(-50% + 30px); right: calc(50% + 30px); height: 4px; border-radius: 99px; background: #e5e7eb; }
+.delivery-flow-step:first-child::before { display: none; }
+.delivery-flow-icon { position: relative; z-index: 1; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; background: #f1f5f9; color: #94a3b8; font-size: 20px; border: 3px solid #fff; box-shadow: 0 0 0 1px #e5e7eb; transition: background .2s ease, color .2s ease; }
+.delivery-flow-step.has-items .delivery-flow-icon { background: #ccfbf1; color: #0f766e; box-shadow: 0 0 0 2px #5eead4; }
+.delivery-flow-step.is-final.has-items .delivery-flow-icon { background: #0f766e; color: #fff; box-shadow: 0 0 0 2px #0f766e; }
+.delivery-flow-step strong { margin-top: 6px; font-size: 15px; color: var(--gray-900, #111827); }
+.delivery-flow-step small { color: #64748b; font-size: 12px; line-height: 1.4; }
+.delivery-flow-count { margin-top: 4px; padding: 3px 12px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.delivery-flow-step.has-items .delivery-flow-count { background: #ecfdf5; color: #0f766e; }
+@media (max-width: 640px) {
+    .delivery-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 24px; }
+    .delivery-flow-step:nth-child(3)::before { display: none; }
+}
+
+.keyword-preview { color: #475569; font-size: 13px; line-height: 1.5; }
+
+/* 欄位下方的說明文字 */
+.form-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-secondary, #64748b); }
+.form-hint[data-points-preview] { font-size: 14px; color: inherit; }
+
+.corrections-table input[name="keyword"] { width: 120px; padding: 6px 10px; }
+.corrections-table td:last-child { white-space: nowrap; }
+.carbon-share { width: 120px; height: 6px; border-radius: 99px; background: #e5e7eb; overflow: hidden; margin-bottom: 4px; }
+.carbon-share-bar { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #34d399, #0f766e); }
+.expiring-stock-table th:last-child, .expiring-stock-table td:last-child { text-align: left; }
+
+/* 企業報名：員工名冊 */
+.app-modal-wide { width: min(860px, 100%); }
+.employee-roster { display: grid; gap: 12px; margin-bottom: 8px; }
+.employee-row { margin: 0; padding: 12px 16px 4px; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 12px; }
+.employee-row legend { padding: 0 6px; font-size: 13px; font-weight: 700; color: #0f766e; }
+.employee-roster-table { margin-top: 8px; font-size: 13px; }
+.participant-item > span, .participant-item > small { display: block; margin-top: 2px; }
+
+/* Fancy home ads */
+.fancy-ad-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
+.fancy-ad { position: relative; display: flex; gap: 14px; align-items: flex-start; padding: 16px; border-radius: 16px; color: #fff; overflow: hidden; box-shadow: 0 8px 20px rgba(20, 40, 90, .18); transition: transform .25s ease, box-shadow .25s ease; animation: fancy-ad-in .6s ease both; }
+.fancy-ad::after { content: ""; position: absolute; top: -40%; left: -60%; width: 40%; height: 180%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); transform: rotate(20deg); animation: fancy-ad-shine 4s ease-in-out infinite; }
+.fancy-ad:hover { transform: translateY(-4px) scale(1.01); box-shadow: 0 14px 28px rgba(20, 40, 90, .28); }
+.fancy-ad-0 { background: linear-gradient(135deg, #ff9a44, #fc6076); animation-delay: .05s; }
+.fancy-ad-1 { background: linear-gradient(135deg, #36d1dc, #5b86e5); animation-delay: .2s; }
+.fancy-ad-2 { background: linear-gradient(135deg, #a18cd1, #fbc2eb 140%); animation-delay: .35s; }
+.fancy-ad-icon { flex: none; width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: rgba(255,255,255,.25); backdrop-filter: blur(4px); }
+.fancy-ad-text { position: relative; z-index: 1; min-width: 0; }
+.fancy-ad-text strong { display: block; font-size: 16px; margin-bottom: 4px; }
+.fancy-ad-text p { margin: 0 0 8px; font-size: 13px; line-height: 1.5; opacity: .95; }
+.fancy-ad-text small { opacity: .85; }
+.fancy-ad-badge { float: right; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 1px; background: rgba(255,255,255,.3); }
+@keyframes fancy-ad-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes fancy-ad-shine { 0%, 60% { left: -60%; } 100% { left: 140%; } }
+
+/* ===== 詳情資訊格／物資卡片（src/views/partials/detail_blocks.php） ===== */
+.detail-info-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
+.detail-info-grid > div { min-width: 0; }
+.detail-info-grid .detail-info-wide { grid-column: span 2; }
+.detail-info-grid dt, .detail-item-facts dt { margin: 0 0 2px; color: #64748b; font-size: 12px; font-weight: 600; }
+.detail-info-grid dd, .detail-item-facts dd { margin: 0; color: #0f172a; font-size: 15px; overflow-wrap: anywhere; }
+.detail-info-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 10px 0 0; padding: 10px 12px; }
+.detail-info-grid-compact dd { font-size: 13px; }
+.detail-urgent-badge { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 4px 12px; border-radius: 999px; background: #fef2f2; color: #b91c1c; font-size: 13px; font-weight: 600; }
+.detail-rejected-box { display: grid; gap: 4px; margin: 0 0 20px; padding: 12px 16px; border-left: 4px solid #dc2626; border-radius: 8px; background: #fef2f2; color: #991b1b; }
+.detail-section-title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: 17px; }
+.detail-section-title span { color: #64748b; font-size: 13px; font-weight: 500; }
+.detail-items { margin-bottom: 20px; }
+.detail-item-card { margin-bottom: 10px; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }
+.detail-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.detail-item-head strong { font-size: 16px; }
+.detail-item-index { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: #1e3a8a; color: #fff; font-size: 12px; font-weight: 700; }
+.detail-tag { padding: 2px 10px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 12px; font-weight: 600; }
+.detail-tag-chilled { background: #eff6ff; color: #1d4ed8; }
+.detail-tag-frozen { background: #eef2ff; color: #4338ca; }
+.detail-tag-room { background: #fefce8; color: #a16207; }
+.detail-item-facts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.detail-photos { margin-bottom: 8px; }
+.detail-photo-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.detail-photo-list img { width: 150px; height: 110px; object-fit: cover; border: 1px solid #dfe3ea; border-radius: 8px; }
+@media (max-width: 760px) {
+    .detail-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .detail-item-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+[data-foodbank-only][hidden], [data-rider-location][hidden] { display: none !important; }
+.foodbank-vehicle-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.foodbank-vehicle-form label { color: #64748b; font-size: 13px; font-weight: 600; }
+.foodbank-vehicle-form select { width: auto; min-width: 110px; padding: 6px 10px; }
+
+/* 篩選列（庫存清單）：搜尋、狀態、日期區間、按鈕排成一排 */
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-bar .filter-search,
+.filter-bar .filter-dates,
+.filter-bar .filter-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: 10px;
+    background: #FFFFFF;
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.filter-bar .filter-search {
+    flex: 1 1 260px;
+    min-width: 220px;
+    cursor: text;
+}
+
+.filter-bar .filter-search i,
+.filter-bar .filter-dates i {
+    color: var(--gray-400);
+    font-size: 14px;
+}
+
+.filter-bar .filter-search input,
+.filter-bar .filter-dates input {
+    border: 0;
+    outline: none;
+    background: transparent;
+    padding: 0;
+    height: 100%;
+    font: inherit;
+    color: inherit;
+    box-shadow: none;
+}
+
+.filter-bar .filter-search input {
+    flex: 1;
+    min-width: 0;
+}
+
+.filter-bar .filter-search input::placeholder {
+    color: var(--gray-400);
+}
+
+.filter-bar .filter-select {
+    min-width: 140px;
+    cursor: pointer;
+}
+
+.filter-bar .filter-dates-sep {
+    color: var(--gray-500);
+    font-size: 13px;
+}
+
+.filter-bar .filter-search:focus-within,
+.filter-bar .filter-dates:focus-within,
+.filter-bar .filter-select:focus {
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 3px rgba(32, 59, 143, 0.12);
+    outline: none;
+}
+
+.filter-bar .filter-submit {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+    .filter-bar > * {
+        flex: 1 1 100%;
+    }
+
+    .filter-bar .filter-dates input {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+.filter-bar .filter-label {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
 }

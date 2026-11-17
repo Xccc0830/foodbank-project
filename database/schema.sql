@@ -120,6 +120,7 @@ CREATE TABLE `deliveries` (
   `created_by` int(11) DEFAULT NULL,
   `volunteer_id` int(11) DEFAULT NULL,
   `vehicle_type` enum('car','motorcycle') NOT NULL,
+  `foodbank_vehicle` varchar(30) DEFAULT NULL COMMENT '忠信派車的車種：motorcycle/car/small_truck/refrigerated_truck/frozen_truck',
   `total_distance_km` decimal(8,2) NOT NULL DEFAULT 0.00,
   `weight_kg` decimal(8,2) NOT NULL DEFAULT 0.00,
   `urgency` enum('normal','priority','urgent') NOT NULL DEFAULT 'normal',
@@ -143,31 +144,16 @@ CREATE TABLE `deliveries` (
   `item_description` text DEFAULT NULL,
   `received_location` varchar(100) DEFAULT NULL,
   `arrived_pickup_at` datetime DEFAULT NULL,
-  `received_confirmed_by` int(11) DEFAULT NULL
+  `arrived_dropoff_at` datetime DEFAULT NULL,
+  `received_confirmed_by` int(11) DEFAULT NULL,
+  `multi_stop_bonus` int(11) NOT NULL DEFAULT 0,
+  `is_cold_storage` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- 傾印資料表的資料 `deliveries`
 --
 
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `departments`
---
-
-DROP TABLE IF EXISTS `departments`;
-CREATE TABLE `departments` (
-  `department_id` int(11) NOT NULL,
-  `department_code` varchar(50) NOT NULL,
-  `department_name` varchar(100) NOT NULL,
-  `description` text DEFAULT NULL,
-  `manager_id` int(11) DEFAULT NULL,
-  `budget` decimal(12,2) DEFAULT NULL,
-  `status` enum('active','inactive') DEFAULT 'active',
-  `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -224,6 +210,7 @@ CREATE TABLE `donations` (
   `dispatch_contact_phone` varchar(30) DEFAULT NULL,
   `dispatch_vehicle_info` varchar(150) DEFAULT NULL,
   `revision_no` int(11) NOT NULL DEFAULT 1,
+  `is_urgent` tinyint(1) NOT NULL DEFAULT 0,
   `rejected_fields` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -324,26 +311,6 @@ CREATE TABLE `donor_reward_redemptions` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `enterprise_verification_requests`
---
-
-DROP TABLE IF EXISTS `enterprise_verification_requests`;
-CREATE TABLE `enterprise_verification_requests` (
-  `request_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `enterprise_name` varchar(150) NOT NULL,
-  `business_registration_number` varchar(50) DEFAULT NULL,
-  `business_license_url` text DEFAULT NULL,
-  `submission_date` datetime DEFAULT current_timestamp(),
-  `status` enum('pending','approved','rejected') DEFAULT 'pending',
-  `reviewer_id` int(11) DEFAULT NULL,
-  `review_date` datetime DEFAULT NULL,
-  `review_notes` text DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `item_categories`
 --
 
@@ -352,6 +319,10 @@ CREATE TABLE `item_categories` (
   `category_id` int(11) NOT NULL,
   `category_name` varchar(50) NOT NULL,
   `description` text DEFAULT NULL,
+  `keywords` text DEFAULT NULL,
+  `default_storage` enum('room','chilled','frozen') DEFAULT NULL,
+  `carbon_factor` decimal(6,2) DEFAULT NULL,
+  `expiry_alert_days` int(11) DEFAULT NULL,
   `icon` varchar(50) DEFAULT NULL,
   `display_order` int(11) DEFAULT 0,
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
@@ -422,22 +393,6 @@ CREATE TABLE `otp_codes` (
 -- --------------------------------------------------------
 
 --
--- 資料表結構 `password_resets`
---
-
-DROP TABLE IF EXISTS `password_resets`;
-CREATE TABLE `password_resets` (
-  `reset_id` int(11) NOT NULL,
-  `user_id` int(11) NOT NULL,
-  `token_hash` varchar(64) NOT NULL,
-  `expires_at` datetime NOT NULL,
-  `used_at` datetime DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
 -- 資料表結構 `point_transactions`
 --
 
@@ -458,27 +413,6 @@ CREATE TABLE `point_transactions` (
 
 INSERT INTO `point_transactions` (`transaction_id`, `user_id`, `delivery_id`, `points`, `transaction_type`, `description`, `created_at`) VALUES
 (3, 4, NULL, -30, 'redeemed', '兌換獎勵', '2026-08-23 06:50:40');
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `public_relations`
---
-
-DROP TABLE IF EXISTS `public_relations`;
-CREATE TABLE `public_relations` (
-  `pr_id` int(11) NOT NULL,
-  `event_name` varchar(150) NOT NULL,
-  `event_date` date NOT NULL,
-  `event_type` enum('fundraiser','awareness','community','partnership','media') NOT NULL,
-  `description` text DEFAULT NULL,
-  `location` varchar(200) DEFAULT NULL,
-  `organizer_id` int(11) DEFAULT NULL,
-  `participants_count` int(11) DEFAULT NULL,
-  `status` enum('planned','ongoing','completed','cancelled') DEFAULT 'planned',
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -551,43 +485,6 @@ CREATE TABLE `reward_redemptions` (
 
 -- --------------------------------------------------------
 
---
--- 資料表結構 `sales`
---
-
-DROP TABLE IF EXISTS `sales`;
-CREATE TABLE `sales` (
-  `sale_id` int(11) NOT NULL,
-  `sale_code` varchar(50) NOT NULL,
-  `sale_date` datetime NOT NULL,
-  `customer_name` varchar(100) DEFAULT NULL,
-  `customer_email` varchar(100) DEFAULT NULL,
-  `total_amount` decimal(12,2) DEFAULT NULL,
-  `payment_method` enum('cash','credit_card','check','transfer') NOT NULL,
-  `status` enum('completed','pending','cancelled') DEFAULT 'completed',
-  `notes` text DEFAULT NULL,
-  `processed_by` int(11) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- 資料表結構 `sale_items`
---
-
-DROP TABLE IF EXISTS `sale_items`;
-CREATE TABLE `sale_items` (
-  `sale_item_id` int(11) NOT NULL,
-  `sale_id` int(11) NOT NULL,
-  `inventory_id` int(11) NOT NULL,
-  `quantity` decimal(10,2) NOT NULL,
-  `unit_price` decimal(10,2) DEFAULT NULL,
-  `total_price` decimal(12,2) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
 -- --------------------------------------------------------
 
 --
@@ -619,6 +516,12 @@ CREATE TABLE `users` (
   `enterprise_name` varchar(150) DEFAULT NULL,
   `enterprise_verified_at` datetime DEFAULT NULL,
   `default_pickup_address` varchar(255) DEFAULT NULL,
+  `open_days` varchar(20) DEFAULT NULL,
+  `business_hours` varchar(100) DEFAULT NULL,
+  `closed_days` varchar(100) DEFAULT NULL,
+  `pickup_note` varchar(255) DEFAULT NULL,
+  `failed_login_count` int(11) NOT NULL DEFAULT 0,
+  `login_locked_until` datetime DEFAULT NULL,
   `id_number_encrypted` text DEFAULT NULL,
   `id_number_hash` char(64) DEFAULT NULL,
   `id_verify_status` enum('none','pending','approved','rejected') NOT NULL DEFAULT 'none',
@@ -715,15 +618,6 @@ ALTER TABLE `deliveries`
   ADD KEY `donation_id` (`donation_id`);
 
 --
--- 資料表索引 `departments`
---
-ALTER TABLE `departments`
-  ADD PRIMARY KEY (`department_id`),
-  ADD UNIQUE KEY `department_code` (`department_code`),
-  ADD KEY `manager_id` (`manager_id`),
-  ADD KEY `status` (`status`);
-
---
 -- 資料表索引 `donations`
 --
 ALTER TABLE `donations`
@@ -763,14 +657,6 @@ ALTER TABLE `donor_reward_redemptions`
   ADD KEY `status` (`status`);
 
 --
--- 資料表索引 `enterprise_verification_requests`
---
-ALTER TABLE `enterprise_verification_requests`
-  ADD PRIMARY KEY (`request_id`),
-  ADD KEY `user_id` (`user_id`),
-  ADD KEY `status` (`status`);
-
---
 -- 資料表索引 `item_categories`
 --
 ALTER TABLE `item_categories`
@@ -795,29 +681,12 @@ ALTER TABLE `otp_codes`
   ADD KEY `purpose` (`purpose`);
 
 --
--- 資料表索引 `password_resets`
---
-ALTER TABLE `password_resets`
-  ADD PRIMARY KEY (`reset_id`),
-  ADD KEY `user_id` (`user_id`);
-
---
 -- 資料表索引 `point_transactions`
 --
 ALTER TABLE `point_transactions`
   ADD PRIMARY KEY (`transaction_id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `delivery_id` (`delivery_id`);
-
---
--- 資料表索引 `public_relations`
---
-ALTER TABLE `public_relations`
-  ADD PRIMARY KEY (`pr_id`),
-  ADD KEY `organizer_id` (`organizer_id`),
-  ADD KEY `event_date` (`event_date`),
-  ADD KEY `event_type` (`event_type`),
-  ADD KEY `status` (`status`);
 
 --
 -- 資料表索引 `reward_catalog`
@@ -841,25 +710,6 @@ ALTER TABLE `reward_redemptions`
   ADD PRIMARY KEY (`redemption_id`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `reward_id` (`reward_id`);
-
---
--- 資料表索引 `sales`
---
-ALTER TABLE `sales`
-  ADD PRIMARY KEY (`sale_id`),
-  ADD UNIQUE KEY `sale_code` (`sale_code`),
-  ADD KEY `processed_by` (`processed_by`),
-  ADD KEY `sale_date` (`sale_date`),
-  ADD KEY `status` (`status`),
-  ADD KEY `idx_sales_date` (`sale_date`);
-
---
--- 資料表索引 `sale_items`
---
-ALTER TABLE `sale_items`
-  ADD PRIMARY KEY (`sale_item_id`),
-  ADD KEY `inventory_id` (`inventory_id`),
-  ADD KEY `sale_id` (`sale_id`);
 
 --
 -- 資料表索引 `users`
@@ -904,12 +754,6 @@ ALTER TABLE `deliveries`
   MODIFY `delivery_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `departments`
---
-ALTER TABLE `departments`
-  MODIFY `department_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donations`
 --
 ALTER TABLE `donations`
@@ -934,12 +778,6 @@ ALTER TABLE `donor_reward_redemptions`
   MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `enterprise_verification_requests`
---
-ALTER TABLE `enterprise_verification_requests`
-  MODIFY `request_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `item_categories`
 --
 ALTER TABLE `item_categories`
@@ -958,22 +796,10 @@ ALTER TABLE `otp_codes`
   MODIFY `otp_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `password_resets`
---
-ALTER TABLE `password_resets`
-  MODIFY `reset_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `point_transactions`
 --
 ALTER TABLE `point_transactions`
   MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
-
---
--- 使用資料表自動遞增(AUTO_INCREMENT) `public_relations`
---
-ALTER TABLE `public_relations`
-  MODIFY `pr_id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `reward_catalog`
@@ -994,18 +820,6 @@ ALTER TABLE `reward_redemptions`
   MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
--- 使用資料表自動遞增(AUTO_INCREMENT) `sales`
---
-ALTER TABLE `sales`
-  MODIFY `sale_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- 使用資料表自動遞增(AUTO_INCREMENT) `sale_items`
---
-ALTER TABLE `sale_items`
-  MODIFY `sale_item_id` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- 使用資料表自動遞增(AUTO_INCREMENT) `users`
 --
 ALTER TABLE `users`
@@ -1016,12 +830,6 @@ ALTER TABLE `users`
 --
 ALTER TABLE `audit_logs`
   ADD CONSTRAINT `audit_logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
-
---
--- 資料表的限制式 `departments`
---
-ALTER TABLE `departments`
-  ADD CONSTRAINT `departments_ibfk_1` FOREIGN KEY (`manager_id`) REFERENCES `users` (`user_id`);
 
 --
 -- 資料表的限制式 `donations`
@@ -1048,30 +856,6 @@ ALTER TABLE `donor_reward_redemptions`
   ADD CONSTRAINT `donor_reward_redemptions_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `donor_reward_items` (`item_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `donor_reward_redemptions_ibfk_2` FOREIGN KEY (`volunteer_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `donor_reward_redemptions_ibfk_3` FOREIGN KEY (`donor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
-
---
--- 資料表的限制式 `enterprise_verification_requests`
---
-ALTER TABLE `enterprise_verification_requests`
-  ADD CONSTRAINT `enterprise_verification_requests_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
-
---
--- 資料表的限制式 `public_relations`
---
-ALTER TABLE `public_relations`
-  ADD CONSTRAINT `public_relations_ibfk_1` FOREIGN KEY (`organizer_id`) REFERENCES `users` (`user_id`);
-
---
--- 資料表的限制式 `sales`
---
-ALTER TABLE `sales`
-  ADD CONSTRAINT `sales_ibfk_1` FOREIGN KEY (`processed_by`) REFERENCES `users` (`user_id`);
-
---
--- 資料表的限制式 `sale_items`
---
-ALTER TABLE `sale_items`
-  ADD CONSTRAINT `sale_items_ibfk_1` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`);
 
 --
 -- 資料表結構 `donation_items`
@@ -1278,6 +1062,7 @@ INSERT INTO `role_permission_defaults` (`role`, `member_type`, `permission_key`)
   ('member', 'enterprise', 'page.dashboard'),
   ('member', 'enterprise', 'page.order_tracking'),
   ('member', 'enterprise', 'page.news'),
+  ('member', 'enterprise', 'page.settings'),
   ('member', 'enterprise', 'page.activities'),
   ('member', 'enterprise', 'ad.publish'),
   ('member', 'enterprise', 'activity.publish'),
@@ -1365,6 +1150,14 @@ CREATE TABLE `rider_applications` (
 --
 
 DROP TABLE IF EXISTS `advertisements`;
+-- 系統紀錄（例如資料表檢查的程式指紋，程式更新後才重新檢查資料表）
+CREATE TABLE IF NOT EXISTS `app_meta` (
+  `meta_key` varchar(50) NOT NULL,
+  `meta_value` varchar(255) NOT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`meta_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE `advertisements` (
   `ad_id` int(11) NOT NULL AUTO_INCREMENT,
   `advertiser_id` int(11) NOT NULL,
@@ -1380,6 +1173,8 @@ CREATE TABLE `advertisements` (
   `reviewed_by` int(11) DEFAULT NULL,
   `reviewed_at` datetime DEFAULT NULL,
   `fee_amount` decimal(10,2) DEFAULT NULL,
+  `policy_agreed_at` datetime DEFAULT NULL COMMENT '刊登者同意廣告刊登規範的時間',
+  `policy_flags` text DEFAULT NULL COMMENT '自動檢查出需審核人員注意的項目（JSON）',
   PRIMARY KEY (`ad_id`),
   KEY `idx_advertisements_status` (`status`, `created_at`),
   KEY `idx_advertisements_advertiser` (`advertiser_id`)
@@ -1417,8 +1212,70 @@ ALTER TABLE `donation_allocation_items`
 ALTER TABLE `deliveries`
   ADD KEY `idx_deliveries_allocation_id` (`allocation_id`);
 
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `rider_locations`（GO Rider 最新位置，只保留每人一筆）
+--
+
+DROP TABLE IF EXISTS `rider_locations`;
+CREATE TABLE `rider_locations` (
+  `volunteer_id` int(11) NOT NULL,
+  `lat` decimal(10,7) NOT NULL,
+  `lon` decimal(10,7) NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`volunteer_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- 資料表結構 `category_corrections`（自動分類被手動改掉的紀錄）
+--
+
+DROP TABLE IF EXISTS `category_corrections`;
+CREATE TABLE `category_corrections` (
+  `correction_id` int(11) NOT NULL AUTO_INCREMENT,
+  `item_name` varchar(150) NOT NULL,
+  `suggested_category_id` int(11) DEFAULT NULL,
+  `chosen_category_id` int(11) NOT NULL,
+  `source` enum('donation','inventory') NOT NULL,
+  `resolved` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`correction_id`),
+  KEY `idx_category_corrections_open` (`resolved`,`chosen_category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- 資料表結構 `activity_participants`（企業報名的員工名冊，身分證字號加密保存）
+--
+
+DROP TABLE IF EXISTS `activity_participants`;
+CREATE TABLE `activity_participants` (
+  `participant_id` int(11) NOT NULL AUTO_INCREMENT,
+  `assignment_id` int(11) NOT NULL,
+  `full_name` varchar(50) NOT NULL,
+  `phone` varchar(20) NOT NULL,
+  `id_number_encrypted` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`participant_id`),
+  KEY `idx_activity_participants_assignment` (`assignment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+-- 食物銀行資料（全食物銀行共用一份，profile_id 固定為 1）：在「設置」由食物銀行人員維護
+CREATE TABLE IF NOT EXISTS foodbank_profile (
+    profile_id TINYINT NOT NULL PRIMARY KEY,
+    contact_name VARCHAR(100) NULL,
+    contact_phone VARCHAR(30) NULL,
+    address VARCHAR(255) NULL,
+    open_days VARCHAR(20) NULL COMMENT '可收貨的星期，逗號分隔（1=週一…7=週日）',
+    business_hours VARCHAR(100) NULL,
+    closed_days VARCHAR(100) NULL,
+    receiving_note VARCHAR(255) NULL COMMENT 'GO Rider 送達時看到的備註',
+    updated_by INT NULL,
+    updated_at DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
