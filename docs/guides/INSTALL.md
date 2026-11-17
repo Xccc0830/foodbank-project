@@ -79,7 +79,7 @@ http://localhost/SA/foodbank-project/foodbank-project/public/
 
 ### 第 6 步：登錄應用
 
-新安裝的示範資料包含食物銀行、商家及 GO Rider 測試帳號。僅在本機開發時啟用除錯模式，登入頁才會顯示測試帳號快捷按鈕。正式使用前必須停用或更換測試帳號及密碼。
+新安裝的示範資料包含食物銀行、商家及 GO Rider 測試帳號。可在本機啟用快捷登入，設定方式見下方開發環境說明。正式使用前必須停用或更換測試帳號及密碼。
 
 快捷登入包含食物銀行管理員、行政人員、愛心商家和 GO Rider。示範資料沒有預設行政人員測試帳號，需先在獨立的測試資料庫中建立專用食物銀行帳號，並將其 `staff_type` 設為 `clerk`，再依下方開發環境說明設定帳號密碼；未設定時按鈕會停用。
 例如，在測試資料庫建立 `test_clerk` 帳號後執行 `UPDATE users SET staff_type = 'clerk' WHERE username = 'test_clerk';`。不要對正式帳號執行此操作。
@@ -148,6 +148,15 @@ foodbank-project/
 
 ## 🚀 開發環境配置
 
+### 啟用本機快捷登入
+
+僅在獨立測試環境，於 Git 忽略的 `config/local.php` 加入：
+```php
+<?php
+define('LOCAL_DEMO_LOGIN', true);
+```
+這不會開啟其他除錯功能；按鈕僅顯示給直接連線到本機回環位址的使用者。不要在正式或共用環境啟用，也不要透過反向代理使用，因為代理可能隱藏訪客的真實位址。測試帳號密碼會出現在頁面 HTML，僅供使用獨立測試資料庫。
+
 ### 啟用調試模式
 
 僅供本機測試：在 Git 忽略的 `config/local.php` 加入：
@@ -162,7 +171,7 @@ define('APP_DEBUG', true);
 define('DEMO_CLERK_USERNAME', getenv('DEMO_CLERK_USERNAME') ?: '');
 define('DEMO_CLERK_PASSWORD', getenv('DEMO_CLERK_PASSWORD') ?: '');
 ```
-這些值會出現在除錯登入頁的 HTML 中，僅能使用專供本機、獨立測試資料庫的測試帳號，勿使用正式帳號或密碼，也不要將本機設定或密碼提交至版本庫。快捷按鈕仍會走一般登入驗證，帳號必須啟用且密碼正確。
+這些值會出現在快捷登入頁的 HTML 中，僅能使用專供本機、獨立測試資料庫的測試帳號，勿使用正式帳號或密碼，也不要將本機設定或密碼提交至版本庫。快捷按鈕仍會走一般登入驗證，帳號必須啟用且密碼正確。
 
 ### 啟用錯誤報告
 

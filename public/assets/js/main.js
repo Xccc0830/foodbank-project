@@ -847,6 +847,7 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]');
         if (csrfToken) {
             document.querySelectorAll('form').forEach(function (form) {
+                if (form.method.toLowerCase() !== 'post') { return; }
                 if (!form.querySelector('input[name="csrf_token"]')) {
                     const input = document.createElement('input');
                     input.type = 'hidden';

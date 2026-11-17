@@ -38,6 +38,10 @@ if (!defined('APP_DEBUG')) {
     define('APP_DEBUG', $debug);
 }
 
+if (!defined('LOCAL_DEMO_LOGIN')) {
+    define('LOCAL_DEMO_LOGIN', false);
+}
+
 if (!defined('DEMO_CLERK_USERNAME')) {
     define('DEMO_CLERK_USERNAME', getenv('DEMO_CLERK_USERNAME') ?: '');
 }

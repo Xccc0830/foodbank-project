@@ -2,8 +2,17 @@
 $error = $error ?? null;
 $loginCssPath = BASE_PATH . '/public/assets/css/style.css';
 $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time();
-$clerkUsername = APP_DEBUG && defined('DEMO_CLERK_USERNAME') ? trim((string) DEMO_CLERK_USERNAME) : '';
-$clerkPassword = APP_DEBUG && defined('DEMO_CLERK_PASSWORD') ? (string) DEMO_CLERK_PASSWORD : '';
+$loopbackAddresses = ['127.0.0.1', '::1'];
+$isDirectLocalRequest = in_array($_SERVER['REMOTE_ADDR'] ?? '', $loopbackAddresses, true)
+    && in_array($_SERVER['SERVER_ADDR'] ?? '', $loopbackAddresses, true)
+    && preg_match('/^(localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/i', $_SERVER['HTTP_HOST'] ?? '')
+    && !isset($_SERVER['HTTP_FORWARDED'])
+    && !isset($_SERVER['HTTP_X_FORWARDED_FOR'])
+    && !isset($_SERVER['HTTP_X_FORWARDED_HOST'])
+    && !isset($_SERVER['HTTP_X_REAL_IP']);
+$showQuickLogin = APP_DEBUG || (defined('LOCAL_DEMO_LOGIN') && LOCAL_DEMO_LOGIN && $isDirectLocalRequest);
+$clerkUsername = $showQuickLogin && defined('DEMO_CLERK_USERNAME') ? trim((string) DEMO_CLERK_USERNAME) : '';
+$clerkPassword = $showQuickLogin && defined('DEMO_CLERK_PASSWORD') ? (string) DEMO_CLERK_PASSWORD : '';
 $clerkConfigured = $clerkUsername !== '' && $clerkPassword !== '';
 ?>
 <!DOCTYPE html>
@@ -48,7 +57,7 @@ $clerkConfigured = $clerkUsername !== '' && $clerkPassword !== '';
                 <div class="form-group"><label for="password">密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" autocomplete="current-password" placeholder="輸入你的密碼" required></div></div>
                 <button class="btn btn-primary login-submit" type="submit">登入系統 <i class="fa-solid fa-arrow-right"></i></button>
             </form>
-            <?php if (APP_DEBUG): ?>
+            <?php if ($showQuickLogin): ?>
             <div class="login-divider"><span>快速登入（僅供開發測試）</span></div>
             <div class="login-roles" aria-label="測試帳號快捷登入">
                 <button type="button" class="login-role-button" data-username="manager" data-password="manager123">食物銀行管理帳號</button>
@@ -64,7 +73,7 @@ $clerkConfigured = $clerkUsername !== '' && $clerkPassword !== '';
             <?php endif; ?>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
             <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>
-            <?php if (APP_DEBUG): ?>
+            <?php if ($showQuickLogin): ?>
             <div class="login-hint">
                 <strong>開發測試帳號</strong>
                 <span>食物銀行管理帳號：manager / manager123</span>
@@ -74,7 +83,7 @@ $clerkConfigured = $clerkUsername !== '' && $clerkPassword !== '';
             <?php endif; ?>
         </section>
     </main>
-    <?php if (APP_DEBUG): ?>
+    <?php if ($showQuickLogin): ?>
     <script>
         document.querySelectorAll('.login-role-button').forEach(function (button) {
             button.addEventListener('click', function () {
