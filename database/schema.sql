@@ -286,13 +286,6 @@ CREATE TABLE `donor_reward_items` (
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- 傾印資料表的資料 `donor_reward_items`
---
-
-INSERT INTO `donor_reward_items` (`item_id`, `donor_id`, `title`, `description`, `cost_points`, `stock`, `category`, `redemption_code`, `status`, `created_at`, `updated_at`) VALUES
-(1, 13, '愛心店家 9 折優惠券', '合作店家消費可折抵，掃描店家 QR Code 自行扣點', 30, NULL, 'discount', NULL, 'active', '2026-08-23 06:35:36', '2026-08-23 06:35:36');
-
 -- --------------------------------------------------------
 
 --
@@ -438,14 +431,6 @@ CREATE TABLE `reward_catalog` (
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- 傾印資料表的資料 `reward_catalog`
---
-
-INSERT INTO `reward_catalog` (`reward_id`, `title`, `description`, `cost_points`, `stock`, `status`, `created_at`) VALUES
-(2, '食物銀行公益禮盒', '兌換一份食物銀行整理的公益物資禮盒', 80, 20, 'active', '2026-08-23 06:35:36'),
-(3, '公益貢獻感謝狀', '累積貢獻達標即可換取實體感謝狀', 150, NULL, 'active', '2026-08-23 06:35:36');
 
 -- --------------------------------------------------------
 
