@@ -2108,6 +2108,89 @@ form {
     gap: 24px;
 }
 
+.reward-template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 16px;
+}
+
+.reward-template-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.reward-template-card:hover,
+.reward-template-card:focus-visible,
+.reward-template-card.is-selected {
+    border-color: var(--primary-color);
+    background: rgba(32, 59, 143, 0.06);
+}
+
+.reward-template-card small {
+    color: var(--text-secondary);
+}
+
+.reward-template-action {
+    margin-top: auto;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.reward-store-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    gap: 20px;
+}
+
+.reward-store-card {
+    padding: 24px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+}
+
+.reward-store-card h3 {
+    margin-bottom: 16px;
+}
+
+.reward-store-details {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.reward-store-details dt {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.reward-store-details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.reward-store-offers {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.reward-store-offers li {
+    padding: 14px 0;
+    border-top: 1px solid var(--gray-200);
+}
+
+.reward-store-offers p {
+    margin: 8px 0;
+    overflow-wrap: anywhere;
+}
+
 .reward-card {
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);

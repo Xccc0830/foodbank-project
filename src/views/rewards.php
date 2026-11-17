@@ -16,6 +16,18 @@ $canVerify = $currentRole === 'foodbank_staff' || $isDonor;
 $message = $_SESSION['rewards_flash_message'] ?? null;
 unset($_SESSION['rewards_flash_message']);
 
+function rewardRuleText($reward) {
+    $points = (int) ($reward['points_spent'] ?? $reward['cost_points'] ?? 0);
+    $rule = $reward['rule_type'] ?? 'direct_exchange';
+    if ($rule === 'min_spend_discount') {
+        return '【滿額折抵】滿 ' . (int) $reward['min_spend'] . ' 元折 ' . (int) $reward['discount_amount'] . ' 元（需 ' . $points . ' 點）';
+    }
+    if ($rule === 'min_spend_percentage') {
+        return '【滿額打折】滿 ' . (int) $reward['min_spend'] . ' 元享 ' . rtrim(rtrim(number_format((float) $reward['discount_rate'] * 10, 1), '0'), '.') . ' 折（需 ' . $points . ' 點）';
+    }
+    return '【商品直換】' . $points . ' 點，無需現金';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -44,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = ['type' => 'error', 'text' => '此兌換紀錄無法重新開啟。'];
         }
     } elseif ($action === 'fulfill_claim' && $canVerify) {
-        $fulfillment = $rewardModel->fulfillByToken($_POST['claim_token'] ?? '', (int) $currentUser['user_id'], $currentRole);
+        $fulfillment = $rewardModel->fulfillByToken($_POST['claim_token'] ?? '', (int) $currentUser['user_id'], $currentRole, $_POST['bill_amount'] ?? null);
         $message = [
             'type' => $fulfillment['success'] ? 'success' : 'error',
             'text' => $fulfillment['message'],
@@ -79,13 +91,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'title' => trim($_POST['title'] ?? ''),
             'description' => trim($_POST['description'] ?? ''),
             'category' => $_POST['category'] ?? 'other',
-            'cost_points' => (int) ($_POST['cost_points'] ?? 0),
-            'stock' => ($_POST['stock'] ?? '') !== '' ? (int) $_POST['stock'] : null,
+            'cost_points' => ($_POST['rule_type'] ?? '') === 'min_spend_discount' ? ($_POST['discount_amount'] ?? '') : ($_POST['cost_points'] ?? ''),
+            'stock' => $_POST['stock'] ?? null,
+            'rule_type' => $_POST['rule_type'] ?? 'direct_exchange',
+            'min_spend' => $_POST['min_spend'] ?? 0,
+            'discount_amount' => $_POST['discount_amount'] ?? null,
+            'discount_rate' => $_POST['discount_rate'] ?? null,
         ];
-        $validCategories = ['discount', 'product', 'experience', 'other'];
-        $message = ($data['title'] !== '' && $data['cost_points'] > 0 && ($data['stock'] === null || $data['stock'] >= 0) && in_array($data['category'], $validCategories, true) && $rewardModel->updateDonorReward((int) ($_POST['item_id'] ?? 0), (int) $currentUser['user_id'], $data, $currentRole === 'foodbank_staff'))
+        $message = $rewardModel->updateDonorReward((int) ($_POST['item_id'] ?? 0), (int) $currentUser['user_id'], $data, $currentRole === 'foodbank_staff')
             ? ['type' => 'success', 'text' => '獎勵方案已更新。']
-            : ['type' => 'error', 'text' => '請確認方案名稱、分類、所需心意幣與庫存格式。'];
+            : ['type' => 'error', 'text' => '請確認方案名稱及優惠條件；折抵金額不得超過最低消費。'];
     } elseif ($action === 'delete_donor_reward' && ($isDonor || $currentRole === 'foodbank_staff')) {
         $message = $rewardModel->deleteDonorReward((int) ($_POST['item_id'] ?? 0), (int) $currentUser['user_id'], $currentRole === 'foodbank_staff')
             ? ['type' => 'success', 'text' => '獎勵方案已刪除。']
@@ -94,12 +109,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $rewardModel->createDonorReward((int) $currentUser['user_id'], [
             'title' => $_POST['title'] ?? '',
             'description' => $_POST['description'] ?? '',
-            'cost_points' => $_POST['cost_points'] ?? 0,
-            'stock' => $_POST['stock'] !== '' ? $_POST['stock'] : null,
+            'cost_points' => ($_POST['rule_type'] ?? '') === 'min_spend_discount' ? ($_POST['discount_amount'] ?? '') : ($_POST['cost_points'] ?? ''),
+            'stock' => $_POST['stock'] ?? null,
             'category' => $_POST['category'] ?? 'other',
+            'rule_type' => $_POST['rule_type'] ?? 'direct_exchange',
+            'min_spend' => $_POST['min_spend'] ?? 0,
+            'discount_amount' => $_POST['discount_amount'] ?? null,
+            'discount_rate' => $_POST['discount_rate'] ?? null,
         ])
             ? ['type' => 'success', 'text' => '獎勵方案已新增。']
-            : ['type' => 'error', 'text' => '新增失敗，請確認資料格式後再試。'];
+            : ['type' => 'error', 'text' => '新增失敗，請確認方案名稱及優惠條件；折抵金額不得超過最低消費。'];
     } elseif ($action === 'update_donor_redemption' && $isDonor) {
         $status = $_POST['status'] ?? '';
         $message = $rewardModel->updateDonorRedemptionStatus(
@@ -113,11 +132,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $_SESSION['rewards_flash_message'] = $message;
     $redirectUrl = '?page=rewards';
+    if (($_POST['editor_flow'] ?? '') === '1' && in_array($action, ['create_donor_reward', 'update_donor_reward'], true)) {
+        unset($_SESSION['reward_editor_input']);
+        if (($message['type'] ?? '') === 'error') {
+            $fields = ['title', 'description', 'category', 'stock', 'cost_points', 'min_spend', 'discount_amount', 'discount_rate', 'rule_type'];
+            $input = [];
+            foreach ($fields as $field) {
+                if (isset($_POST[$field]) && is_scalar($_POST[$field])) {
+                    $input[$field] = (string) $_POST[$field];
+                }
+            }
+            $_SESSION['reward_editor_input'] = $input;
+            $redirectUrl .= '&editor=' . ($action === 'create_donor_reward' ? 'create' : 'edit');
+            if ($action === 'update_donor_reward') {
+                $redirectUrl .= '&item_id=' . (int) ($_POST['item_id'] ?? 0);
+            }
+            if (in_array($input['rule_type'] ?? '', ['direct_exchange', 'min_spend_discount', 'min_spend_percentage'], true)) {
+                $redirectUrl .= '&template=' . $input['rule_type'];
+            }
+        }
+    }
     if ($action === 'refresh_claim' && !empty($_POST['claim_id'])) {
         $redirectUrl .= '&claim_id=' . (int) $_POST['claim_id'];
     }
     redirectTo($redirectUrl);
     exit;
+}
+
+$editor = $_GET['editor'] ?? '';
+if (($editor === 'create' && $isDonor) || ($editor === 'edit' && ($isDonor || $canCreateCatalogReward))) {
+    require BASE_PATH . '/src/views/reward_editor.php';
+    return;
+}
+if (($_GET['stores'] ?? '') === '1') {
+    require BASE_PATH . '/src/views/reward_stores.php';
+    return;
 }
 
 $balance = $rewardModel->getBalance((int) $currentUser['user_id']);
@@ -153,7 +202,11 @@ if ($isDonor) {
 <div class="view-header">
     <div>
         <h1 class="view-title">心意幣兌換</h1>
-        <p class="view-subtitle">心意幣僅作為公益貢獻紀錄，不具現金兌換功能</p>
+        <p class="view-subtitle">愛心店家優惠以 1 點折抵 1 元；心意幣不可兌換現金。</p>
+    </div>
+    <div>
+        <a class="btn btn-secondary" href="?page=rewards&amp;stores=1">查看合作商家</a>
+        <?php if ($isDonor): ?><a class="btn btn-primary" href="?page=rewards&amp;editor=create">設定店家優惠</a><?php endif; ?>
     </div>
 </div>
 
@@ -161,7 +214,7 @@ if ($isDonor) {
     <div class="reward-verification-notice reward-verification-notice-<?php echo htmlspecialchars($message['type'], ENT_QUOTES, 'UTF-8'); ?>" role="alert">
         <span class="reward-verification-notice-icon"><?php echo $message['type'] === 'success' ? '✓' : '!'; ?></span>
         <div>
-            <strong><?php echo $message['type'] === 'success' ? '核銷成功' : '核銷未完成'; ?></strong>
+            <strong><?php echo $message['type'] === 'success' ? '操作成功' : '操作未完成'; ?></strong>
             <p><?php echo htmlspecialchars($message['text']); ?></p>
         </div>
     </div>
@@ -172,15 +225,17 @@ if ($isDonor) {
 </div>
 
 <div class="card mt-32">
-    <div class="card-header"><h2>兌換目錄</h2><p>選擇非現金獎勵進行兌換</p></div>
+    <div class="card-header"><h2>兌換目錄</h2><p>選擇獎勵或愛心店家優惠進行兌換</p></div>
     <div class="card-body">
         <?php if ($catalog): ?>
             <div class="reward-grid">
                 <?php foreach ($catalog as $reward): ?>
-                    <div class="reward-card">
+                    <div class="reward-card" id="reward-<?php echo $reward['source_type'] === 'donor' ? 'donor' : 'foodbank'; ?>-<?php echo (int) $reward['source_id']; ?>">
                         <h3><?php echo htmlspecialchars($reward['title']); ?></h3>
+                        <?php if ($reward['source_type'] === 'donor'): ?><p class="toolbar-meta">提供店家：<?php echo htmlspecialchars($reward['donor_name'] ?? '未知店家'); ?></p><?php endif; ?>
                         <p><?php echo htmlspecialchars($reward['description'] ?? ''); ?></p>
                         <span class="reward-cost"><?php echo (int) $reward['cost_points']; ?> 點</span>
+                        <?php if ($reward['source_type'] === 'donor'): ?><p><strong class="status status-info"><?php echo htmlspecialchars(rewardRuleText($reward)); ?></strong></p><?php endif; ?>
                         <?php if ($reward['stock'] !== null): ?><p class="toolbar-meta">剩餘 <?php echo (int) $reward['stock']; ?> 份</p><?php endif; ?>
                         <?php if ($canCreateCatalogReward && $reward['source_type'] === 'foodbank'): ?>
                             <button class="btn btn-secondary btn-sm" type="button" data-action="edit-reward">編輯品項</button>
@@ -204,27 +259,7 @@ if ($isDonor) {
                                 <button class="btn btn-danger btn-sm" type="submit">刪除品項</button>
                             </form>
                         <?php elseif ($reward['source_type'] === 'donor' && ($currentRole === 'foodbank_staff' || ((int) ($reward['source_owner_id'] ?? 0) === (int) $currentUser['user_id']))): ?>
-                            <button class="btn btn-secondary btn-sm" type="button" data-action="edit-reward">編輯品項</button>
-                            <form method="post" class="reward-management-form" hidden>
-                                <?php echo csrfField(); ?>
-                                <input type="hidden" name="action" value="update_donor_reward">
-                                <input type="hidden" name="item_id" value="<?php echo (int) $reward['source_id']; ?>">
-                                <div class="form-group"><label>品項名稱</label><input name="title" value="<?php echo htmlspecialchars($reward['title'], ENT_QUOTES, 'UTF-8'); ?>" required></div>
-                                <div class="form-group"><label>說明</label><textarea name="description"><?php echo htmlspecialchars($reward['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea></div>
-                                <div class="grid-2">
-                                    <div class="form-group"><label>分類</label>
-                                        <select name="category" required>
-                                            <?php foreach (['discount' => '折扣優惠', 'product' => '實體商品', 'experience' => '體驗活動', 'other' => '其他'] as $categoryValue => $categoryLabel): ?>
-                                                <option value="<?php echo $categoryValue; ?>" <?php echo ($reward['category'] ?? 'other') === $categoryValue ? 'selected' : ''; ?>><?php echo $categoryLabel; ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="form-group"><label>所需心意幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
-                                </div>
-                                <div class="form-group"><label>庫存</label><input type="number" name="stock" min="0" value="<?php echo $reward['stock'] !== null ? (int) $reward['stock'] : ''; ?>" placeholder="不限量"></div>
-                                <button class="btn btn-primary btn-sm" type="submit">儲存修改</button>
-                                <button class="btn btn-secondary btn-sm" type="button" data-action="cancel-edit-reward">取消</button>
-                            </form>
+                            <a class="btn btn-secondary btn-sm" href="?page=rewards&amp;editor=edit&amp;item_id=<?php echo (int) $reward['source_id']; ?>">編輯方案</a>
                             <form method="post" class="reward-delete-form" onsubmit="return confirm('確定要刪除此愛心商家品項嗎？');">
                                 <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="delete_donor_reward">
@@ -271,6 +306,12 @@ if ($isDonor) {
     <div class="card-header"><h2><?php echo htmlspecialchars($selectedClaim['title']); ?></h2><p>請於核銷時再出示 QR Code</p></div>
     <div class="card-body reward-claim-detail">
         <p class="reward-claim-number">兌換編號：<?php echo htmlspecialchars('R' . str_pad((string) $selectedClaim['claim_id'], 6, '0', STR_PAD_LEFT)); ?></p>
+        <?php if ($selectedClaim['source_type'] === 'donor'): ?>
+            <p>提供店家：<?php echo htmlspecialchars($selectedClaim['donor_name'] ?? '未知店家'); ?></p>
+            <p><strong><?php echo htmlspecialchars(rewardRuleText($selectedClaim)); ?></strong></p>
+            <?php if (!empty($selectedClaim['reward_description'])): ?><p><?php echo nl2br(htmlspecialchars($selectedClaim['reward_description'])); ?></p><?php endif; ?>
+            <p>請於指定店家消費並出示此券；滿額優惠須達最低消費，點數已於領券時扣除。</p>
+        <?php endif; ?>
         <a class="btn btn-secondary btn-sm" href="?page=rewards">返回我的優惠券</a>
         <div id="selected-reward-qr-code" aria-label="兌換 QR Code"></div>
         <p id="selected-reward-qr-countdown" class="toolbar-meta"></p>
@@ -302,11 +343,18 @@ if ($isDonor) {
         <button class="btn btn-secondary btn-sm" type="button" id="stop-reward-scanner" hidden>關閉相機</button>
         <div id="reward-qr-reader" style="max-width: 420px;"></div>
         <p id="reward-scanner-status" class="toolbar-meta">可掃描 QR Code，或輸入兌換編號（例如 R000001）核銷。</p>
-        <form method="post" class="mt-20">
+        <form method="post" class="mt-20" id="reward-fulfill-form">
             <?php echo csrfField(); ?>
             <input type="hidden" name="action" value="fulfill_claim">
             <div class="form-group"><label for="claim_token">無法掃描時輸入兌換碼</label><input id="claim_token" name="claim_token" required></div>
-            <button class="btn btn-primary btn-sm" type="submit">確認核銷</button>
+            <button class="btn btn-secondary btn-sm" type="button" id="reward-preview">查詢優惠券</button>
+            <p id="reward-preview-status" role="status"></p>
+            <div id="reward-calculator" hidden>
+                <p id="reward-rule-summary"></p>
+                <div class="form-group" id="reward-bill-group" hidden><label for="reward-bill">消費總金額（元）</label><input id="reward-bill" type="number" name="bill_amount" min="0" max="99999999.99" step="0.01"></div>
+                <p id="reward-calculation"></p>
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit" id="reward-confirm" disabled>確認核銷</button>
         </form>
     </div>
 </div>
@@ -424,7 +472,8 @@ if ($isDonor) {
                     { fps: 10, qrbox: 220 },
                     function (decodedText) {
                         document.getElementById('claim_token').value = decodedText;
-                        status.textContent = '已讀取 QR Code，請按「確認核銷」。';
+                        document.getElementById('claim_token').dispatchEvent(new Event('input'));
+                        document.getElementById('reward-preview').click();
                         stopScanner('已讀取 QR Code，相機已關閉。');
                     }
                 ).then(function () {
@@ -443,6 +492,94 @@ if ($isDonor) {
         });
         </script>
         <?php endif; ?>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var form = document.getElementById('reward-fulfill-form');
+            if (!form) return;
+            var token = document.getElementById('claim_token');
+            var status = document.getElementById('reward-preview-status');
+            var calculator = document.getElementById('reward-calculator');
+            var summary = document.getElementById('reward-rule-summary');
+            var billGroup = document.getElementById('reward-bill-group');
+            var bill = document.getElementById('reward-bill');
+            var calculation = document.getElementById('reward-calculation');
+            var confirm = document.getElementById('reward-confirm');
+            var claim = null;
+            var requestId = 0;
+            function reset() {
+                requestId++;
+                claim = null;
+                calculator.hidden = true;
+                confirm.disabled = true;
+                bill.required = false;
+                bill.value = '';
+                status.textContent = '';
+            }
+            function calculate() {
+                if (!claim) return;
+                var discount = claim.source_type === 'donor' && claim.rule_type && claim.rule_type !== 'direct_exchange';
+                billGroup.hidden = !discount;
+                bill.required = discount;
+                var ruleText = !discount ? '商品直換' :
+                    claim.rule_type === 'min_spend_discount'
+                        ? '滿 ' + claim.min_spend + ' 元折 ' + claim.discount_amount + ' 元'
+                        : '滿 ' + claim.min_spend + ' 元享 ' + (Number(claim.discount_rate) * 10).toFixed(1).replace(/\.0$/, '') + ' 折';
+                summary.textContent = claim.title + '｜' + ruleText + '（扣除 ' + claim.points_spent + ' 點，已於領券時扣除）';
+                if (!discount) {
+                    calculation.textContent = '商品直換，無需現金。';
+                    confirm.disabled = false;
+                    return;
+                }
+                var valid = /^\d{1,8}(?:\.\d{1,2})?$/.test(bill.value) && bill.checkValidity();
+                var total = Number(bill.value);
+                var eligible = valid && total >= Number(claim.min_spend);
+                confirm.disabled = !eligible;
+                if (!eligible) {
+                    calculation.textContent = '未達門檻：最低消費 ' + claim.min_spend + ' 元。';
+                    return;
+                }
+                var cash = claim.rule_type === 'min_spend_discount'
+                    ? Math.max(0, total - Number(claim.discount_amount))
+                    : Math.floor((Math.round(total * 100) * Math.round(Number(claim.discount_rate) * 100) + 5000) / 10000);
+                calculation.textContent = '已達門檻（滿 ' + claim.min_spend + ' 元）｜本次折抵：' +
+                    (total - cash).toFixed(2) + ' 元｜應收現金：$' + cash.toFixed(2);
+            }
+            token.addEventListener('input', reset);
+            bill.addEventListener('input', calculate);
+            document.getElementById('reward-preview').addEventListener('click', function () {
+                reset();
+                if (!token.value.trim()) {
+                    status.textContent = '請先輸入兌換碼。';
+                    return;
+                }
+                var current = requestId;
+                var data = new FormData();
+                data.append('csrf_token', form.querySelector('[name="csrf_token"]').value);
+                data.append('claim_token', token.value);
+                status.textContent = '正在查詢優惠券…';
+                fetch('?action=reward_claim_preview', { method: 'POST', body: data })
+                    .then(function (response) {
+                        if (!response.ok) throw new Error('查詢失敗，請重新登入或稍後再試。');
+                        return response.json();
+                    })
+                    .then(function (result) {
+                        if (current !== requestId) return;
+                        if (!result.success) {
+                            status.textContent = result.message;
+                            return;
+                        }
+                        claim = result.claim;
+                        status.textContent = '已取得優惠券，請確認後核銷。';
+                        calculator.hidden = false;
+                        calculate();
+                    })
+                    .catch(function () {
+                        if (current === requestId) status.textContent = '查詢失敗，請重新登入或稍後再試。';
+                    });
+            });
+        });
+        </script>
 
 <?php if ($canCreateCatalogReward): ?>
 <div class="card mt-32">
@@ -477,7 +614,7 @@ if ($isDonor) {
                     <td><?php echo htmlspecialchars($redemption['created_at']); ?></td>
                     <td><span class="status status-<?php echo $redemption['status'] === 'fulfilled' ? 'completed' : ($redemption['status'] === 'pending' ? 'pending' : ($redemption['status'] === 'cancelled' ? 'cancelled' : 'info')); ?>"><?php echo ['pending' => '待核銷', 'fulfilled' => '已核銷', 'cancelled' => '已取消'][$redemption['status']] ?? $redemption['status']; ?></span></td>
                     <td>
-                        <?php if ($redemption['status'] === 'pending'): ?>
+                        <?php if ($redemption['status'] === 'pending' && ($redemption['rule_type'] ?? 'direct_exchange') === 'direct_exchange'): ?>
                             <form method="post" class="inline-form">
                                 <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="update_donor_redemption">
@@ -485,7 +622,7 @@ if ($isDonor) {
                                 <button class="btn btn-primary btn-sm" type="submit" name="status" value="fulfilled">標記完成</button>
                             </form>
                         <?php else: ?>
-                            <span class="toolbar-meta">無可用操作</span>
+                            <span class="toolbar-meta"><?php echo $redemption['status'] === 'pending' ? '請使用上方核銷計算機' : '無可用操作'; ?></span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -498,7 +635,9 @@ if ($isDonor) {
 </div>
 
 <div class="card mt-32">
-    <div class="card-header"><h2>我的獎勵方案</h2><p>設定 GO Rider 可在貴店家兌換的獎勵與優惠</p></div>
+    <div class="card-header"><h2>我的獎勵方案</h2><p>設定 GO Rider 可在貴店家兌換的獎勵與優惠</p>
+        <a class="btn btn-primary btn-sm" href="?page=rewards&amp;editor=create">選擇優惠模板並新增方案</a>
+    </div>
     <div class="card-body">
         <?php if ($donorRewards): ?>
             <div class="rewards-table-wrapper">
@@ -511,38 +650,14 @@ if ($isDonor) {
                     <td><?php echo $reward['stock'] !== null ? (int) $reward['stock'] . ' 份' : '不限量'; ?></td>
                     <td><span class="status status-<?php echo $reward['status']; ?>"><?php echo $reward['status'] === 'active' ? '啟用' : '停用'; ?></span></td>
                     <td>
-                        <button class="btn btn-secondary btn-sm" type="button" data-action="edit-donor-reward">編輯方案</button>
+                        <?php if ($reward['status'] === 'active'): ?>
+                            <a class="btn btn-secondary btn-sm" href="?page=rewards&amp;editor=edit&amp;item_id=<?php echo (int) $reward['item_id']; ?>">編輯方案</a>
+                        <?php endif; ?>
                         <form method="post" onsubmit="return confirm('確定要刪除此獎勵方案嗎？');" style="display: inline-block;">
                             <?php echo csrfField(); ?>
                             <input type="hidden" name="action" value="delete_donor_reward">
                             <input type="hidden" name="item_id" value="<?php echo (int) $reward['item_id']; ?>">
                             <button class="btn btn-danger btn-sm" type="submit">刪除方案</button>
-                        </form>
-                    </td>
-                </tr>
-                <tr hidden>
-                    <td colspan="6">
-                        <form method="post" class="reward-management-form">
-                            <?php echo csrfField(); ?>
-                            <input type="hidden" name="action" value="update_donor_reward">
-                            <input type="hidden" name="item_id" value="<?php echo (int) $reward['item_id']; ?>">
-                            <div class="grid-2">
-                                <div class="form-group"><label>方案名稱</label><input name="title" value="<?php echo htmlspecialchars($reward['title'], ENT_QUOTES, 'UTF-8'); ?>" required></div>
-                                <div class="form-group"><label>所需心意幣</label><input type="number" name="cost_points" min="1" value="<?php echo (int) $reward['cost_points']; ?>" required></div>
-                            </div>
-                            <div class="grid-2">
-                                <div class="form-group"><label>分類</label>
-                                    <select name="category" required>
-                                        <?php foreach (['discount' => '折扣優惠', 'product' => '實體商品', 'experience' => '體驗活動', 'other' => '其他'] as $categoryValue => $categoryLabel): ?>
-                                            <option value="<?php echo $categoryValue; ?>" <?php echo $reward['category'] === $categoryValue ? 'selected' : ''; ?>><?php echo $categoryLabel; ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="form-group"><label>庫存</label><input type="number" name="stock" min="0" value="<?php echo $reward['stock'] !== null ? (int) $reward['stock'] : ''; ?>" placeholder="不限量"></div>
-                            </div>
-                            <div class="form-group"><label>說明</label><textarea name="description"><?php echo htmlspecialchars($reward['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></textarea></div>
-                            <button class="btn btn-primary btn-sm" type="submit">儲存修改</button>
-                            <button class="btn btn-secondary btn-sm" type="button" data-action="cancel-donor-reward-edit">取消</button>
                         </form>
                     </td>
                 </tr>
@@ -555,30 +670,4 @@ if ($isDonor) {
     </div>
 </div>
 
-<div class="card mt-32">
-    <div class="card-header"><h2>新增獎勵方案</h2><p>讓 GO Rider 可以兌換你提供的優惠或商品</p></div>
-    <div class="card-body">
-        <form method="post">
-            <?php echo csrfField(); ?>
-            <input type="hidden" name="action" value="create_donor_reward">
-            <div class="grid-2">
-                <div class="form-group"><label>方案名稱*</label><input name="title" placeholder="例：消費 9 折優惠券" required></div>
-                <div class="form-group"><label>所需心意幣*</label><input type="number" name="cost_points" min="1" placeholder="例：30" required></div>
-            </div>
-            <div class="grid-2">
-                <div class="form-group"><label>分類*</label>
-                    <select name="category" required>
-                        <option value="discount">折扣優惠</option>
-                        <option value="product">實體商品</option>
-                        <option value="experience">體驗活動</option>
-                        <option value="other">其他</option>
-                    </select>
-                </div>
-                <div class="form-group"><label>庫存（留空為不限量）</label><input type="number" name="stock" min="0" placeholder="例：50"></div>
-            </div>
-            <div class="form-group"><label>說明</label><textarea name="description" placeholder="詳細描述此獎勵方案的內容和兌換方式"></textarea></div>
-            <button class="btn btn-primary" type="submit"><i class="fas fa-plus"></i> 新增方案</button>
-        </form>
-    </div>
-</div>
 <?php endif; ?>

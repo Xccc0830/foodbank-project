@@ -317,6 +317,26 @@ $currentUser = $_SESSION['user'];
 require_once BASE_PATH . '/src/services/AuthService.php';
 $authService = AuthService::forCurrentUser($currentUser);
 
+if ($action === 'reward_claim_preview') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    $role = $currentUser['role'] ?? '';
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !$authService->can('page.rewards')
+        || !($role === 'foodbank_staff' || ($role === 'member' && ($currentUser['member_type'] ?? '') === 'enterprise'))) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => '無權查詢優惠券。'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    require_once BASE_PATH . '/src/models/RewardModel.php';
+    $result = (new RewardModel())->previewClaim($_POST['claim_token'] ?? '', (int) $currentUser['user_id'], $role);
+    if ($result['success']) {
+        $claim = $result['claim'];
+        $result['claim'] = array_intersect_key($claim, array_flip(['title', 'source_type', 'points_spent', 'rule_type', 'min_spend', 'discount_amount', 'discount_rate']));
+    }
+    echo json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+
 if ($action === 'notifications_poll') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');

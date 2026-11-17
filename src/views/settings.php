@@ -95,7 +95,7 @@ if (isset($db) && $db instanceof Database) {
             <div class="form-group">
                 <label for="businessAddress">商家取貨地址 <span class="required-mark">*</span></label>
                 <input id="businessAddress" type="text" name="business_address" required minlength="5" maxlength="255" autocomplete="off" placeholder="例：台北市信義區○○路 1 號" value="<?php echo htmlspecialchars($businessProfile['default_pickup_address'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
-                <p class="form-hint">新增物資時會自動帶入這個地址。搬家後請在這裡更新；已送出的物資單仍使用當時的地址，並會通知食物銀行。</p>
+                <p class="form-hint">新增物資時會自動帶入這個地址；有啟用中的心意幣優惠時，此地址及下方營業資訊也會顯示於合作商家清單。搬家後請在這裡更新；已送出的物資單仍使用當時的地址，並會通知食物銀行。</p>
             </div>
             <div class="form-group">
                 <label>營業日（選填，勾選有營業的日子）</label>
