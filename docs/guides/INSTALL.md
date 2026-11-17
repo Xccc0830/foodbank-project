@@ -2,8 +2,8 @@
 
 ## 📋 系統要求
 
-- **PHP**: 7.4 或更高版本
-- **MySQL**: 5.7 或更高版本
+- **PHP**: XAMPP PHP 8.2（需啟用 `mysqli`、`curl`、`fileinfo`、`mbstring`、`openssl`）
+- **資料庫**: XAMPP MariaDB 10.4；以 phpMyAdmin 匯入
 - **Web 服務器**: Apache（XAMPP 已包含）
 - **瀏覽器**: 現代瀏覽器（Chrome、Firefox、Safari 等）
 
@@ -11,19 +11,21 @@
 
 ### 資料庫
 
-`database/schema.sql` 是本專案唯一提供的 SQL，包含目前完整資料表、欄位、索引與權限種子資料，僅供新安裝使用。
+`database/schema.sql` 是本專案提供的 SQL，包含資料表、權限與既有示範資料，僅供新安裝使用。
 匯入前請先備份資料庫；新安裝時，先建立空的 `shinigyi_foodbank`，再直接匯入 `database/schema.sql`。
 此 SQL 會刪除並重建其中列出的資料表，不可匯入已有資料的資料庫。本專案目前不提供既有資料庫升級 SQL；若需保留既有資料，請勿匯入。
-依 2026/10/13 專題會議決議，系統不提供即時 GPS 定位；配送進度以狀態（接單、取貨、送達）呈現。
+本 SQL 含有測試帳號和示範資料，不能直接視為正式環境的空白資料庫。正式使用前須清理不需要的資料及停用或更換所有測試帳號。
 
-駕照照片存放於 `storage/rider_licenses/`（不在網站根目錄內），部署時請確認 PHP 可寫入該資料夾，並由網站伺服器禁止直接存取 `storage/`。
+駕照照片存放於 `storage/rider_licenses/`，身分證加密金鑰存放於 `storage/keys/`。部署時請確認 PHP 可寫入 `storage/`、Apache 已啟用 `.htaccess` 並禁止直接存取 `storage/`。備份資料庫時也須安全備份金鑰和上傳檔案，否則無法還原資料或解密身分證資料。
 物資捐贈表單在「商家取貨地址」與「配送地址」都填寫完成後，會呼叫伺服器端的 `?action=calculate_distance` API 自動計算兩地之間的路程距離與預估運送時間並帶入表單。此功能透過 OpenStreetMap 的 Nominatim（地理編碼）與 OSRM（路徑規劃）公開服務運作，**需要伺服器可對外連線**（PHP 需啟用 `curl` 擴充套件）；由於台灣部分門牌號碼未完整收錄於 OpenStreetMap，系統會自動從完整地址逐步簡化為路段層級查詢，若僅能定位到路段會標示為概略估算。
+
+**正式上線限制：**目前尚未串接簡訊服務。`APP_DEBUG=false` 時不會顯示模擬驗證碼，註冊手機驗證及忘記密碼無法完成；應先串接簡訊服務或安排其他安全的身分驗證流程，勿以開啟除錯模式代替。
 
 ### 第 1 步：獲取項目文件
 
 本項目應已位於以下位置：
 ```
-C:\xampp\htdocs\foodbank-project
+C:\xampp\htdocs\SA\foodbank-project\foodbank-project
 ```
 
 ### 第 2 步：啟動 XAMPP 服務
@@ -64,35 +66,20 @@ CREATE DATABASE shinigyi_foodbank CHARACTER SET utf8mb4 COLLATE utf8mb4_general_
 **或者** 使用命令行：
 
 ```bash
-mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\foodbank-project\database\schema.sql"
+mysql -u root shinigyi_foodbank < "C:\xampp\htdocs\SA\foodbank-project\foodbank-project\database\schema.sql"
 ```
 
 ### 第 5 步：驗證安裝
 
 在瀏覽器中訪問：
 ```
-http://localhost/foodbank-project/foodbank-project/public
+http://localhost/SA/foodbank-project/foodbank-project/public/
 ```
+其他安裝路徑請依 `htdocs` 下的實際資料夾名稱調整網址。
 
 ### 第 6 步：登錄應用
 
-使用以下預設帳號登錄：
-
-#### 管理介面
-- **用戶名**: `manager`
-- **密碼**: `manager123`
-
-#### 店家身份（捐贈店家）
-- **用戶名**: `store_demo`
-- **密碼**: `store123`
-- **會員類型**: 企業會員
-
-#### 忠信GO RIDER
-- **用戶名**: `courier_demo`
-- **密碼**: `courier123`
-- **會員類型**: 一般會員
-
-> 這些帳號已經在資料庫中建立好，可直接用於測試捐贈與配送流程。
+新安裝的示範資料包含食物銀行、商家及 GO Rider 測試帳號。僅在本機開發時啟用除錯模式，登入頁才會顯示測試帳號快捷按鈕。正式使用前必須停用或更換測試帳號及密碼。
 
 ## 🔐 安全建議（重要）
 
@@ -103,13 +90,13 @@ http://localhost/foodbank-project/foodbank-project/public
    - 更改食物銀行職員帳號密碼
 
 2. **更新數據庫配置**
-   - 編輯 `config/database.php`
-   - 設置 MySQL 密碼（如已設置）
-   - 更改數據庫用戶名
+   - 如需自訂連線，在 Git 忽略的 `config/local.php` 設定 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER` 和 `DB_PASS`，不要提交密碼。
+   - 預設為 `127.0.0.1:3306`、資料庫 `shinigyi_foodbank`、帳號 `root`、空密碼；正式環境應使用有密碼且權限適當的帳號。
 
 3. **配置生產環境設置**
-   - 在 `config/database.php` 中設置 `APP_DEBUG = false`
-   - 配置適當的日誌記錄
+   - 預設 `APP_DEBUG` 為 `false`；正式使用時維持關閉，並啟用 HTTPS。
+   - 設定 Apache 使用 `public/` 作為網站根目錄，或確認專案根目錄及 `public/uploads/` 的 `.htaccess` 生效；不要公開設定檔、備份、金鑰或資料庫工具。
+   - 切勿將 phpMyAdmin 或資料庫管理介面直接公開至網際網路，並定期備份。
 
 ## 📁 文件結構說明
 
@@ -147,23 +134,25 @@ foodbank-project/
 
 ### Q3: 無法登錄
 **A**:
-- 確認密碼正確（默認密碼：`admin123`）
+- 確認帳號密碼正確
 - 檢查數據庫中是否有 users 表
 - 查看 PHP 錯誤日誌
 
 ### Q4: 上傳文件失敗
 **A**:
-- 檢查 `uploads/` 文件夾權限（需要 777）
+- 檢查 `public/uploads/` 與 `storage/` 是否可由 PHP 寫入
 - 確認 PHP 上傳大小限制設置
 
 ## 🚀 開發環境配置
 
 ### 啟用調試模式
 
-編輯 `config/database.php`：
+僅供本機測試：在 Git 忽略的 `config/local.php` 加入：
 ```php
-define('APP_DEBUG', true);  // 開發時設為 true
+<?php
+define('APP_DEBUG', true);
 ```
+此模式會顯示測試帳號及模擬驗證碼；不要在可公開存取的網站啟用。
 
 ### 啟用錯誤報告
 
@@ -176,7 +165,7 @@ ini_set('display_errors', 1);
 
 1. **自定義品牌** - 編輯 `config/database.php` 中的 `APP_NAME`
 2. **添加更多用戶** - 在後台管理添加新用戶
-3. **配置郵件系統** - 在設置中配置 SMTP
+3. **串接正式簡訊驗證** - 手機驗證與忘記密碼目前僅有開發用模擬
 4. **設置備份計劃** - 定期備份數據庫
 
 ## 📞 技術支持

@@ -28,16 +28,17 @@ if (!defined('APP_URL')) {
     }
 }
 
+if (file_exists(__DIR__ . '/local.php')) {
+    require_once __DIR__ . '/local.php';
+}
+
 if (!defined('APP_DEBUG')) {
     $debugEnv = getenv('APP_DEBUG');
-    $debug = $debugEnv === false ? true : filter_var($debugEnv, FILTER_VALIDATE_BOOLEAN);
+    $debug = $debugEnv === false ? false : filter_var($debugEnv, FILTER_VALIDATE_BOOLEAN);
     define('APP_DEBUG', $debug);
 }
 
 // Browser key for Maps JavaScript API + Places; restrict it by HTTP referrer in Google Cloud Console.
-if (file_exists(__DIR__ . '/local.php')) {
-    require_once __DIR__ . '/local.php';
-}
 if (!defined('GOOGLE_MAPS_API_KEY')) {
     define('GOOGLE_MAPS_API_KEY', getenv('GOOGLE_MAPS_API_KEY') ?: '');
 }

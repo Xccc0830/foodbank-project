@@ -6,7 +6,7 @@
 -- 產生時間： 2026 年 09 月 22 日 11:07
 -- 伺服器版本： 10.4.28-MariaDB
 -- PHP 版本： 8.2.4
--- 新安裝唯一主 SQL；既有資料庫升級請使用 migrations/20261018_meeting_decisions_consolidated.sql。
+-- 僅供新安裝；會刪除並重建資料表，請勿匯入需要保留資料的資料庫。
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;

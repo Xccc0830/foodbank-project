@@ -142,7 +142,9 @@ if ($action === 'register' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     require_once BASE_PATH . '/src/helpers/ValidationHelper.php';
     require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 
-    if ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && $enterpriseName === '')) {
+    if (!APP_DEBUG) {
+        $registrationError = '手機驗證服務尚未啟用，目前無法註冊，請聯絡食物銀行。';
+    } elseif ($fullName === '' || $username === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^09\d{8}$/', $phone) || strlen($password) < 8 || !in_array($memberType, $allowedMemberTypes, true) || ($memberType === 'enterprise' && $enterpriseName === '')) {
         $registrationError = '請完整填寫資料；企業會員須填寫企業／組織名稱，電話需為台灣手機號碼格式，密碼至少需要 8 個字元。';
     } elseif ($memberType === 'enterprise' && !isValidTaiwanTaxId($taxId)) {
         $registrationError = '請輸入正確的 8 碼統一編號，作為企業或商家身分認證。';
@@ -222,8 +224,8 @@ if ($action === 'verify_phone') {
 }
 
 if ($action === 'forgot_password') {
-    $resetRequestMessage = null;
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $resetRequestMessage = APP_DEBUG ? null : '手機驗證服務尚未啟用，目前無法重設密碼，請聯絡食物銀行。';
+    if (APP_DEBUG && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $identifier = trim($_POST['identifier'] ?? '');
         $identifierEscaped = $connection->real_escape_string($identifier);
         $result = $connection->query("SELECT user_id, phone FROM users WHERE (username = '{$identifierEscaped}' OR email = '{$identifierEscaped}') AND status = 'active' LIMIT 1");
@@ -278,7 +280,7 @@ if ($action === 'reset_password') {
 }
 
 if ($action === 'register') {
-    $error = $registrationError ?? null;
+    $error = $registrationError ?? (APP_DEBUG ? null : '手機驗證服務尚未啟用，目前無法註冊，請聯絡食物銀行。');
     include BASE_PATH . '/src/views/register.php';
     exit;
 }

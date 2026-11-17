@@ -1,0 +1,4 @@
+LOAD DATABASE
+    FROM mysql://root@host.docker.internal:3306/shinigyi_foodbank
+    INTO postgresql://postgres.jtzmmiqdrtootaiyugwd:wcWnH0J5gErf1feD@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require
+WITH create tables, create indexes, reset sequences;

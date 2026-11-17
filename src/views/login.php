@@ -45,22 +45,27 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
                 <div class="form-group"><label for="password">密碼</label><div class="input-with-icon"><i class="fa-solid fa-lock"></i><input id="password" name="password" type="password" autocomplete="current-password" placeholder="輸入你的密碼" required></div></div>
                 <button class="btn btn-primary login-submit" type="submit">登入系統 <i class="fa-solid fa-arrow-right"></i></button>
             </form>
+            <?php if (APP_DEBUG): ?>
             <div class="login-divider"><span>測試帳號</span></div>
             <div class="login-roles" aria-label="測試帳號快捷登入">
                 <button type="button" class="login-role-button" data-username="manager" data-password="manager123">食物銀行管理帳號</button>
                 <button type="button" class="login-role-button" data-username="store_demo" data-password="store123">愛心商家帳號</button>
                 <button type="button" class="login-role-button" data-username="courier_demo" data-password="courier123">GO Rider 帳號</button>
             </div>
+            <?php endif; ?>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
             <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>
+            <?php if (APP_DEBUG): ?>
             <div class="login-hint">
                 <strong>開發測試帳號</strong>
                 <span>食物銀行管理帳號：manager / manager123</span>
                 <span>愛心商家帳號：store_demo / store123</span>
                 <span>GO Rider 帳號：courier_demo / courier123</span>
             </div>
+            <?php endif; ?>
         </section>
     </main>
+    <?php if (APP_DEBUG): ?>
     <script>
         document.querySelectorAll('.login-role-button').forEach(function (button) {
             button.addEventListener('click', function () {
@@ -70,5 +75,6 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
             });
         });
     </script>
+    <?php endif; ?>
 </body>
 </html>
