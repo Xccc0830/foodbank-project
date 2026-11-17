@@ -38,6 +38,13 @@ if (!defined('APP_DEBUG')) {
     define('APP_DEBUG', $debug);
 }
 
+if (!defined('DEMO_CLERK_USERNAME')) {
+    define('DEMO_CLERK_USERNAME', getenv('DEMO_CLERK_USERNAME') ?: '');
+}
+if (!defined('DEMO_CLERK_PASSWORD')) {
+    define('DEMO_CLERK_PASSWORD', getenv('DEMO_CLERK_PASSWORD') ?: '');
+}
+
 // Browser key for Maps JavaScript API + Places; restrict it by HTTP referrer in Google Cloud Console.
 if (!defined('GOOGLE_MAPS_API_KEY')) {
     define('GOOGLE_MAPS_API_KEY', getenv('GOOGLE_MAPS_API_KEY') ?: '');

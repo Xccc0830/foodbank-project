@@ -2,6 +2,9 @@
 $error = $error ?? null;
 $loginCssPath = BASE_PATH . '/public/assets/css/style.css';
 $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time();
+$clerkUsername = APP_DEBUG && defined('DEMO_CLERK_USERNAME') ? trim((string) DEMO_CLERK_USERNAME) : '';
+$clerkPassword = APP_DEBUG && defined('DEMO_CLERK_PASSWORD') ? (string) DEMO_CLERK_PASSWORD : '';
+$clerkConfigured = $clerkUsername !== '' && $clerkPassword !== '';
 ?>
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -46,12 +49,18 @@ $loginCssVersion = file_exists($loginCssPath) ? filemtime($loginCssPath) : time(
                 <button class="btn btn-primary login-submit" type="submit">登入系統 <i class="fa-solid fa-arrow-right"></i></button>
             </form>
             <?php if (APP_DEBUG): ?>
-            <div class="login-divider"><span>測試帳號</span></div>
+            <div class="login-divider"><span>快速登入（僅供開發測試）</span></div>
             <div class="login-roles" aria-label="測試帳號快捷登入">
                 <button type="button" class="login-role-button" data-username="manager" data-password="manager123">食物銀行管理帳號</button>
+                <?php if ($clerkConfigured): ?>
+                <button type="button" class="login-role-button" data-username="<?php echo htmlspecialchars($clerkUsername, ENT_QUOTES, 'UTF-8'); ?>" data-password="<?php echo htmlspecialchars($clerkPassword, ENT_QUOTES, 'UTF-8'); ?>">食物銀行行政人員</button>
+                <?php else: ?>
+                <button type="button" class="login-role-button" disabled aria-describedby="clerk-login-hint">食物銀行行政人員（尚未設定）</button>
+                <?php endif; ?>
                 <button type="button" class="login-role-button" data-username="store_demo" data-password="store123">愛心商家帳號</button>
                 <button type="button" class="login-role-button" data-username="courier_demo" data-password="courier123">GO Rider 帳號</button>
             </div>
+            <?php if (!$clerkConfigured): ?><p class="login-quick-note" id="clerk-login-hint">行政人員測試帳號需先建立並在本機設定，詳見安裝說明。</p><?php endif; ?>
             <?php endif; ?>
             <p class="login-register-link">還沒有帳號？<a href="?action=register">申請加入平台 <i class="fa-solid fa-arrow-right"></i></a></p>
             <p class="login-register-link"><a href="?action=forgot_password"><i class="fa-solid fa-key"></i> 忘記密碼？</a></p>

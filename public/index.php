@@ -578,7 +578,7 @@ $latestNotificationId = $notificationModel->getLatestIdForUser((int) $currentUse
 $role = $currentUser['role'];
 $memberType = $currentUser['member_type'] ?? null;
 $roleLabels = [
-    'foodbank_staff' => '食物銀行管理員',
+    'foodbank_staff' => ($currentUser['staff_type'] ?? '') === 'clerk' ? '食物銀行行政人員' : '食物銀行管理員',
     'member' => $memberType === 'enterprise' ? '企業會員' : ($memberType === 'general' ? '一般會員' : '會員'),
 ];
 

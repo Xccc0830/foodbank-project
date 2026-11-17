@@ -81,6 +81,9 @@ http://localhost/SA/foodbank-project/foodbank-project/public/
 
 新安裝的示範資料包含食物銀行、商家及 GO Rider 測試帳號。僅在本機開發時啟用除錯模式，登入頁才會顯示測試帳號快捷按鈕。正式使用前必須停用或更換測試帳號及密碼。
 
+快捷登入包含食物銀行管理員、行政人員、愛心商家和 GO Rider。示範資料沒有預設行政人員測試帳號，需先在獨立的測試資料庫中建立專用食物銀行帳號，並將其 `staff_type` 設為 `clerk`，再依下方開發環境說明設定帳號密碼；未設定時按鈕會停用。
+例如，在測試資料庫建立 `test_clerk` 帳號後執行 `UPDATE users SET staff_type = 'clerk' WHERE username = 'test_clerk';`。不要對正式帳號執行此操作。
+
 ## 🔐 安全建議（重要）
 
 ### 首次登錄後立即執行：
@@ -153,6 +156,13 @@ foodbank-project/
 define('APP_DEBUG', true);
 ```
 此模式會顯示測試帳號及模擬驗證碼；不要在可公開存取的網站啟用。
+
+若需要行政人員快捷登入，可在相同的本機設定檔加入下列設定，由執行 PHP 的環境提供測試帳號與密碼：
+```php
+define('DEMO_CLERK_USERNAME', getenv('DEMO_CLERK_USERNAME') ?: '');
+define('DEMO_CLERK_PASSWORD', getenv('DEMO_CLERK_PASSWORD') ?: '');
+```
+這些值會出現在除錯登入頁的 HTML 中，僅能使用專供本機、獨立測試資料庫的測試帳號，勿使用正式帳號或密碼，也不要將本機設定或密碼提交至版本庫。快捷按鈕仍會走一般登入驗證，帳號必須啟用且密碼正確。
 
 ### 啟用錯誤報告
 

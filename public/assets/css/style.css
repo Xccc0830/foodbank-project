@@ -1918,7 +1918,9 @@ form {
 .login-panel .input-with-icon input { width: 100%; height: 52px; padding: 0 16px 0 45px; border: 1px solid #DDE5EF; border-radius: 12px; background: #F8FAFD; color: var(--login-ink); font: inherit; transition: 0.2s ease; }
 .login-panel .input-with-icon input:focus { border-color: #3B5DB2; outline: 0; box-shadow: 0 0 0 4px rgba(32, 59, 143, 0.12); }
 .login-role-button { border: 1px solid #DDE5EF; border-radius: 999px; padding: 10px 16px; background: transparent; color: #4C5F78; font: inherit; cursor: pointer; transition: 0.2s ease; }
-.login-role-button:hover { border-color: #203B8F; color: #203B8F; background: #F0F4FA; }
+.login-role-button:hover:not(:disabled) { border-color: #203B8F; color: #203B8F; background: #F0F4FA; }
+.login-role-button:disabled { opacity: 0.6; cursor: not-allowed; }
+.login-quick-note { margin: 10px 0 0; color: #687A91; font-size: 12px; }
 .login-submit { width: 100%; min-height: 52px; justify-content: space-between; padding: 0 18px 0 20px; border: 0; border-radius: 12px; background: var(--login-green); box-shadow: 0 10px 20px rgba(32, 59, 143, 0.18); font-size: 14px; }
 .login-submit:hover { background: #172F75; transform: translateY(-1px); }
 .login-divider { display: flex; align-items: center; gap: 12px; margin: 38px 0 16px; color: #8A9AAF; font-size: 11px; }
