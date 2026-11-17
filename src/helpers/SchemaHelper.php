@@ -118,7 +118,7 @@ function runAllSchemaChecks(mysqli $connection) {
 
     $modelDir = dirname(__DIR__) . '/models';
     foreach (['AdvertisementModel', 'DeliveryModel', 'DonationModel', 'FoodbankProfileModel', 'IdVerificationModel',
-              'InventoryReceiptModel', 'ItemCategoryModel', 'NotificationModel', 'RewardModel', 'ThanksModel'] as $modelClass) {
+              'InventoryReceiptModel', 'ItemCategoryModel', 'MerchantDiscountModel', 'NotificationModel', 'RewardModel', 'ThanksModel'] as $modelClass) {
         require_once $modelDir . '/' . $modelClass . '.php';
         new $modelClass();
     }

@@ -27,6 +27,10 @@ try {
     check('兌換成功', is_array($claim));
     check('回傳正確的兌換券編號', is_array($claim) && $claim['claim_id'] > $maxClaimId
         && (int) $db->query("SELECT COUNT(*) c FROM reward_claims WHERE claim_id = " . (int) $claim['claim_id'] . " AND reward_id = {$rewardId}")->fetch_assoc()['c'] === 1);
+    $riderClaims = $rewardModel->getRedemptionsByUser($riderId);
+    check('舊制兌換券出現在騎手歷史紀錄', is_array($claim) && count(array_filter($riderClaims, function ($row) use ($claim) {
+        return (int) $row['claim_id'] === (int) $claim['claim_id'] && $row['source_type'] === 'foodbank';
+    })) === 1);
     check('扣掉 5 枚心意幣', $rewardModel->getBalance($riderId) === $balanceBefore + 5);
     check('庫存減為 0', (int) $db->query("SELECT stock FROM reward_catalog WHERE reward_id = {$rewardId}")->fetch_assoc()['stock'] === 0);
 

@@ -64,6 +64,20 @@ class RewardModel extends BaseModel {
         );
     }
 
+    public function getRedemptionsByUser($userId) {
+        $userId = (int) $userId;
+        return $this->query(
+            "SELECT claim_id, source_type, title, points_spent, status, token_expires_at, redeemed_at, created_at
+             FROM reward_claims WHERE user_id = {$userId}
+             UNION ALL
+             SELECT rr.redemption_id, 'foodbank', rc.title, rr.points_spent, rr.status, NULL, NULL, rr.created_at
+             FROM reward_redemptions rr
+             JOIN reward_catalog rc ON rc.reward_id = rr.reward_id
+             WHERE rr.user_id = {$userId}
+             ORDER BY created_at DESC"
+        );
+    }
+
     public function getPendingFoodbankClaims() {
         return $this->query(
             "SELECT rc.claim_id, rc.title, rc.points_spent, rc.created_at,
