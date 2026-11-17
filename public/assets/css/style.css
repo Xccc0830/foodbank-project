@@ -2144,6 +2144,12 @@ form {
     font-weight: 700;
 }
 
+#stop-store-scanner[hidden],
+#stop-reward-scanner[hidden],
+#merchant-store-qr-download[hidden] {
+    display: none;
+}
+
 .reward-store-filter {
     display: flex;
     flex-wrap: wrap;

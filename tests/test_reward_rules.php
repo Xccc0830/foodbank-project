@@ -69,11 +69,65 @@ try {
     $item = $model->createDonorReward(11, $direct);
     $claim = $model->redeem(12, 'donor', $item);
     ruleCheck('直換無需帳單', $claim && $model->fulfillByToken($claim['token'], 11, 'member')['success']);
+    $notice = $db->query("SELECT message FROM notifications WHERE user_id = 12 AND title = '心意幣兌換已核銷' ORDER BY notification_id DESC LIMIT 1")->fetch_assoc();
+    ruleCheck('商家核銷通知標示愛心商家', $notice && strpos($notice['message'], '愛心商家') !== false);
 
     $db->query("INSERT INTO reward_catalog (title, cost_points, status) VALUES ('官辦禮品測試', 5, 'active')");
     $claim = $model->redeem(12, 'foodbank', (int) $db->insert_id);
     ruleCheck('官辦禮品只能由職員核銷', $claim && !$model->fulfillByToken($claim['token'], 11, 'member')['success']);
     ruleCheck('官辦禮品無需帳單', $claim && $model->fulfillByToken($claim['token'], 3, 'foodbank_staff')['success']);
+
+    $item = $model->createDonorReward(11, array_replace($percent, ['min_spend' => 1, 'discount_rate' => '0.99']));
+    $claim = $model->redeem(12, 'donor', $item, 11);
+    ruleCheck('打折金額不超過原帳單', $claim && $model->fulfillByToken($claim['token'], 11, 'member', '1.52')['success']
+        && $db->query('SELECT final_cash_paid FROM reward_claims WHERE claim_id = ' . (int) $claim['claim_id'])->fetch_assoc()['final_cash_paid'] === '1.52');
+    ruleCheck('掃碼商家不能兌換其他店家的方案', !$model->redeem(12, 'donor', $item, 13));
+    $db->query("UPDATE users SET status = 'inactive' WHERE user_id = 11");
+    $catalog = $model->getAvailableRewards();
+    ruleCheck('停用商家的優惠不出現在目錄', !array_filter($catalog, static function ($row) use ($item) {
+        return $row['source_type'] === 'donor' && (int) $row['source_id'] === (int) $item;
+    }));
+    ruleCheck('停用商家的優惠無法領取', !$model->redeem(12, 'donor', $item));
+    $db->query("UPDATE users SET status = 'active' WHERE user_id = 11");
+
+    $item = $model->createDonorReward(11, array_replace($direct, ['stock' => 1]));
+    $before = $model->getBalance(12);
+    $claim = $model->redeem(12, 'donor', $item, 11);
+    ruleCheck('其他會員不能取消券', $claim && !$model->cancelClaim($claim['claim_id'], 13)['success']);
+    $cancelled = $model->cancelClaim($claim['claim_id'], 12);
+    $stock = $db->query('SELECT stock FROM donor_reward_items WHERE item_id = ' . (int) $item)->fetch_assoc();
+    ruleCheck('取消待核銷券退點並還原有限庫存', $cancelled['success'] && $model->getBalance(12) === $before && (int) $stock['stock'] === 1);
+    ruleCheck('重複取消不會再次退點', !$model->cancelClaim($claim['claim_id'], 12)['success'] && $model->getBalance(12) === $before);
+    ruleCheck('取消後不可核銷', !$model->fulfillByToken($claim['token'], 11, 'member')['success']);
+
+    $item = $model->createDonorReward(11, $direct);
+    $claim = $model->redeem(12, 'donor', $item);
+    $db->query('UPDATE donor_reward_items SET stock = 5 WHERE item_id = ' . (int) $item);
+    $cancelled = $model->cancelClaim($claim['claim_id'], 12);
+    $stock = $db->query('SELECT stock FROM donor_reward_items WHERE item_id = ' . (int) $item)->fetch_assoc();
+    ruleCheck('原不限量的券取消時不增加後來設定的庫存', $cancelled['success'] && (int) $stock['stock'] === 5);
+
+    $item = $model->createDonorReward(11, array_replace($direct, ['stock' => 1]));
+    $claim = $model->redeem(12, 'donor', $item);
+    $db->query('UPDATE reward_claims SET stock_reserved = NULL WHERE claim_id = ' . (int) $claim['claim_id']);
+    $cancelled = $model->cancelClaim($claim['claim_id'], 12);
+    $stock = $db->query('SELECT stock FROM donor_reward_items WHERE item_id = ' . (int) $item)->fetch_assoc();
+    ruleCheck('舊券退點但不猜測有限庫存', $cancelled['success'] && strpos($cancelled['message'], '庫存') !== false && (int) $stock['stock'] === 0);
+
+    $item = $model->createDonorReward(11, $direct);
+    $claim = $model->redeem(12, 'donor', $item);
+    $model->fulfillByToken($claim['token'], 11, 'member');
+    ruleCheck('已核銷券不能取消', !$model->cancelClaim($claim['claim_id'], 12)['success']);
+    $db->query("INSERT INTO reward_catalog (title, cost_points, stock, status) VALUES ('取消測試', 5, 1, 'active')");
+    $foodbankId = (int) $db->insert_id;
+    $claim = $model->redeem(12, 'foodbank', $foodbankId);
+    $cancelled = $model->cancelClaim($claim['claim_id'], 12);
+    $stock = $db->query('SELECT stock FROM reward_catalog WHERE reward_id = ' . $foodbankId)->fetch_assoc();
+    ruleCheck('官辦禮品取消可恢復庫存', $cancelled['success'] && (int) $stock['stock'] === 1);
+    $history = $model->getPointTransactions(12);
+    ruleCheck('會員點數明細包含取消退點', (bool) array_filter($history, static function ($entry) {
+        return $entry['transaction_type'] === 'adjusted' && (int) $entry['points'] === 10;
+    }));
 } finally {
     Transaction::rollback($db);
 }

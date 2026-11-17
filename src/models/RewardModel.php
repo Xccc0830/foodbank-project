@@ -25,6 +25,7 @@ class RewardModel extends BaseModel {
                 'discount_rate' => 'DECIMAL(4,2) DEFAULT NULL',
             ],
             'reward_claims' => [
+                'stock_reserved' => 'TINYINT(1) DEFAULT NULL',
                 'bill_amount' => 'DECIMAL(10,2) DEFAULT NULL',
                 'final_cash_paid' => 'DECIMAL(10,2) DEFAULT NULL',
                 'rule_type' => "ENUM('direct_exchange','min_spend_discount','min_spend_percentage') DEFAULT NULL",
@@ -79,8 +80,24 @@ class RewardModel extends BaseModel {
     public function getBalance($userId) {
         $userId = (int) $userId;
         $result = $this->db->query("SELECT COALESCE(SUM(points), 0) AS balance FROM point_transactions WHERE user_id = {$userId}");
-        $row = $result ? $result->fetch_assoc() : null;
-        return max(0, $row ? (int) $row['balance'] : 0);
+        if (!$result) {
+            throw new RuntimeException('無法讀取點數餘額: ' . $this->db->error);
+        }
+        $row = $result->fetch_assoc();
+        return max(0, (int) $row['balance']);
+    }
+
+    public function getPointTransactions($userId) {
+        $userId = (int) $userId;
+        $result = $this->db->query(
+            "SELECT points, transaction_type, description, delivery_id, created_at
+             FROM point_transactions WHERE user_id = {$userId}
+             ORDER BY created_at DESC, transaction_id DESC LIMIT 100"
+        );
+        if (!$result) {
+            throw new RuntimeException('無法讀取點數明細: ' . $this->db->error);
+        }
+        return $result->fetch_all(MYSQLI_ASSOC);
     }
 
     public function getAvailableRewards() {
@@ -93,8 +110,8 @@ class RewardModel extends BaseModel {
              SELECT dri.item_id AS source_id, 'donor' AS source_type, dri.donor_id AS source_owner_id, dri.title, dri.description, dri.cost_points, dri.stock,
                     dri.category, dri.rule_type, dri.min_spend, dri.discount_amount, dri.discount_rate, COALESCE(NULLIF(u.enterprise_name, ''), u.full_name) AS donor_name
              FROM donor_reward_items dri
-             LEFT JOIN users u ON u.user_id = dri.donor_id
-             WHERE dri.status = 'active'
+             JOIN users u ON u.user_id = dri.donor_id
+             WHERE dri.status = 'active' AND u.status = 'active' AND u.role = 'member' AND u.member_type = 'enterprise'
              ORDER BY cost_points ASC"
         );
     }
@@ -141,7 +158,7 @@ class RewardModel extends BaseModel {
         );
     }
 
-    public function redeem($userId, $sourceType, $sourceId) {
+    public function redeem($userId, $sourceType, $sourceId, $expectedDonorId = null) {
         $userId = (int) $userId;
         $sourceType = $sourceType === 'donor' ? 'donor' : 'foodbank';
         $sourceId = (int) $sourceId;
@@ -167,10 +184,29 @@ class RewardModel extends BaseModel {
                 Transaction::rollback($this->db);
                 return false;
             }
+            if ($sourceType === 'donor') {
+                $ownerId = (int) $reward['donor_id'];
+                if ($expectedDonorId !== null && $ownerId !== (int) $expectedDonorId) {
+                    Transaction::rollback($this->db);
+                    return false;
+                }
+                $ownerResult = $this->db->query("SELECT status, role, member_type FROM users WHERE user_id = {$ownerId} FOR UPDATE");
+                if (!$ownerResult) {
+                    throw new RuntimeException('無法檢查商家狀態。');
+                }
+                $owner = $ownerResult->fetch_assoc();
+                if (!$owner || $owner['status'] !== 'active' || $owner['role'] !== 'member' || $owner['member_type'] !== 'enterprise') {
+                    Transaction::rollback($this->db);
+                    return false;
+                }
+            }
             $cost = (int) $reward['cost_points'];
             $balanceResult = $this->db->query("SELECT COALESCE(SUM(points), 0) AS balance FROM point_transactions WHERE user_id = {$userId}");
-            $balanceRow = $balanceResult ? $balanceResult->fetch_assoc() : null;
-            $currentBalance = max(0, $balanceRow ? (int) $balanceRow['balance'] : 0);
+            if (!$balanceResult) {
+                throw new RuntimeException('無法讀取會員點數。');
+            }
+            $balanceRow = $balanceResult->fetch_assoc();
+            $currentBalance = max(0, (int) $balanceRow['balance']);
             if ($currentBalance < $cost) {
                 Transaction::rollback($this->db);
                 return false;
@@ -180,7 +216,8 @@ class RewardModel extends BaseModel {
             $tokenHash = hash('sha256', $token);
             $expiresAt = date('Y-m-d H:i:s', time() + 600);
             $title = $this->db->real_escape_string($reward['title']);
-            if (!$this->db->query("INSERT INTO point_transactions (user_id, points, transaction_type, description) VALUES ({$userId}, -{$cost}, 'redeemed', '兌換公益獎勵')")) {
+            $transactionDescription = $this->db->real_escape_string('兌換「' . $reward['title'] . '」');
+            if (!$this->db->query("INSERT INTO point_transactions (user_id, points, transaction_type, description) VALUES ({$userId}, -{$cost}, 'redeemed', '{$transactionDescription}')")) {
                 throw new RuntimeException('扣除心意幣失敗');
             }
             $ruleType = $sourceType === 'donor' ? "'" . $this->db->real_escape_string($reward['rule_type']) . "'" : 'NULL';
@@ -188,9 +225,10 @@ class RewardModel extends BaseModel {
             $discountAmount = $sourceType === 'donor' && $reward['discount_amount'] !== null ? (int) $reward['discount_amount'] : 'NULL';
             $discountRate = $sourceType === 'donor' && $reward['discount_rate'] !== null ? "'" . $this->db->real_escape_string($reward['discount_rate']) . "'" : 'NULL';
             $description = $sourceType === 'donor' && $reward['description'] !== null ? "'" . $this->db->real_escape_string($reward['description']) . "'" : 'NULL';
+            $stockReserved = $reward['stock'] === null ? 0 : 1;
             $claimCreated = $this->db->query(
-                "INSERT INTO reward_claims (user_id, source_type, reward_id, donor_item_id, title, points_spent, token_hash, token_value, token_expires_at, rule_type, min_spend, discount_amount, discount_rate, reward_description)
-                 VALUES ({$userId}, '{$sourceType}', " . ($sourceType === 'foodbank' ? $sourceId : 'NULL') . ", " . ($sourceType === 'donor' ? $sourceId : 'NULL') . ", '{$title}', {$cost}, '{$tokenHash}', '{$token}', '{$expiresAt}', {$ruleType}, {$minSpend}, {$discountAmount}, {$discountRate}, {$description})"
+                "INSERT INTO reward_claims (user_id, source_type, reward_id, donor_item_id, title, points_spent, stock_reserved, token_hash, token_value, token_expires_at, rule_type, min_spend, discount_amount, discount_rate, reward_description)
+                 VALUES ({$userId}, '{$sourceType}', " . ($sourceType === 'foodbank' ? $sourceId : 'NULL') . ", " . ($sourceType === 'donor' ? $sourceId : 'NULL') . ", '{$title}', {$cost}, {$stockReserved}, '{$tokenHash}', '{$token}', '{$expiresAt}', {$ruleType}, {$minSpend}, {$discountAmount}, {$discountRate}, {$description})"
             );
             if (!$claimCreated) {
                 throw new RuntimeException('建立兌換券失敗');
@@ -207,13 +245,13 @@ class RewardModel extends BaseModel {
             if (!Transaction::commit($this->db)) {
                 throw new RuntimeException('儲存兌換紀錄失敗');
             }
-            $this->notifyRedemptionCreated($userId, $sourceType, $sourceId, $reward['title'], $cost);
-            return ['token' => $token, 'expires_at' => $expiresAt, 'claim_id' => $claimId];
         } catch (Throwable $exception) {
             Transaction::rollback($this->db);
             error_log('獎勵兌換失敗: ' . $exception->getMessage());
             return false;
         }
+        $this->notifyRedemptionCreated($userId, $sourceType, $sourceId, $reward['title'], $cost);
+        return ['token' => $token, 'expires_at' => $expiresAt, 'claim_id' => $claimId];
     }
 
     public function getPendingClaimsByUser($userId) {
@@ -235,6 +273,76 @@ class RewardModel extends BaseModel {
             }
         }
         return $claims;
+    }
+
+    public function cancelClaim($claimId, $userId) {
+        $claimId = (int) $claimId;
+        $userId = (int) $userId;
+        if ($claimId <= 0 || $userId <= 0) {
+            return ['success' => false, 'message' => '無效的兌換紀錄。'];
+        }
+        if (!Transaction::begin($this->db)) {
+            error_log('無法開始取消兌換交易');
+            return ['success' => false, 'message' => '取消失敗，請稍後再試。'];
+        }
+        try {
+            $userResult = $this->db->query("SELECT user_id FROM users WHERE user_id = {$userId} FOR UPDATE");
+            if (!$userResult || !$userResult->fetch_assoc()) {
+                throw new RuntimeException('無法鎖定會員帳號。');
+            }
+            $result = $this->db->query("SELECT * FROM reward_claims WHERE claim_id = {$claimId} AND user_id = {$userId} FOR UPDATE");
+            if (!$result) {
+                throw new RuntimeException('無法讀取兌換紀錄。');
+            }
+            $claim = $result->fetch_assoc();
+            if (!$claim || $claim['status'] !== 'pending') {
+                Transaction::rollback($this->db);
+                return ['success' => false, 'message' => '此券不存在、已核銷或已取消，無法退點。'];
+            }
+            $points = (int) $claim['points_spent'];
+            if ($points <= 0) {
+                throw new RuntimeException('兌換點數無效。');
+            }
+            $stockNeedsReview = false;
+            if ($claim['stock_reserved'] === null || (int) $claim['stock_reserved'] === 1) {
+                $isDonor = $claim['source_type'] === 'donor';
+                $table = $isDonor ? 'donor_reward_items' : 'reward_catalog';
+                $idColumn = $isDonor ? 'item_id' : 'reward_id';
+                $itemId = (int) ($isDonor ? $claim['donor_item_id'] : $claim['reward_id']);
+                $stockResult = $this->db->query("SELECT stock FROM {$table} WHERE {$idColumn} = {$itemId} FOR UPDATE");
+                if (!$stockResult) {
+                    throw new RuntimeException('無法讀取方案庫存。');
+                }
+                $item = $stockResult->fetch_assoc();
+                if (!$item) {
+                    $stockNeedsReview = true;
+                } elseif ($item['stock'] !== null && $claim['stock_reserved'] === null) {
+                    $stockNeedsReview = true;
+                } elseif ($item['stock'] !== null) {
+                    if (!$this->db->query("UPDATE {$table} SET stock = stock + 1 WHERE {$idColumn} = {$itemId}") || $this->db->affected_rows !== 1) {
+                        throw new RuntimeException('無法恢復方案庫存。');
+                    }
+                }
+            }
+            if (!$this->db->query("UPDATE reward_claims SET status = 'cancelled', token_value = NULL WHERE claim_id = {$claimId} AND user_id = {$userId} AND status = 'pending'")
+                || $this->db->affected_rows !== 1) {
+                throw new RuntimeException('無法取消兌換紀錄。');
+            }
+            $description = $this->db->real_escape_string('取消兌換 R' . str_pad((string) $claimId, 6, '0', STR_PAD_LEFT) . ' 退回點數');
+            if (!$this->db->query("INSERT INTO point_transactions (user_id, points, transaction_type, description) VALUES ({$userId}, {$points}, 'adjusted', '{$description}')")) {
+                throw new RuntimeException('無法退回點數。');
+            }
+            if (!Transaction::commit($this->db)) {
+                throw new RuntimeException('無法儲存取消交易。');
+            }
+            return ['success' => true, 'message' => $stockNeedsReview
+                ? '已取消並退回點數；此舊券或原方案的庫存請提供者確認。'
+                : '已取消兌換並退回點數。'];
+        } catch (Throwable $exception) {
+            Transaction::rollback($this->db);
+            error_log('取消兌換失敗: ' . $exception->getMessage());
+            return ['success' => false, 'message' => '取消失敗，請稍後再試。'];
+        }
     }
 
     public function getPendingClaimById($claimId, $userId) {
@@ -356,7 +464,7 @@ class RewardModel extends BaseModel {
             } elseif ($rule === 'min_spend_percentage' && $claim['discount_rate'] !== null) {
                 $cents = (int) round($bill * 100);
                 $ratePercent = (int) round((float) $claim['discount_rate'] * 100);
-                $final = intdiv($cents * $ratePercent + 5000, 10000);
+                $final = min($bill, intdiv($cents * $ratePercent + 5000, 10000));
             } else {
                 return ['success' => false, 'message' => '優惠規則無效，無法核銷。'];
             }
@@ -371,7 +479,7 @@ class RewardModel extends BaseModel {
              WHERE claim_id = " . (int) $claim['claim_id'] . " AND token_hash = '{$tokenHash}' AND status = 'pending' AND token_expires_at > '{$currentTime}'"
         );
         if ($updated && $this->db->affected_rows === 1) {
-            $this->notifyVolunteerFulfilled((int) $claim['user_id'], $claim['title']);
+            $this->notifyVolunteerFulfilled((int) $claim['user_id'], $claim['title'], $claim['source_type']);
             return ['success' => true, 'message' => '兌換完成，憑證已核銷。'];
         }
         if (!$updated) {
@@ -388,20 +496,25 @@ class RewardModel extends BaseModel {
         $ownerCondition = $sourceType === 'donor'
             ? " AND u.member_type = 'enterprise' AND u.user_id = (SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $sourceId . " LIMIT 1)"
             : '';
-        $this->db->query(
+        if (!$this->db->query(
             "INSERT INTO notifications (user_id, title, message, type)
              SELECT u.user_id, '新的心意幣兌換', '{$message}', 'info'
              FROM users u
              WHERE u.role IN {$roles} AND u.status = 'active'{$ownerCondition}"
-        );
+        )) {
+            error_log('兌換通知寫入失敗: ' . $this->db->error);
+        }
     }
 
-    private function notifyVolunteerFulfilled($volunteerId, $title) {
+    private function notifyVolunteerFulfilled($volunteerId, $title, $sourceType) {
         $title = $this->db->real_escape_string($title);
-        $this->db->query(
+        $verifier = $sourceType === 'donor' ? '愛心商家' : '食物銀行';
+        if (!$this->db->query(
             "INSERT INTO notifications (user_id, title, message, type)
-             VALUES (" . (int) $volunteerId . ", '心意幣兌換已核銷', '「{$title}」已由食物銀行完成核銷。', 'success')"
-        );
+             VALUES (" . (int) $volunteerId . ", '心意幣兌換已核銷', '「{$title}」已由{$verifier}完成核銷。', 'success')"
+        )) {
+            error_log('核銷通知寫入失敗: ' . $this->db->error);
+        }
     }
 
     public function createReward($data) {
@@ -496,13 +609,23 @@ class RewardModel extends BaseModel {
             return false;
         }
 
-        return (bool) $this->db->query(
+        $updated = $this->db->query(
             "UPDATE reward_claims
              SET status = 'fulfilled', redeemed_at = NOW(), redeemed_by = {$donorId}
              WHERE claim_id = {$redemptionId} AND source_type = 'donor' AND status = 'pending'
                AND (rule_type IS NULL OR rule_type = 'direct_exchange')
                AND donor_item_id IN (SELECT item_id FROM donor_reward_items WHERE donor_id = {$donorId})"
-        ) && $this->db->affected_rows === 1;
+        );
+        if (!$updated || $this->db->affected_rows !== 1) {
+            return false;
+        }
+        $result = $this->db->query("SELECT user_id, title FROM reward_claims WHERE claim_id = {$redemptionId} LIMIT 1");
+        if ($result && ($claim = $result->fetch_assoc())) {
+            $this->notifyVolunteerFulfilled((int) $claim['user_id'], $claim['title'], 'donor');
+        } else {
+            error_log('無法讀取已核銷紀錄以發送通知: ' . $this->db->error);
+        }
+        return true;
     }
 
     private function insertInto($table, $data) {

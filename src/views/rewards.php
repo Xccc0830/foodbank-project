@@ -35,19 +35,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$isVolunteer) {
             $message = ['type' => 'error', 'text' => '只有 GO Rider 可以使用心意幣兌換。'];
         } else {
-            $claim = $rewardModel->redeem(
-                (int) $currentUser['user_id'],
-                $_POST['source_type'] ?? 'foodbank',
-                (int) ($_POST['source_id'] ?? 0)
+            $scanStoreId = (int) ($_POST['store_id'] ?? 0);
+            $sourceType = $_POST['source_type'] ?? 'foodbank';
+            $claim = $scanStoreId > 0 && $sourceType !== 'donor' ? false : $rewardModel->redeem(
+                (int) $currentUser['user_id'], $sourceType, (int) ($_POST['source_id'] ?? 0),
+                $scanStoreId > 0 ? $scanStoreId : null
             );
             if ($claim) {
                 $_SESSION['reward_claim_token'] = $claim['token'];
                 $_SESSION['reward_claim_id'] = $claim['claim_id'];
-                $message = ['type' => 'success', 'text' => '兌換成功，請在 10 分鐘內出示 QR Code。'];
+                $message = ['type' => 'success', 'text' => '已扣除點數，請出示兌換編號，並由店家核實。'];
             } else {
-                $message = ['type' => 'error', 'text' => '兌換失敗，可能心意幣不足或庫存已用完。'];
+                $message = ['type' => 'error', 'text' => '兌換失敗，請確認店家、點數餘額及優惠庫存。'];
             }
         }
+    } elseif ($action === 'cancel_claim' && $isVolunteer) {
+        $result = $rewardModel->cancelClaim((int) ($_POST['claim_id'] ?? 0), (int) $currentUser['user_id']);
+        $message = ['type' => $result['success'] ? 'success' : 'error', 'text' => $result['message']];
     } elseif ($action === 'refresh_claim' && $isVolunteer) {
         $claim = $rewardModel->refreshClaimToken((int) $_POST['claim_id'], (int) $currentUser['user_id']);
         if ($claim) {
@@ -132,6 +136,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $_SESSION['rewards_flash_message'] = $message;
     $redirectUrl = '?page=rewards';
+    if ($action === 'redeem_reward' && $isVolunteer && !empty($scanStoreId)) {
+        $redirectUrl .= '&store=' . $scanStoreId;
+        if ($claim) $redirectUrl .= '&claim_id=' . (int) $claim['claim_id'];
+    }
     if (($_POST['editor_flow'] ?? '') === '1' && in_array($action, ['create_donor_reward', 'update_donor_reward'], true)) {
         unset($_SESSION['reward_editor_input']);
         if (($message['type'] ?? '') === 'error') {
@@ -171,6 +179,22 @@ if (($_GET['stores'] ?? '') === '1') {
 
 $balance = $rewardModel->getBalance((int) $currentUser['user_id']);
 $catalog = $rewardModel->getAvailableRewards();
+$storeRequested = $isVolunteer && isset($_GET['store']);
+$storeId = $storeRequested && is_string($_GET['store']) && preg_match('/^[1-9][0-9]{0,9}$/D', $_GET['store']) && (float) $_GET['store'] <= 2147483647
+    ? (int) $_GET['store'] : 0;
+$scanStore = null;
+if ($storeRequested) {
+    foreach ($rewardModel->getPartnerStoreOffers() as $offer) {
+        if ((int) $offer['donor_id'] === $storeId) {
+            $scanStore = $offer;
+            break;
+        }
+    }
+    $catalog = array_values(array_filter($catalog, static function ($reward) use ($storeId) {
+        return $reward['source_type'] === 'donor' && (int) $reward['source_owner_id'] === $storeId;
+    }));
+}
+$pointTransactions = $isVolunteer ? $rewardModel->getPointTransactions((int) $currentUser['user_id']) : [];
 $foodbankPendingClaims = $currentRole === 'foodbank_staff'
     ? $rewardModel->getPendingFoodbankClaims()
     : [];
@@ -224,9 +248,37 @@ if ($isDonor) {
     <div class="stat-card"><h3>目前可用心意幣</h3><div class="stat-number"><?php echo number_format($balance); ?></div><p class="stat-label">心意幣</p></div>
 </div>
 
+<?php if ($isVolunteer): ?>
 <div class="card mt-32">
-    <div class="card-header"><h2>兌換目錄</h2><p>選擇獎勵或愛心店家優惠進行兌換</p></div>
+    <div class="card-header"><h2>掃描店家 QR Code</h2><p>掃描店家張貼的固定碼，選擇優惠並自行扣點，完成後請店家核實。</p></div>
     <div class="card-body">
+        <button class="btn btn-primary btn-sm" type="button" id="start-store-scanner">掃描店家</button>
+        <button class="btn btn-secondary btn-sm" type="button" id="stop-store-scanner" hidden>關閉相機</button>
+        <div id="store-qr-reader" style="max-width: 420px;"></div>
+        <p id="store-scanner-status" role="status">也可使用手機相機掃描店家的 QR Code。</p>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($isDonor): ?>
+<div class="card mt-32">
+    <div class="card-header"><h2>本店固定 QR Code</h2><p>列印並張貼此碼；會員掃描後選擇本店優惠、確認扣點，再由您核實。</p></div>
+    <div class="card-body">
+        <div id="merchant-store-qr" aria-label="本店固定 QR Code"></div>
+        <p id="merchant-store-qr-status" role="status"></p>
+        <p class="toolbar-meta">手機須能連上此網站；localhost 僅供本機測試。正式使用請以手機可連線的 HTTPS 網址開啟本頁後列印。</p>
+        <a id="merchant-store-qr-download" class="btn btn-secondary btn-sm" download="store-qr.png" hidden>下載 QR Code 圖片</a>
+    </div>
+</div>
+<?php endif; ?>
+
+<div class="card mt-32">
+    <div class="card-header">
+        <h2><?php echo $storeRequested ? '本店優惠' : '兌換目錄'; ?></h2>
+        <p><?php echo $storeRequested && $scanStore ? '店家：' . htmlspecialchars($scanStore['donor_name'], ENT_QUOTES, 'UTF-8') . '；選擇優惠後立即扣點，再請店家核實。' : '選擇獎勵或愛心店家優惠進行兌換'; ?></p>
+    </div>
+    <div class="card-body">
+        <?php if ($storeRequested && !$scanStore): ?><p role="alert">店家不存在、已停用或目前沒有啟用的優惠。</p><?php endif; ?>
         <?php if ($catalog): ?>
             <div class="reward-grid">
                 <?php foreach ($catalog as $reward): ?>
@@ -268,12 +320,13 @@ if ($isDonor) {
                             </form>
                         <?php endif; ?>
                         <?php if ($isVolunteer): ?>
-                            <form method="post">
+                            <form method="post" onsubmit="return confirm('確認使用 <?php echo (int) $reward['cost_points']; ?> 點兌換此優惠？');">
                                 <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="redeem_reward">
                                 <input type="hidden" name="source_type" value="<?php echo htmlspecialchars($reward['source_type']); ?>">
                                 <input type="hidden" name="source_id" value="<?php echo (int) $reward['source_id']; ?>">
-                                <button class="btn btn-primary btn-sm" type="submit" <?php echo ($balance < (int) $reward['cost_points'] || ($reward['stock'] !== null && (int) $reward['stock'] <= 0)) ? 'disabled' : ''; ?>>立即兌換</button>
+                                <?php if ($storeRequested && $storeId > 0): ?><input type="hidden" name="store_id" value="<?php echo $storeId; ?>"><?php endif; ?>
+                                <button class="btn btn-primary btn-sm" type="submit" <?php echo ($balance < (int) $reward['cost_points'] || ($reward['stock'] !== null && (int) $reward['stock'] <= 0)) ? 'disabled' : ''; ?>><?php echo $storeRequested ? '確認扣點' : '立即兌換'; ?></button>
                             </form>
                         <?php endif; ?>
                     </div>
@@ -295,6 +348,12 @@ if ($isDonor) {
                 <p class="toolbar-meta">兌換編號：<?php echo htmlspecialchars('R' . str_pad((string) $claim['claim_id'], 6, '0', STR_PAD_LEFT)); ?></p>
                   <p class="toolbar-meta"><?php echo (int) $claim['points_spent']; ?> 點・待核銷</p>
                 <a class="btn btn-primary btn-sm" href="?page=rewards&amp;claim_id=<?php echo (int) $claim['claim_id']; ?>">查看優惠券</a>
+                <form method="post" class="inline-form" onsubmit="return confirm('確定取消尚未核銷的優惠券並退回點數嗎？');">
+                    <?php echo csrfField(); ?>
+                    <input type="hidden" name="action" value="cancel_claim">
+                    <input type="hidden" name="claim_id" value="<?php echo (int) $claim['claim_id']; ?>">
+                    <button class="btn btn-secondary btn-sm" type="submit">取消並退點</button>
+                </form>
             </div>
         <?php endforeach; ?>
     </div>
@@ -322,6 +381,24 @@ if ($isDonor) {
             <input type="hidden" name="claim_id" value="<?php echo (int) $selectedClaim['claim_id']; ?>">
             <button class="btn btn-primary btn-sm" type="submit">重新開啟 QR Code</button>
         </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($isVolunteer): ?>
+<div class="card mt-32">
+    <div class="card-header"><h2>點數明細</h2><p>最近 100 筆入帳、兌換與調整紀錄。</p></div>
+    <div class="card-body">
+        <?php if ($pointTransactions): ?>
+        <div class="rewards-table-wrapper"><table class="data-table">
+            <thead><tr><th>時間</th><th>項目</th><th>點數</th></tr></thead>
+            <tbody><?php foreach ($pointTransactions as $transaction): ?>
+                <tr><td><?php echo htmlspecialchars($transaction['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?php echo htmlspecialchars($transaction['description'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?php $change = (int) $transaction['points']; echo ($change > 0 ? '+' : '') . $change; ?></td></tr>
+            <?php endforeach; ?></tbody>
+        </table></div>
+        <?php else: ?><div class="empty-state"><p>目前沒有點數紀錄</p></div><?php endif; ?>
     </div>
 </div>
 <?php endif; ?>
@@ -415,8 +492,36 @@ if ($isDonor) {
 </div>
 <?php endif; ?>
 
-        <?php if ($selectedClaim): ?>
+        <?php if ($selectedClaim || $isDonor): ?>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <?php endif; ?>
+        <?php if ($isDonor): ?>
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var status = document.getElementById('merchant-store-qr-status');
+            if (!window.QRCode) {
+                status.textContent = '無法載入 QR Code，請檢查網路連線並重新整理。';
+                return;
+            }
+            var url = new URL(window.location.href);
+            url.search = '';
+            url.hash = '';
+            url.searchParams.set('page', 'rewards');
+            url.searchParams.set('store', '<?php echo (int) $currentUser['user_id']; ?>');
+            new QRCode(document.getElementById('merchant-store-qr'), { text: url.toString(), width: 220, height: 220 });
+            var canvas = document.querySelector('#merchant-store-qr canvas');
+            if (canvas) {
+                var download = document.getElementById('merchant-store-qr-download');
+                download.href = canvas.toDataURL('image/png');
+                download.hidden = false;
+                status.textContent = '固定碼不含登入憑證，請下載圖片後列印。';
+            } else {
+                status.textContent = 'QR Code 已顯示，但無法下載，請嘗試其他瀏覽器。';
+            }
+        });
+        </script>
+        <?php endif; ?>
+        <?php if ($selectedClaim): ?>
         <script>
         document.addEventListener('DOMContentLoaded', function () {
             new QRCode(document.getElementById('selected-reward-qr-code'), {
@@ -437,8 +542,67 @@ if ($isDonor) {
         });
         </script>
         <?php endif; ?>
-        <?php if ($canVerify): ?>
+        <?php if ($canVerify || $isVolunteer): ?>
         <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+        <?php endif; ?>
+        <?php if ($isVolunteer): ?>
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var start = document.getElementById('start-store-scanner');
+            var stop = document.getElementById('stop-store-scanner');
+            var status = document.getElementById('store-scanner-status');
+            if (!window.Html5Qrcode) {
+                start.disabled = true;
+                status.textContent = '無法載入掃碼功能，請使用手機相機掃描。';
+                return;
+            }
+            var scanner = new Html5Qrcode('store-qr-reader');
+            var handled = false;
+            start.addEventListener('click', function () {
+                handled = false;
+                start.disabled = true;
+                status.textContent = '正在啟動相機，請允許瀏覽器使用相機。';
+                scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 220 }, function (text) {
+                    if (handled) return;
+                    var target;
+                    try { target = new URL(text); } catch (e) { status.textContent = '這不是有效的店家 QR Code。'; return; }
+                    var store = target.searchParams.get('store');
+                    if (target.origin !== window.location.origin || target.pathname !== window.location.pathname
+                        || target.searchParams.get('page') !== 'rewards' || !/^[1-9][0-9]{0,9}$/.test(store || '')
+                        || Number(store) > 2147483647) {
+                        status.textContent = '這不是本網站的店家 QR Code。';
+                        return;
+                    }
+                    handled = true;
+                    scanner.stop().then(function () {
+                        var url = new URL(window.location.href);
+                        var token = url.searchParams.get('_t');
+                        url.search = '';
+                        url.hash = '';
+                        url.searchParams.set('page', 'rewards');
+                        url.searchParams.set('store', store);
+                        if (token) url.searchParams.set('_t', token);
+                        window.location.assign(url.toString());
+                    }).catch(function () { status.textContent = '相機關閉失敗，請重新整理後再試。'; });
+                }).then(function () {
+                    stop.hidden = false;
+                    status.textContent = '請對準店家 QR Code。';
+                }).catch(function () {
+                    start.disabled = false;
+                    status.textContent = '相機無法啟動，請使用手機相機掃描店家 QR Code。';
+                });
+            });
+            stop.addEventListener('click', function () {
+                scanner.stop().then(function () {
+                    stop.hidden = true;
+                    start.disabled = false;
+                    status.textContent = '相機已關閉。';
+                }).catch(function () { status.textContent = '相機關閉失敗，請重新整理後再試。'; });
+            });
+        });
+        </script>
+        <?php endif; ?>
+        <?php if ($canVerify): ?>
         <script>
         document.addEventListener('DOMContentLoaded', function () {
             if (!window.Html5Qrcode) return;
@@ -541,12 +705,20 @@ if ($isDonor) {
                 }
                 var cash = claim.rule_type === 'min_spend_discount'
                     ? Math.max(0, total - Number(claim.discount_amount))
-                    : Math.floor((Math.round(total * 100) * Math.round(Number(claim.discount_rate) * 100) + 5000) / 10000);
+                    : Math.min(total, Math.floor((Math.round(total * 100) * Math.round(Number(claim.discount_rate) * 100) + 5000) / 10000));
                 calculation.textContent = '已達門檻（滿 ' + claim.min_spend + ' 元）｜本次折抵：' +
                     (total - cash).toFixed(2) + ' 元｜應收現金：$' + cash.toFixed(2);
             }
             token.addEventListener('input', reset);
             bill.addEventListener('input', calculate);
+            document.querySelectorAll('.reward-check-claim').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    token.value = button.dataset.claimNumber;
+                    token.dispatchEvent(new Event('input'));
+                    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    document.getElementById('reward-preview').click();
+                });
+            });
             document.getElementById('reward-preview').addEventListener('click', function () {
                 reset();
                 if (!token.value.trim()) {
@@ -602,12 +774,13 @@ if ($isDonor) {
 
 <?php if ($isDonor): ?>
 <div class="card mt-32">
-    <div class="card-header"><h2>獎勵兌換紀錄</h2><p>查看 GO Rider 兌換你提供的獎勵方案</p></div>
+    <div class="card-header"><h2>獎勵兌換紀錄</h2><p>請與現場會員核對兌換編號，確認交易後再核銷。</p></div>
     <div class="card-body">
         <?php if ($donorRedemptions): ?>
-            <table class="data-table donor-redemptions-table"><thead><tr><th>GO Rider</th><th>獎勵方案</th><th>兌換心意幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+            <table class="data-table donor-redemptions-table"><thead><tr><th>兌換編號</th><th>GO Rider</th><th>獎勵方案</th><th>兌換心意幣</th><th>日期</th><th>狀態</th><th>操作</th></tr></thead><tbody>
             <?php foreach ($donorRedemptions as $redemption): ?>
                 <tr>
+                    <td><?php echo htmlspecialchars('R' . str_pad((string) $redemption['redemption_id'], 6, '0', STR_PAD_LEFT)); ?></td>
                     <td><?php echo htmlspecialchars($redemption['volunteer_name']); ?></td>
                     <td><?php echo htmlspecialchars($redemption['title']); ?></td>
                     <td><?php echo (int) $redemption['points_spent']; ?> 點</td>
@@ -621,8 +794,10 @@ if ($isDonor) {
                                 <input type="hidden" name="redemption_id" value="<?php echo (int) $redemption['redemption_id']; ?>">
                                 <button class="btn btn-primary btn-sm" type="submit" name="status" value="fulfilled">標記完成</button>
                             </form>
+                        <?php elseif ($redemption['status'] === 'pending'): ?>
+                            <button type="button" class="btn btn-secondary btn-sm reward-check-claim" data-claim-number="<?php echo htmlspecialchars('R' . str_pad((string) $redemption['redemption_id'], 6, '0', STR_PAD_LEFT), ENT_QUOTES, 'UTF-8'); ?>">核實帳單</button>
                         <?php else: ?>
-                            <span class="toolbar-meta"><?php echo $redemption['status'] === 'pending' ? '請使用上方核銷計算機' : '無可用操作'; ?></span>
+                            <span class="toolbar-meta">無可用操作</span>
                         <?php endif; ?>
                     </td>
                 </tr>

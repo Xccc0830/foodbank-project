@@ -118,7 +118,9 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         session_regenerate_id(true);
         unset($_SESSION['csrf_token']); // 換新的表單憑證，登入前開啟的舊分頁就不能再送出表單
         $_SESSION['user'] = $user;
-        redirectTo('?page=dashboard');
+        $scanStoreId = (int) ($_SESSION['reward_scan_store'] ?? 0);
+        unset($_SESSION['reward_scan_store']);
+        redirectTo($scanStoreId > 0 ? '?page=rewards&store=' . $scanStoreId : '?page=dashboard');
         exit;
     }
 
@@ -304,6 +306,12 @@ if ($action === 'calculate_distance' && empty($_SESSION['user'])) {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['error' => '登入狀態已逾時，請重新登入後再計算距離。'], JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+if (empty($_SESSION['user']) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET'
+    && ($_GET['page'] ?? '') === 'rewards' && isset($_GET['store']) && is_string($_GET['store'])
+    && preg_match('/^[1-9][0-9]{0,9}$/D', $_GET['store']) && (float) $_GET['store'] <= 2147483647) {
+    $_SESSION['reward_scan_store'] = (int) $_GET['store'];
 }
 
 if ($action === 'login' || empty($_SESSION['user'])) {

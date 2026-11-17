@@ -748,14 +748,30 @@ class DeliveryModel extends BaseModel {
             return false;
         }
 
-        Transaction::begin($this->db);
+        if (!Transaction::begin($this->db)) {
+            error_log('無法開始配送完成交易');
+            return false;
+        }
         try {
+            $volunteerId = (int) $delivery['volunteer_id'];
+            if ($volunteerId > 0) {
+                $userResult = $this->db->query("SELECT user_id FROM users WHERE user_id = {$volunteerId} FOR UPDATE");
+                if (!$userResult || !$userResult->fetch_assoc()) {
+                    throw new RuntimeException('無法鎖定配送員帳號。');
+                }
+            }
+            $lockedResult = $this->db->query("SELECT volunteer_id, points, multi_stop_bonus, delivery_method, estimated_arrival_end, arrived_dropoff_at FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} FOR UPDATE");
+            $lockedDelivery = $lockedResult ? $lockedResult->fetch_assoc() : null;
+            if (!$lockedResult || !$lockedDelivery || (int) $lockedDelivery['volunteer_id'] !== $volunteerId) {
+                throw new RuntimeException('配送任務狀態或配送員已變更。');
+            }
+            $delivery = $lockedDelivery;
             $confirmedSql = $confirmedBy ? (int) $confirmedBy : 'NULL';
-            $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), received_confirmed_by = {$confirmedSql} WHERE delivery_id = {$deliveryId}{$ownerCondition}");
-            if ($this->db->affected_rows !== 1) {
+            $volunteerCondition = $delivery['volunteer_id'] === null ? 'volunteer_id IS NULL' : "volunteer_id = {$volunteerId}";
+            $updated = $this->db->query("UPDATE deliveries SET status = 'delivered', delivered_at = NOW(), received_confirmed_by = {$confirmedSql} WHERE delivery_id = {$deliveryId}{$ownerCondition} AND {$volunteerCondition}");
+            if (!$updated || $this->db->affected_rows !== 1) {
                 throw new RuntimeException('配送任務狀態已變更，無法完成行程。');
             }
-            $volunteerId = (int) $delivery['volunteer_id'];
             $points = (int) $delivery['points'];
             $bonusNotes = [];
             // 加給只發給 GO Rider（食物銀行自行配送的單 points 為 0，不發幣）
@@ -770,26 +786,34 @@ class DeliveryModel extends BaseModel {
                     $points += (int) $delivery['multi_stop_bonus'];
                     $bonusNotes[] = '順路配送 +' . (int) $delivery['multi_stop_bonus'];
                 }
-                $earnedBefore = $this->db->query("SELECT 1 FROM point_transactions WHERE user_id = {$volunteerId} AND transaction_type = 'earned' AND delivery_id <> {$deliveryId} LIMIT 1");
-                if ($earnedBefore && $earnedBefore->num_rows === 0) {
+                $earnedBefore = $this->db->query("SELECT 1 FROM point_transactions WHERE user_id = {$volunteerId} AND transaction_type = 'earned' AND delivery_id <> {$deliveryId} LIMIT 1 FOR UPDATE");
+                if (!$earnedBefore) {
+                    throw new RuntimeException('無法檢查首次配送加給。');
+                }
+                if ($earnedBefore->num_rows === 0) {
                     $points += 3;
                     $bonusNotes[] = '首次配送 +3';
                 }
             }
             if ($volunteerId > 0) {
                 $description = $this->db->real_escape_string('完成惜食配送' . ($bonusNotes ? '（' . implode('、', $bonusNotes) . '）' : ''));
-                $this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '{$description}')");
+                if (!$this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '{$description}')")) {
+                    throw new RuntimeException('無法記錄配送點數。');
+                }
             }
-            Transaction::commit($this->db);
-            $this->notifyDonorDelivered($deliveryId);
-            if ($volunteerId > 0) {
-                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚心意幣。", 'success');
+            if (!Transaction::commit($this->db)) {
+                throw new RuntimeException('無法儲存配送完成交易。');
             }
-            return true;
         } catch (Throwable $exception) {
             Transaction::rollback($this->db);
+            error_log('配送完成失敗: ' . $exception->getMessage());
             return false;
         }
+        $this->notifyDonorDelivered($deliveryId);
+        if ($volunteerId > 0) {
+            $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚心意幣。", 'success');
+        }
+        return true;
     }
 
     private function notifyUser($userId, $title, $message, $type) {

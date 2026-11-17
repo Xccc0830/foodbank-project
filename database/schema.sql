@@ -447,6 +447,7 @@ CREATE TABLE `reward_claims` (
   `donor_item_id` int(11) DEFAULT NULL,
   `title` varchar(150) NOT NULL,
   `points_spent` int(11) NOT NULL,
+  `stock_reserved` tinyint(1) DEFAULT NULL COMMENT '領券時是否扣除有限庫存；NULL 為舊券',
   `bill_amount` decimal(10,2) DEFAULT NULL COMMENT '原消費總金額',
   `final_cash_paid` decimal(10,2) DEFAULT NULL COMMENT '折抵後實收現金',
   `rule_type` enum('direct_exchange','min_spend_discount','min_spend_percentage') DEFAULT NULL,
