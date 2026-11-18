@@ -22,8 +22,8 @@ class SpecCheckHelper {
 
     /**
      * 檢查數字欄位的格式（空白代表沒填，不檢查）：
-     * 數量、總重量只能是 1 以上的整數；長寬高要大於 0，最多一位小數。
-     * 擋掉 -1、0、0.1（數量／重量）、1/2 這類不合理的值。
+     * 數量只能是 1 以上的整數；總重量要大於 0，最多兩位小數（例如 4.8、0.5）；長寬高要大於 0，最多一位小數。
+     * 擋掉 -1、0、0.1（數量）、1/2 這類不合理的值。
      *
      * @param array $item 可含 quantity, weight_kg, length_cm, width_cm, height_cm（原始字串）
      * @return array<string,string> 欄位 => 錯誤說明；沒問題回傳空陣列
@@ -36,8 +36,8 @@ class SpecCheckHelper {
         if ($raw('quantity') !== '' && !self::isWholeNumber($raw('quantity'))) {
             $problems['quantity'] = '數量必須是 1 以上的整數（不能填負數、0、小數或分數）。';
         }
-        if ($raw('weight_kg') !== '' && !self::isWholeNumber($raw('weight_kg'))) {
-            $problems['weight_kg'] = '總重量必須是 1 以上的整數公斤（不能填負數、0、小數或分數）。';
+        if ($raw('weight_kg') !== '' && !self::isPositiveTwoDecimal($raw('weight_kg'))) {
+            $problems['weight_kg'] = '總重量必須大於 0 公斤，最多填到小數點後兩位（例如 4.8），不能填負數或分數。';
         }
         foreach (['length_cm' => '長', 'width_cm' => '寬', 'height_cm' => '高'] as $key => $label) {
             if ($raw($key) !== '' && !self::isPositiveOneDecimal($raw($key))) {
@@ -51,6 +51,12 @@ class SpecCheckHelper {
     public static function isWholeNumber($value) {
         $value = trim((string) $value);
         return preg_match('/^\d+(\.0+)?$/', $value) === 1 && (float) $value >= 1;
+    }
+
+    /** 大於 0、最多兩位小數（重量用）；接受資料庫存的「4.80」寫法。 */
+    public static function isPositiveTwoDecimal($value) {
+        $value = trim((string) $value);
+        return preg_match('/^\d+(\.\d{1,2}0*)?$/', $value) === 1 && (float) $value > 0;
     }
 
     /** 大於 0、最多一位小數；接受資料庫存的「12.50」寫法。 */

@@ -656,8 +656,8 @@ class DonationModel extends BaseModel {
                 $name = trim((string) ($edit['item_name'] ?? ''));
                 $rawQuantity = trim((string) ($edit['quantity'] ?? ''));
                 $rawWeight = trim((string) ($edit['item_weight_kg'] ?? ''));
-                // 數量、重量只能是 1 以上的整數（與商家填寫時的規則相同）
-                if ($name === '' || !SpecCheckHelper::isWholeNumber($rawQuantity) || ($rawWeight !== '' && !SpecCheckHelper::isWholeNumber($rawWeight))) {
+                // 數量只能是 1 以上的整數；重量大於 0、最多兩位小數（與商家填寫時的規則相同）
+                if ($name === '' || !SpecCheckHelper::isWholeNumber($rawQuantity) || ($rawWeight !== '' && !SpecCheckHelper::isPositiveTwoDecimal($rawWeight))) {
                     return false;
                 }
                 $itemEdits[(int) $itemId] = [

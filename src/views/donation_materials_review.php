@@ -300,7 +300,7 @@ $renderPublishItemFields = static function ($donation) use ($donationModel) {
                         <td><input type="text" name="items[<?php echo $itemId; ?>][item_name]" value="<?php echo htmlspecialchars($item['item_name'], ENT_QUOTES); ?>" required></td>
                         <td><input type="number" step="1" min="1" inputmode="numeric" name="items[<?php echo $itemId; ?>][quantity]" value="<?php echo htmlspecialchars((string) ($item['quantity'] + 0), ENT_QUOTES); ?>" required></td>
                         <td><?php echo htmlspecialchars($item['unit']); ?></td>
-                        <td><input type="number" step="1" min="1" inputmode="numeric" name="items[<?php echo $itemId; ?>][item_weight_kg]" value="<?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? (string) ($item['item_weight_kg'] + 0) : '', ENT_QUOTES); ?>"></td>
+                        <td><input type="number" step="0.01" min="0.01" inputmode="decimal" name="items[<?php echo $itemId; ?>][item_weight_kg]" value="<?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? (string) ($item['item_weight_kg'] + 0) : '', ENT_QUOTES); ?>"></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

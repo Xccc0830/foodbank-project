@@ -27,7 +27,12 @@ check('規格 500g×4 與重量 2kg 吻合不提醒', SpecCheckHelper::check(['s
 check('數量 0 會報錯', strpos(messages(SpecCheckHelper::check(['quantity' => 0], $today)), '1 以上的整數') !== false);
 foreach (['-1', '0.1', '1/2'] as $bad) {
     check("數量 {$bad} 會報錯", isset(SpecCheckHelper::numberProblems(['quantity' => $bad])['quantity']));
+}
+foreach (['-1', '0', '1/2', '4.855'] as $bad) {
     check("重量 {$bad} 會報錯", isset(SpecCheckHelper::numberProblems(['weight_kg' => $bad])['weight_kg']));
+}
+foreach (['4.8', '0.5', '12.25', '20', '4.80'] as $good) {
+    check("重量 {$good} 可以", !isset(SpecCheckHelper::numberProblems(['weight_kg' => $good])['weight_kg']));
 }
 check('長 0.05 會報錯', isset(SpecCheckHelper::numberProblems(['length_cm' => '0.05'])['length_cm']));
 check('長 12.5 可以', SpecCheckHelper::numberProblems(['length_cm' => '12.5', 'quantity' => '3', 'weight_kg' => '5']) === []);

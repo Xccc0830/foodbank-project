@@ -9,7 +9,6 @@ require_once BASE_PATH . '/src/helpers/AddressHelper.php';
 
 $deliveryModel = new DeliveryModel();
 $message = null;
-$editingDelivery = null;
 $currentRole = $currentUser['role'] ?? 'volunteer';
 $memberType = $currentUser['member_type'] ?? null;
 $currentUserId = (int) ($currentUser['user_id'] ?? 0);
@@ -114,16 +113,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = $thanksResult === true
             ? ['type' => 'success', 'text' => '感謝訊息已送給商家。']
             : ['type' => 'error', 'text' => $thanksResult];
-    } elseif ($action === 'load_edit_delivery') {
-        if (!$canManageDeliveries) {
-            $message = ['type' => 'error', 'text' => '只有管理員可以編輯配送任務。'];
-        } else {
-        $editingDelivery = $deliveryModel->getDeliveryById((int) $_POST['delivery_id']);
-        if (!$editingDelivery || !$deliveryModel->canManageDelivery((int) $_POST['delivery_id'], $currentUserId, $currentRole)) {
-            $message = ['type' => 'error', 'text' => '您無權編輯此配送任務。'];
-            $editingDelivery = null;
-        }
-        }
     } elseif ($action === 'update_delivery') {
         if (!$canManageDeliveries) {
             $message = ['type' => 'error', 'text' => '只有管理員可以更新配送任務。'];
@@ -507,53 +496,82 @@ if ($isVolunteer) {
     </div>
 </div>
 
-<?php if ($editingDelivery): ?>
-<div class="card mt-32">
-    <div class="card-header"><h2>編輯配送任務</h2><p>更新任務內容與點數計算</p></div>
-    <div class="card-body">
-        <form method="post">
-            <?php echo csrfField(); ?>
-            <input type="hidden" name="action" value="update_delivery">
-            <input type="hidden" name="delivery_id" value="<?php echo (int) $editingDelivery['delivery_id']; ?>">
-            <div class="grid-2">
-                <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0" value="<?php echo (int) ($editingDelivery['donation_id'] ?? 0); ?>"></div>
-                <div class="form-group"><label>運送方式*</label><select name="delivery_method" required>
-                    <option value="food_bank" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'food_bank' ? 'selected' : ''; ?>>忠信派車</option>
-                    <option value="volunteer" <?php echo ($editingDelivery['delivery_method'] ?? 'volunteer') === 'volunteer' ? 'selected' : ''; ?>>GO Rider 派車</option>
-                </select></div>
-                <div class="form-group"><label>交通工具</label><select name="vehicle_type">
-                    <option value="motorcycle" <?php echo $editingDelivery['vehicle_type'] === 'motorcycle' ? 'selected' : ''; ?>>機車</option>
-                    <option value="car" <?php echo $editingDelivery['vehicle_type'] === 'car' ? 'selected' : ''; ?>>汽車</option>
-                </select></div>
-            </div>
-            <div class="grid-2">
-                <div class="form-group"><label>總配送距離（公里）*</label><input type="number" name="total_distance_km" min="0" step="0.1" value="<?php echo htmlspecialchars((string) $editingDelivery['total_distance_km']); ?>" required></div>
-                <div class="form-group"><label>物資重量（公斤）*</label><input type="number" name="weight_kg" min="0" step="0.1" value="<?php echo htmlspecialchars((string) $editingDelivery['weight_kg']); ?>" required></div>
-            </div>
-            <div class="grid-2">
-                <div class="form-group"><label>任務類型</label><select name="urgency">
-                    <option value="normal" <?php echo $editingDelivery['urgency'] === 'normal' ? 'selected' : ''; ?>>一般配送</option>
-                    <option value="priority" <?php echo $editingDelivery['urgency'] === 'priority' ? 'selected' : ''; ?>>優先配送</option>
-                    <option value="urgent" <?php echo $editingDelivery['urgency'] === 'urgent' ? 'selected' : ''; ?>>急件配送</option>
-                </select></div>
+<?php if ($canManageDeliveries): ?>
+<?php $editStatusLabels = ['open' => '待接單', 'claimed' => '已接單', 'arrived_pickup' => '已到店', 'picked_up' => '已取貨', 'exception' => '異常待處理', 'cancelled' => '已取消']; ?>
+<div class="app-modal-overlay" id="editDeliveryModal" role="dialog" aria-modal="true" aria-labelledby="editDeliveryTitle" hidden>
+    <div class="app-modal app-modal-wide">
+        <div class="app-modal-header">
+            <div><h2 id="editDeliveryTitle">編輯配送任務 <span data-edit-delivery-number></span></h2><p>更新任務內容，心意幣會依新的距離、重量、任務類型重新計算</p></div>
+            <button type="button" class="icon-btn" data-modal-close aria-label="關閉"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="app-modal-body">
+            <form method="post" data-edit-delivery-form>
+                <?php echo csrfField(); ?>
+                <input type="hidden" name="action" value="update_delivery">
+                <input type="hidden" name="delivery_id" value="">
+                <div class="grid-2">
+                    <div class="form-group"><label>關聯捐贈編號</label><input type="number" name="donation_id" min="0"></div>
+                    <div class="form-group"><label>運送方式*</label><select name="delivery_method" required>
+                        <option value="food_bank">忠信派車</option>
+                        <option value="volunteer">GO Rider 派車</option>
+                    </select></div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group"><label>交通工具</label><select name="vehicle_type">
+                        <option value="motorcycle">機車</option>
+                        <option value="car">汽車</option>
+                    </select></div>
+                    <div class="form-group"><label>任務類型</label><select name="urgency">
+                        <option value="normal">一般配送</option>
+                        <option value="priority">優先配送</option>
+                        <option value="urgent">急件配送</option>
+                    </select></div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group"><label>總配送距離（公里）*</label><input type="number" name="total_distance_km" min="0" step="0.1" required></div>
+                    <div class="form-group"><label>物資重量（公斤）*</label><input type="number" name="weight_kg" min="0" step="0.1" required></div>
+                </div>
                 <div class="form-group"><label>任務狀態</label><select name="status" required>
-                    <?php
-                    $statusLabels = ['open' => '待接單', 'claimed' => '已接單', 'picked_up' => '已取貨', 'exception' => '異常待處理', 'cancelled' => '已取消'];
-                    foreach ($statusLabels as $statusValue => $statusLabel):
-                    ?>
-                        <option value="<?php echo $statusValue; ?>" <?php echo ($editingDelivery['status'] ?? 'open') === $statusValue ? 'selected' : ''; ?>><?php echo $statusLabel; ?></option>
+                    <?php foreach ($editStatusLabels as $statusValue => $statusLabel): ?>
+                        <option value="<?php echo $statusValue; ?>"><?php echo $statusLabel; ?></option>
                     <?php endforeach; ?>
                 </select></div>
-                <div class="form-group"><label>送達地址*</label><input type="text" name="delivery_address" value="<?php echo htmlspecialchars($editingDelivery['delivery_address']); ?>" required></div>
-            </div>
-            <div class="form-group"><label>取貨地址*</label><input type="text" name="pickup_address" value="<?php echo htmlspecialchars($editingDelivery['pickup_address']); ?>" required></div>
-            <div class="btn-group">
-                <button class="btn btn-primary" type="submit">儲存變更</button>
-                <a class="btn btn-secondary" href="?page=deliveries">取消</a>
-            </div>
-        </form>
+                <div class="form-group"><label>取貨地址*</label><input type="text" name="pickup_address" required></div>
+                <div class="form-group"><label>送達地址*</label><input type="text" name="delivery_address" required></div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" type="submit">儲存變更</button>
+                    <button class="btn btn-secondary" type="button" data-modal-close>取消</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
+<script>
+    // 按「編輯」時，把那一列的任務資料填進小視窗
+    (function () {
+        const modal = document.getElementById('editDeliveryModal');
+        if (!modal) {
+            return;
+        }
+        modal.addEventListener('app-modal-open', function (event) {
+            const opener = event.detail && event.detail.opener;
+            let data = {};
+            try {
+                data = JSON.parse(opener.dataset.delivery || '{}');
+            } catch (error) {
+                data = {};
+            }
+            const form = modal.querySelector('[data-edit-delivery-form]');
+            ['delivery_id', 'donation_id', 'delivery_method', 'vehicle_type', 'urgency', 'total_distance_km', 'weight_kg', 'status', 'pickup_address', 'delivery_address'].forEach(function (name) {
+                const field = form.elements[name];
+                if (field && data[name] !== undefined && data[name] !== null) {
+                    field.value = data[name];
+                }
+            });
+            modal.querySelector('[data-edit-delivery-number]').textContent = data.delivery_id ? '#' + data.delivery_id : '';
+        });
+    })();
+</script>
 <?php endif; ?>
 
 <?php
@@ -705,12 +723,21 @@ if ($isVolunteer) {
                             <?php if ($canCompleteDelivery): ?><form method="post" class="delivery-action-form"><?php echo csrfField(); ?><input type="hidden" name="action" value="complete_delivery"><input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>"><button class="btn btn-success btn-sm"><?php echo ($delivery['delivery_method'] ?? '') === 'food_bank' ? '確認忠信派車已完成' : '已抵達，確認收貨'; ?></button></form><?php endif; ?>
                             <?php if ($canManageDeliveries && $delivery['status'] !== 'delivered'): ?>
                                 <div class="inline-action-group">
-                                    <form method="post" class="delivery-action-form">
-                                        <?php echo csrfField(); ?>
-                                        <input type="hidden" name="action" value="load_edit_delivery">
-                                        <input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>">
-                                        <button class="btn btn-secondary btn-sm" type="submit">編輯</button>
-                                    </form>
+                                    <?php
+                                    $editPayload = [
+                                        'delivery_id' => (int) $delivery['delivery_id'],
+                                        'donation_id' => (int) ($delivery['donation_id'] ?? 0),
+                                        'delivery_method' => $delivery['delivery_method'] ?? 'volunteer',
+                                        'vehicle_type' => $delivery['vehicle_type'] ?? 'motorcycle',
+                                        'urgency' => $delivery['urgency'] ?? 'normal',
+                                        'total_distance_km' => (string) ($delivery['total_distance_km'] ?? '0'),
+                                        'weight_kg' => (string) ($delivery['weight_kg'] ?? '0'),
+                                        'status' => $delivery['status'],
+                                        'pickup_address' => $delivery['pickup_address'] ?? '',
+                                        'delivery_address' => $delivery['delivery_address'] ?? '',
+                                    ];
+                                    ?>
+                                    <button class="btn btn-secondary btn-sm" type="button" data-modal-open="editDeliveryModal" data-delivery="<?php echo htmlspecialchars(json_encode($editPayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>">編輯</button>
                                     <form method="post" class="delivery-action-form" onsubmit="return confirm('確定要刪除這個配送任務嗎？');">
                                         <input type="hidden" name="action" value="delete_delivery">
                                         <input type="hidden" name="delivery_id" value="<?php echo (int) $delivery['delivery_id']; ?>">
