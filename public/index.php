@@ -465,7 +465,7 @@ if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST
         CURLOPT_POSTFIELDS => $body,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 2,
-        CURLOPT_TIMEOUT => 30,
+        CURLOPT_TIMEOUT => 180,
         CURLOPT_HTTPHEADER => [
             'Content-Type: multipart/form-data; boundary=' . $boundary,
             'Accept: application/json',

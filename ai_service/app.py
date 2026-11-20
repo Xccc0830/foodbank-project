@@ -118,7 +118,12 @@ async def analyze(files: list[UploadFile] = File(...)):
             if name and quantity > 0:
                 first_items.append({"name": name, "quantity": quantity, "unit": unit})
 
-        if first_items:
+        item_names = [item["name"] for item in first_items]
+        should_verify_count = (
+            len(first_items) == 1
+            and any(name in item_names[0] for name in ("雞蛋", "牛奶", "罐頭"))
+        )
+        if should_verify_count:
             try:
                 verified = verify_ollama_count(image_bytes, first_items)
                 if isinstance(verified.get("items"), list):
