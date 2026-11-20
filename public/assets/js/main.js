@@ -774,6 +774,7 @@
                 method: 'POST',
                 credentials: 'same-origin',
                 body: formData,
+                cache: 'no-store',
                 headers: { 'Accept': 'application/json' }
             })
                 .then(function (response) {

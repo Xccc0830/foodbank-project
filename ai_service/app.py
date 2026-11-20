@@ -38,7 +38,9 @@ def analyze_with_ollama(image_bytes):
         "你是食物銀行物資盤點助手。只分析圖片中的捐贈物資，不要描述背景或包裝品牌。"
         "請回傳嚴格 JSON，不要 Markdown。格式是 "
         '{"items":[{"name":"中文物資名稱","quantity":數字,"unit":"件"}],"confidence":0到1的數字}。'
-        "先逐一數完所有可見物件，再回傳數量，不要只描述場景。若圖片呈現 8 盒牛奶，就回 quantity 8、name「牛奶」、unit「盒」。"
+        "先逐一數完所有可見物件，再回傳數量，不要只描述場景。"
+        "雞蛋要逐顆數，完整或露出大部分的蛋都計入；不要把蛋盒格數、背景或人物當成蛋。"
+        "牛奶盒要逐盒數，不要把行銷標誌當物品。若圖片呈現 8 盒牛奶，就回 quantity 8、name「牛奶」、unit「盒」。"
         "未看清楚或不是捐贈物資時 quantity=0，不要猜品牌或商品。"
     )
     payload = json.dumps({
@@ -48,6 +50,38 @@ def analyze_with_ollama(image_bytes):
         "stream": False,
         "format": "json",
         "options": {"temperature": 0.1},
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        OLLAMA_URL.rstrip("/") + "/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=90) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    return json.loads(result.get("response", "{}"))
+
+
+def verify_ollama_count(image_bytes, initial_items):
+    summary = ", ".join(
+        "{} {} {}".format(item["name"], item["quantity"], item["unit"])
+        for item in initial_items
+        if str(item.get("name", "")).strip() and int(item.get("quantity", 0) or 0) > 0
+    )
+    prompt = (
+        "請獨立重新數一次這張照片，不要參考任何先前答案。"
+        "只回傳嚴格 JSON："
+        '{"items":[{"name":"中文物資名稱","quantity":數字,"unit":"顆"}],"confidence":0到1的數字}。'
+        "完整可見或露出大部分的每個物件計一個。"
+        "初步觀察是：" + (summary or "未辨識到物資") + "。若初步觀察正確就保留；若數量錯，就修正。"
+    )
+    payload = json.dumps({
+        "model": VISION_MODEL,
+        "prompt": prompt,
+        "images": [base64.b64encode(image_bytes).decode("ascii")],
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0.0},
     }).encode("utf-8")
     request = urllib.request.Request(
         OLLAMA_URL.rstrip("/") + "/api/generate",
@@ -75,6 +109,22 @@ async def analyze(files: list[UploadFile] = File(...)):
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as error:
             vision_errors.append(str(error))
             continue
+
+        first_items = []
+        for detected in vision.get("items", []):
+            name = str(detected.get("name", "")).strip()
+            quantity = int(detected.get("quantity", 0) or 0)
+            unit = str(detected.get("unit", "件")).strip() or "件"
+            if name and quantity > 0:
+                first_items.append({"name": name, "quantity": quantity, "unit": unit})
+
+        if first_items:
+            try:
+                verified = verify_ollama_count(image_bytes, first_items)
+                if isinstance(verified.get("items"), list):
+                    vision = verified
+            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as error:
+                vision_errors.append("count_verification_failed:" + str(error))
 
         overall_confidence = float(vision.get("confidence", 0.75))
         for detected in vision.get("items", []):
