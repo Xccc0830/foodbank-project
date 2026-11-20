@@ -487,7 +487,14 @@ $formatDateTime = static function ($value) {
                     </div>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" id="addMaterialItemButton"><i class="fas fa-plus"></i> 新增物資</button>
-                <div class="form-group"><label>安全驗證：照片上傳</label><input type="file" name="photo[]" accept="image/png,image/jpeg,image/webp" multiple></div>
+                <div class="form-group">
+                    <label>安全驗證：照片上傳</label>
+                    <input type="file" id="materialImageUpload" name="photo[]" accept="image/png,image/jpeg,image/webp" multiple>
+                    <button type="button" class="btn btn-secondary btn-sm" id="analyzeMaterialImages" style="margin-top:8px">
+                        <i class="fas fa-wand-magic-sparkles"></i> 本地 AI 辨識物資
+                    </button>
+                    <div id="materialAiResults" class="dispatch-details-note" hidden></div>
+                </div>
                 <div class="step-actions"><button type="button" class="btn btn-secondary" data-previous-step>上一步</button><button type="submit" class="btn btn-primary">儲存物資</button></div>
             </section>
         </form>

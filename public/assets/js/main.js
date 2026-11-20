@@ -10,6 +10,7 @@
         initializeSessionGuard();
         initializeSpecCheck();
         initializeCategorySuggest();
+        initializeMaterialImageAnalysis();
         initializeAppModals();
         initializeNoReloadForms();
         initializeSidebarToggle();
@@ -740,6 +741,134 @@
     }
 
     // 物資規格防呆：欄位改完後向後端檢查，在該筆物資下方顯示黃色提醒（只提醒，不擋送出）。
+    function initializeMaterialImageAnalysis() {
+        const upload = document.getElementById('materialImageUpload');
+        const button = document.getElementById('analyzeMaterialImages');
+        const results = document.getElementById('materialAiResults');
+        const itemRows = document.getElementById('materialItemRows');
+        if (!upload || !button || !results || !itemRows) {
+            return;
+        }
+
+        button.addEventListener('click', function () {
+            if (!upload.files.length) {
+                results.hidden = false;
+                results.textContent = '請先選擇至少一張物資照片。';
+                return;
+            }
+
+            const formData = new FormData();
+            const csrfToken = document.querySelector('meta[name="csrf-token"]');
+            if (csrfToken) {
+                formData.append('csrf_token', csrfToken.content);
+            }
+            Array.prototype.forEach.call(upload.files, function (file) {
+                formData.append('photos[]', file);
+            });
+
+            button.disabled = true;
+            results.hidden = false;
+            results.textContent = '本地 AI 正在分析照片…';
+
+            fetch('?action=material_image_analyze&_t=' + encodeURIComponent(window.sessionStorage.getItem('tabToken') || ''), {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: formData,
+                headers: { 'Accept': 'application/json' }
+            })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (!response.ok) {
+                            throw new Error(data.error || '辨識失敗');
+                        }
+                        return data;
+                    });
+                })
+                .then(function (data) {
+                    results.textContent = '';
+
+                    if (!data.items || !data.items.length) {
+                        results.textContent = '辨識不到可確認的物資。請使用較清楚、正面且不重疊的照片。';
+                        return;
+                    }
+
+                    const title = document.createElement('strong');
+                    title.textContent = 'AI 建議（請確認後套用）';
+                    results.appendChild(title);
+
+                    data.items.forEach(function (item, index) {
+                        const row = document.createElement('div');
+                        row.style.marginTop = '8px';
+
+                        const label = document.createElement('span');
+                        label.textContent = item.name + ' × ' + item.quantity + '（信心 ' + Math.round(item.confidence * 100) + '%）';
+                        label.style.marginRight = '8px';
+
+                        const apply = document.createElement('button');
+                        apply.type = 'button';
+                        apply.className = 'btn btn-primary btn-sm';
+                        apply.textContent = '套用';
+                        apply.addEventListener('click', function () {
+                            applyDetectedItem(item);
+                        });
+
+                        row.appendChild(label);
+                        row.appendChild(apply);
+                        results.appendChild(row);
+                    });
+                })
+                .catch(function (error) {
+                    results.textContent = error.message || '本地影像辨識暫時無法使用。';
+                })
+                .finally(function () {
+                    button.disabled = false;
+                });
+        });
+
+        function applyDetectedItem(item) {
+            let target = itemRows.querySelector('.material-item-row:last-child');
+            const firstName = target && target.querySelector('[name="item_name[]"]');
+            const firstQuantity = target && target.querySelector('[name="item_quantity[]"]');
+            if (firstName && firstName.value.trim() !== '' && firstQuantity && firstQuantity.value !== '') {
+                const clone = target.cloneNode(true);
+                clone.querySelectorAll('input').forEach(function (input) {
+                    input.value = '';
+                });
+                clone.querySelectorAll('select').forEach(function (select) {
+                    select.selectedIndex = 0;
+                    delete select.dataset.autoValue;
+                    delete select.dataset.manual;
+                });
+                clone.querySelectorAll('.spec-check-box, .category-suggest-hint').forEach(function (node) {
+                    node.remove();
+                });
+                itemRows.appendChild(clone);
+                target = clone;
+            }
+
+            const nameInput = target.querySelector('[name="item_name[]"]');
+            const quantityInput = target.querySelector('[name="item_quantity[]"]');
+            const unitSelect = target.querySelector('[name="item_unit[]"]');
+            if (nameInput) {
+                nameInput.value = item.name;
+                nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (quantityInput) {
+                quantityInput.value = String(item.quantity);
+                quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (unitSelect) {
+                const unit = item.unit === '件' ? '件' : item.unit;
+                const option = Array.prototype.find.call(unitSelect.options, function (option) {
+                    return option.value === unit;
+                });
+                if (option) {
+                    unitSelect.value = unit;
+                }
+            }
+        }
+    }
+
     function initializeSpecCheck() {
         const watched = ['item_name[]', 'item_quantity[]', 'item_unit[]', 'item_weight_kg[]', 'item_length_cm[]', 'item_width_cm[]', 'item_height_cm[]', 'item_expiry_date[]', 'item_storage[]'];
         const numberLabels = { 'item_quantity[]': '數量', 'item_weight_kg[]': '總重量', 'item_length_cm[]': '長', 'item_width_cm[]': '寬', 'item_height_cm[]': '高' };

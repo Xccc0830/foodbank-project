@@ -409,6 +409,86 @@ if ($action === 'rider_license') {
     exit;
 }
 
+if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store, private');
+
+    $remoteAddress = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (!in_array($remoteAddress, ['127.0.0.1', '::1'], true)) {
+        http_response_code(403);
+        echo json_encode(['error' => '影像辨識僅允許本機使用'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if (!isset($_FILES['photos']) || !is_array($_FILES['photos']['tmp_name'] ?? null)) {
+        http_response_code(400);
+        echo json_encode(['error' => '請至少上傳一張照片'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $boundary = 'foodbank-' . bin2hex(random_bytes(12));
+    $body = '';
+    $allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    $fileCount = 0;
+
+    foreach ($_FILES['photos']['tmp_name'] as $index => $tmpName) {
+        if (!is_uploaded_file($tmpName) || ($_FILES['photos']['error'][$index] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            continue;
+        }
+        $size = (int) ($_FILES['photos']['size'][$index] ?? 0);
+        if ($size <= 0 || $size > 10 * 1024 * 1024) {
+            continue;
+        }
+        $mime = finfo_file(finfo_open(FILEINFO_MIME_TYPE), $tmpName);
+        if (!in_array($mime, $allowedTypes, true)) {
+            continue;
+        }
+        $originalName = basename((string) ($_FILES['photos']['name'][$index] ?? 'photo.jpg'));
+        $body .= "--{$boundary}\r\n";
+        $body .= 'Content-Disposition: form-data; name="files"; filename="' . str_replace(["\r", "\n", '"'], '', $originalName) . "\"\r\n";
+        $body .= "Content-Type: {$mime}\r\n\r\n";
+        $body .= file_get_contents($tmpName);
+        $body .= "\r\n";
+        $fileCount++;
+    }
+
+    if ($fileCount === 0) {
+        http_response_code(400);
+        echo json_encode(['error' => '照片格式或大小無效'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $body .= "--{$boundary}--\r\n";
+    $ch = curl_init('http://127.0.0.1:8001/analyze');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $body,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: multipart/form-data; boundary=' . $boundary,
+            'Accept: application/json',
+        ],
+    ]);
+    $response = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $status !== 200) {
+        http_response_code(502);
+        echo json_encode([
+            'error' => '本地影像辨識服務未啟動或無法回應',
+            'detail' => $curlError !== '' ? $curlError : null,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo $response;
+    exit;
+}
+
 if ($action === 'category_suggest' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store, private');
