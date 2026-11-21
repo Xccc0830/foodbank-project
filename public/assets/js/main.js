@@ -756,6 +756,12 @@
                 results.textContent = '請先選擇至少一張物資照片。';
                 return;
             }
+            const maxFiles = Number(upload.dataset.maxFiles || 6);
+            if (upload.files.length > maxFiles) {
+                results.hidden = false;
+                results.textContent = '一次最多可分析 ' + maxFiles + ' 張照片，請先減少照片數量。';
+                return;
+            }
 
             const formData = new FormData();
             const csrfToken = document.querySelector('meta[name="csrf-token"]');
@@ -787,36 +793,70 @@
                 })
                 .then(function (data) {
                     results.textContent = '';
+                    const uncertainItems = Array.isArray(data.uncertain_items) ? data.uncertain_items : [];
 
-                    if (!data.items || !data.items.length) {
-                        results.textContent = '辨識不到可確認的物資。請使用較清楚、正面且不重疊的照片。';
+                    if ((!data.items || !data.items.length) && !uncertainItems.length) {
+                        results.textContent = '辨識不到可確認的物資。請使用較清楚、正面且不重疊的照片，避免同一批物資互相遮擋。';
                         return;
                     }
 
                     const title = document.createElement('strong');
-                    title.textContent = 'AI 建議（請確認後套用）';
+                    title.textContent = '高信心 AI 建議（已通過多輪一致性檢查）';
                     results.appendChild(title);
 
-                    data.items.forEach(function (item, index) {
+                    if (data.items && data.items.length) {
+                        data.items.forEach(function (item) {
+                            const row = document.createElement('div');
+                            row.style.marginTop = '8px';
+
+                            const label = document.createElement('span');
+                            const agreement = Math.round(Number(item.agreement || 0) * 100);
+                            label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（信心 ' + Math.round(item.confidence * 100) + '%；一致率 ' + agreement + '%）';
+                            label.style.marginRight = '8px';
+
+                            const apply = document.createElement('button');
+                            apply.type = 'button';
+                            apply.className = 'btn btn-primary btn-sm';
+                            apply.textContent = '套用';
+                            apply.addEventListener('click', function () {
+                                applyDetectedItem(item);
+                            });
+
+                            row.appendChild(label);
+                            row.appendChild(apply);
+                            results.appendChild(row);
+                        });
+                    } else {
+                        const noAccepted = document.createElement('p');
+                        noAccepted.textContent = '本次沒有達到套用門檻的結果。';
+                        results.appendChild(noAccepted);
+                    }
+
+                    if (uncertainItems.length) {
+                        const uncertainTitle = document.createElement('strong');
+                        uncertainTitle.textContent = '以下結果數量不一致，不會自動套用：';
+                        uncertainTitle.style.display = 'block';
+                        uncertainTitle.style.marginTop = '12px';
+                        results.appendChild(uncertainTitle);
+
+                        uncertainItems.forEach(function (item) {
+                            const row = document.createElement('div');
+                            row.style.marginTop = '6px';
+                            const observations = Array.isArray(item.observed_quantities)
+                                ? item.observed_quantities.join('／')
+                                : '';
+                            row.textContent = item.name + '（各輪數量：' + observations + '）— 請重拍或人工確認';
+                            results.appendChild(row);
+                        });
+                    }
+
+                    if (data.errors && data.errors.length) {
                         const row = document.createElement('div');
                         row.style.marginTop = '8px';
-
-                        const label = document.createElement('span');
-                        label.textContent = item.name + ' × ' + item.quantity + '（信心 ' + Math.round(item.confidence * 100) + '%）';
-                        label.style.marginRight = '8px';
-
-                        const apply = document.createElement('button');
-                        apply.type = 'button';
-                        apply.className = 'btn btn-primary btn-sm';
-                        apply.textContent = '套用';
-                        apply.addEventListener('click', function () {
-                            applyDetectedItem(item);
-                        });
-
-                        row.appendChild(label);
-                        row.appendChild(apply);
+                        row.style.color = '#b45309';
+                        row.textContent = '部分照片或辨識輪次未採用：' + data.errors.join('；');
                         results.appendChild(row);
-                    });
+                    }
                 })
                 .catch(function (error) {
                     results.textContent = error.message || '本地影像辨識暫時無法使用。';

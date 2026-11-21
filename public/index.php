@@ -426,12 +426,22 @@ if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST
         exit;
     }
 
+    $maxFileCount = 6;
+    if (count($_FILES['photos']['tmp_name']) > $maxFileCount) {
+        http_response_code(400);
+        echo json_encode(['error' => "一次最多可分析 {$maxFileCount} 張照片"], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $boundary = 'foodbank-' . bin2hex(random_bytes(12));
     $body = '';
     $allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     $fileCount = 0;
 
     foreach ($_FILES['photos']['tmp_name'] as $index => $tmpName) {
+        if ($fileCount >= $maxFileCount) {
+            break;
+        }
         if (!is_uploaded_file($tmpName) || ($_FILES['photos']['error'][$index] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             continue;
         }
@@ -439,7 +449,11 @@ if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST
         if ($size <= 0 || $size > 10 * 1024 * 1024) {
             continue;
         }
-        $mime = finfo_file(finfo_open(FILEINFO_MIME_TYPE), $tmpName);
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = $finfo ? finfo_file($finfo, $tmpName) : false;
+        if ($finfo) {
+            finfo_close($finfo);
+        }
         if (!in_array($mime, $allowedTypes, true)) {
             continue;
         }
@@ -465,7 +479,7 @@ if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST
         CURLOPT_POSTFIELDS => $body,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CONNECTTIMEOUT => 2,
-        CURLOPT_TIMEOUT => 180,
+        CURLOPT_TIMEOUT => 330,
         CURLOPT_HTTPHEADER => [
             'Content-Type: multipart/form-data; boundary=' . $boundary,
             'Accept: application/json',
