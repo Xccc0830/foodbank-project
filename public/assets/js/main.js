@@ -746,9 +746,22 @@
         const button = document.getElementById('analyzeMaterialImages');
         const results = document.getElementById('materialAiResults');
         const itemRows = document.getElementById('materialItemRows');
+        const aiAppliedInput = document.getElementById('materialAiSuggestionApplied');
+        const aiConfirmation = document.getElementById('materialAiConfirmation');
+        const aiConfirmationInput = document.getElementById('materialAiSuggestionConfirmed');
         if (!upload || !button || !results || !itemRows) {
             return;
         }
+
+        function invalidateAiConfirmation() {
+            if (!aiAppliedInput || !aiConfirmationInput || aiAppliedInput.value !== '1') {
+                return;
+            }
+            aiConfirmationInput.checked = false;
+        }
+
+        itemRows.addEventListener('input', invalidateAiConfirmation);
+        itemRows.addEventListener('change', invalidateAiConfirmation);
 
         button.addEventListener('click', function () {
             if (!upload.files.length) {
@@ -801,7 +814,7 @@
                     }
 
                     const title = document.createElement('strong');
-                    title.textContent = '高信心 AI 建議（已通過多輪一致性檢查）';
+                    title.textContent = '企業安全門檻 AI 建議（所有辨識輪次一致且信心達 95%）';
                     results.appendChild(title);
 
                     if (data.items && data.items.length) {
@@ -906,6 +919,12 @@
                 if (option) {
                     unitSelect.value = unit;
                 }
+            }
+            if (aiAppliedInput && aiConfirmation && aiConfirmationInput) {
+                aiAppliedInput.value = '1';
+                aiConfirmation.hidden = false;
+                aiConfirmationInput.required = true;
+                aiConfirmationInput.checked = false;
             }
         }
     }

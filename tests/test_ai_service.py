@@ -52,7 +52,7 @@ class ImageAnalysisTests(unittest.TestCase):
         self.assertEqual(uncertain[0]["observed_quantities"], [8, 7])
         self.assertIn("沒有達成足夠共識", uncertain[0]["reason"])
 
-    def test_accepts_clear_majority_after_tiebreaker(self):
+    def test_rejects_majority_when_any_tiebreaker_pass_disagrees(self):
         analyses = [
             result([{"name": "罐頭", "quantity": 8, "unit": "罐"}], 0.95),
             result([{"name": "罐頭", "quantity": 7, "unit": "罐"}], 0.94),
@@ -61,9 +61,22 @@ class ImageAnalysisTests(unittest.TestCase):
 
         accepted, uncertain = reconcile_analyses(analyses, 0.75)
 
-        self.assertEqual(len(accepted), 1)
+        self.assertEqual(accepted, [])
+        self.assertEqual(len(uncertain), 1)
+        self.assertEqual(uncertain[0]["agreement"], 0.667)
+
+    def test_accepts_three_unanimous_high_confidence_passes(self):
+        analyses = [
+            result([{"name": "罐頭", "quantity": 8, "unit": "罐"}], 0.97),
+            result([{"name": "罐頭", "quantity": 8, "unit": "罐"}], 0.98),
+            result([{"name": "罐頭", "quantity": 8, "unit": "罐"}], 0.96),
+        ]
+
+        accepted, uncertain = reconcile_analyses(analyses, 0.95)
+
         self.assertEqual(accepted[0]["quantity"], 8)
-        self.assertEqual(accepted[0]["agreement"], 0.667)
+        self.assertEqual(accepted[0]["agreement"], 1.0)
+        self.assertGreaterEqual(accepted[0]["confidence"], 0.95)
         self.assertEqual(uncertain, [])
 
     def test_drops_fractional_and_unrecognized_units(self):

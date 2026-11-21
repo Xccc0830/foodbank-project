@@ -193,6 +193,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     }
     $urgentRequested = !empty($_POST['is_urgent']);
     $openDays = $donationModel->getBusinessProfile($currentUserId)['open_days'] ?? '';
+    $aiSuggestionApplied = ($_POST['ai_suggestion_applied'] ?? '') === '1';
+    $aiSuggestionConfirmed = ($_POST['ai_suggestion_confirmed'] ?? '') === '1';
     $closedDayError = ($deliveryDate && !DonationModel::isOpenOn($openDays, $deliveryDate))
         ? '您預約的取貨日（' . $deliveryDate . '）不是商家營業日（營業日：' . DonationModel::formatOpenDays($openDays) . '），請改選其他日期，或到「設置」更新營業日。'
         : null;
@@ -214,6 +216,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         $formMessage = ['type' => 'error', 'text' => '本月緊急運送已達 ' . DonationModel::URGENT_MONTHLY_LIMIT . ' 單上限，請取消勾選「緊急運送」後再送出。'];
     } elseif ($addressError !== null) {
         $formMessage = ['type' => 'error', 'text' => $addressError];
+    } elseif ($aiSuggestionApplied && !$aiSuggestionConfirmed) {
+        $formMessage = ['type' => 'error', 'text' => 'AI 建議已填入物資欄位，送出前請勾選「已逐項核對 AI 辨識結果」。'];
     } elseif ($donorName === '' || !$deliveryDate || !$deliveryTime || $hasInvalidItem) {
         $formMessage = ['type' => 'error', 'text' => '請完成企業資料、日期時間，以及至少一筆物資。'];
     } else {
@@ -495,6 +499,13 @@ $formatDateTime = static function ($value) {
                         <i class="fas fa-wand-magic-sparkles"></i> 本地 AI 辨識物資
                     </button>
                     <div id="materialAiResults" class="dispatch-details-note" hidden></div>
+                    <input type="hidden" id="materialAiSuggestionApplied" name="ai_suggestion_applied" value="0">
+                    <div id="materialAiConfirmation" class="dispatch-details-note" hidden>
+                        <label>
+                            <input type="checkbox" id="materialAiSuggestionConfirmed" name="ai_suggestion_confirmed" value="1">
+                            我已逐項核對 AI 辨識的物資名稱、數量、單位與原始照片，並確認資料正確。
+                        </label>
+                    </div>
                 </div>
                 <div class="step-actions"><button type="button" class="btn btn-secondary" data-previous-step>上一步</button><button type="submit" class="btn btn-primary">儲存物資</button></div>
             </section>

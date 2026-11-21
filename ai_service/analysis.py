@@ -196,7 +196,7 @@ def analyses_agree(first, second):
     return analysis_signature(first) == analysis_signature(second)
 
 
-def reconcile_analyses(analyses, minimum_confidence=0.75):
+def reconcile_analyses(analyses, minimum_confidence=0.95):
     if not analyses:
         return [], []
 
@@ -213,7 +213,7 @@ def reconcile_analyses(analyses, minimum_confidence=0.75):
 
     accepted = []
     uncertain = []
-    minimum_votes = len(normalized) if len(normalized) == 2 else 2
+    minimum_votes = len(normalized)
 
     for name, unit in sorted(all_keys):
         observations = [quantities.get((name, unit), 0) for quantities in quantities_by_pass]

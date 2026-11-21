@@ -25,7 +25,7 @@ app = FastAPI(title="Foodbank Local Material Vision")
 OLLAMA_URL = os.getenv("FOODBANK_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 VISION_MODEL = os.getenv("FOODBANK_VISION_MODEL", "gemma3:12b")
 OLLAMA_TIMEOUT = float(os.getenv("FOODBANK_OLLAMA_TIMEOUT", "90"))
-MIN_RESULT_CONFIDENCE = float(os.getenv("FOODBANK_AI_MIN_CONFIDENCE", "0.75"))
+MIN_RESULT_CONFIDENCE = float(os.getenv("FOODBANK_AI_MIN_CONFIDENCE", "0.95"))
 MAX_IMAGES = int(os.getenv("FOODBANK_AI_MAX_IMAGES", "6"))
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_IMAGE_SIDE = 2048
@@ -262,6 +262,8 @@ def health():
         "max_images": MAX_IMAGES,
         "minimum_confidence": MIN_RESULT_CONFIDENCE,
         "ocr_enabled": OCR_ENABLED,
+        "requires_unanimous_agreement": True,
+        "requires_human_confirmation": True,
     }
 
 
@@ -314,6 +316,8 @@ async def analyze(files: list[UploadFile] = File(...)):
         "model": VISION_MODEL,
         "passes": pass_count,
         "minimum_confidence": MIN_RESULT_CONFIDENCE,
+        "requires_unanimous_agreement": True,
+        "requires_human_confirmation": True,
         "image_count": len(prepared_images),
         "errors": image_errors + model_errors,
     })
