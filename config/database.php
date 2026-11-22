@@ -71,7 +71,7 @@ if (!defined('DB_PORT')) {
 }
 
 if (!defined('DB_NAME')) {
-    define('DB_NAME', getenv('DB_NAME') ?: 'shingyi_foodbank');
+    define('DB_NAME', getenv('DB_NAME') ?: 'shinigyi_foodbank');
 }
 
 if (!defined('DB_USER')) {
