@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import os
+import re
 import threading
 import urllib.error
 import urllib.request
@@ -23,7 +24,7 @@ from ai_service.ocr import extract_text_hints
 app = FastAPI(title="Foodbank Local Material Vision")
 
 OLLAMA_URL = os.getenv("FOODBANK_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
-VISION_MODEL = os.getenv("FOODBANK_VISION_MODEL", "gemma3:12b")
+VISION_MODEL = os.getenv("FOODBANK_VISION_MODEL", "gemma4:latest")
 OLLAMA_TIMEOUT = float(os.getenv("FOODBANK_OLLAMA_TIMEOUT", "90"))
 MIN_RESULT_CONFIDENCE = float(os.getenv("FOODBANK_AI_MIN_CONFIDENCE", "0.95"))
 MAX_IMAGES = int(os.getenv("FOODBANK_AI_MAX_IMAGES", "6"))
@@ -33,32 +34,58 @@ MAX_IMAGE_PIXELS = 40_000_000
 MAX_RESPONSE_ITEMS = 100
 OCR_ENABLED = os.getenv("FOODBANK_OCR_ENABLED", "true").lower() not in {"0", "false", "no"}
 _analysis_lock = threading.Lock()
+_detected_model = None
+
+
+def get_preferred_vision_model():
+    global _detected_model
+    configured = os.getenv("FOODBANK_VISION_MODEL")
+    if configured:
+        return configured
+    if _detected_model:
+        return _detected_model
+    try:
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
+        with urllib.request.urlopen(req, timeout=3) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            installed_names = [m.get("name") for m in data.get("models", [])]
+            for candidate in ["gemma4:latest", "llava:7b", "gemma3:12b"]:
+                if candidate in installed_names:
+                    _detected_model = candidate
+                    return candidate
+            for m in data.get("models", []):
+                if "vision" in m.get("capabilities", []):
+                    _detected_model = m.get("name")
+                    return _detected_model
+    except Exception:
+        pass
+    _detected_model = "gemma4:latest"
+    return _detected_model
 
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 BASE_PROMPT = (
-    "你是食物銀行物資盤點品管員。把所有照片視為同一批捐贈物資，只辨識可直接看到的實體物資。"
-    "先判斷 contains_donatable_food：只有實際出現可食用食品、乾貨或包裝飲品才是 true；"
-    "人物、車輛、儀錶、文件、螢幕、建築物或其他非食品為 false，且 items 必須是空陣列。"
-    "若多張照片是同一組物資的不同角度，只能計一次，不可把各張照片相加。"
-    "逐一建立視覺對象清單後再輸出，不要只描述場景。"
-    "規則："
-    "1) 包裝盒、包裝袋、罐頭、瓶子各自以外觀完整且可分辨的個體計數；"
-    "2) 雞蛋逐顆數，完整或露出大部分蛋殼才算，不能把蛋盒格、蛋的倒影、印刷圖案算進去；"
-    "3) 牛奶盒逐盒數，只數獨立容器，不把品牌文字或廣告圖當物資；"
-    "4) 印刷品、照片、背景、人、倒影、鏡像與遮蔽後看不到的物件都不計；"
-    "5) 看不到完整輪廓、無法確認類別或數量時，不要猜，直接省略；"
-    "6) 物資名稱使用不含品牌的簡短中文，單位只可用顆、盒、罐、包、袋、瓶、箱、份、件、組。"
-    "最後以嚴格 JSON 回覆，格式為"
+    "你是食物銀行物資盤點的高精度品管主任。請以最嚴謹的盤點標準，將所有照片視為同一批捐贈物資進行精準識別。"
+    "【食品真確性檢驗】判斷 contains_donatable_food：只有照片中明確包含可食用的包裝食品、乾貨、罐頭、生鮮或飲品才為 true；"
+    "若為人物、車輛、建築、儀表、文件、螢幕、空容器或無可食用物資之場景，必須設為 false 且 items 保持空陣列 []。"
+    "【跨視角防重計】多張照片若為同一組物資之不同拍攝角度或局部特寫，必須合併判定，嚴禁重複疊加數量。"
+    "【高精度計數與盤點規範】"
+    "1) 空間定位盤點：由前向後、由左至右逐排清點實體物件，建立精確視覺定位，不遺漏、不虛報；"
+    "2) 單位與包裝層級：封箱完整且標有箱裝數量的整箱物資單位請用「箱」；已開箱或散裝擺放的物資，請清點獨立實體（罐、瓶、包、盒、袋、顆）；不可同時計算外箱又累計箱內散裝；"
+    "3) 個體計數精度：罐頭（罐）、瓶裝水/油（瓶）、袋裝米/粉/麵（包或袋）、利樂包/紙盒食品（盒）、散裝雞蛋（顆，露出一半以上實體才計，嚴禁把空格、包裝圖案、倒影算入）；"
+    "4) 遮擋與雜物排除：被完全遮蔽、模糊無法確認、反光倒影、包裝空袋、提袋、瓦楞紙箱本體等非食品，一律嚴格排除；"
+    "5) 品名精確度：物資名稱請使用精準繁體中文（如「白米」、「燕麥片」、「鮪魚罐頭」、「麵條」、「保久乳」、「食用油」），若有文字標示，請提取其主要物資名稱；"
+    "6) 信心度客觀評定：畫面清晰、數量輪廓完全明確時給予 0.95~1.00；若有輕度反光或角度遮擋但可確認物資時給予 0.85~0.94；難以確定者直接排除不猜測。"
+    "最後請回覆嚴格 JSON 格式："
     '{"contains_donatable_food":布林值,'
-    '"items":[{"name":"中文物資名稱","quantity":正整數,"unit":"件"}],'
+    '"items":[{"name":"中文品名","quantity":正整數,"unit":"標準單位"}],'
     '"confidence":0到1的小數}。'
 )
 
 ANALYSIS_PROMPTS = (
-    BASE_PROMPT + " 請進行第一輪精細盤點。",
-    BASE_PROMPT + " 請獨立從零重新判定，不沿用任何既有答案，並優先排除不確定物件。",
-    BASE_PROMPT + " 請做最保守的第三輪稽核，只保留跨角度可確認、輪廓不重疊且數量明確的物資。",
+    BASE_PROMPT + "【第 1 輪：標準全景細緻盤點】請仔細清點每一項可見物資的正確名稱、數量與單位。",
+    BASE_PROMPT + "【第 2 輪：邊緣對比反向查核】請由不同視角/邊緣獨立重新查核，嚴格剔除陰影、反光、重疊與非食品物件。",
+    BASE_PROMPT + "【第 3 輪：最保守一致性稽核】僅確認前兩輪完全吻合且邊界清晰無爭議的物資品項與最終數量。",
 )
 
 RESPONSE_SCHEMA = {
@@ -133,12 +160,19 @@ def prepare_image(image_bytes):
             Image.Resampling.LANCZOS,
         )
 
-    enhanced = ImageEnhance.Contrast(corrected).enhance(1.06)
-    enhanced = ImageEnhance.Sharpness(enhanced).enhance(1.08)
+    contrast_balanced = ImageOps.autocontrast(corrected, cutoff=0.5)
+    enhanced = ImageEnhance.Sharpness(contrast_balanced).enhance(1.20)
+    enhanced = ImageEnhance.Contrast(enhanced).enhance(1.08)
+
+    shadow_boost = ImageEnhance.Brightness(corrected).enhance(1.12)
+    shadow_boost = ImageEnhance.Contrast(shadow_boost).enhance(1.05)
+    shadow_boost = ImageEnhance.Sharpness(shadow_boost).enhance(1.15)
+
     return {
         "original": image_bytes,
         "standard": _encode_jpeg(corrected),
         "enhanced": _encode_jpeg(enhanced),
+        "shadow_boost": _encode_jpeg(shadow_boost),
         "width": corrected.width,
         "height": corrected.height,
     }
@@ -158,9 +192,24 @@ def _ocr_prompt(hints):
     )
 
 
+def _safe_parse_json(text):
+    clean = (text or "").strip()
+    if "```" in clean:
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", clean)
+        if match:
+            clean = match.group(1).strip()
+    start = clean.find("{")
+    end = clean.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        clean = clean[start : end + 1]
+    return json.loads(clean)
+
+
 def analyze_with_ollama(image_variants, pass_index, ocr_hints):
+    model = get_preferred_vision_model()
     payload = json.dumps({
-        "model": VISION_MODEL,
+        "model": model,
+        "system": "You are a precise foodbank inventory engine. Output strict JSON only matching the schema. Do not output any thoughts, reasoning, markdown or explanation.",
         "prompt": ANALYSIS_PROMPTS[pass_index] + _ocr_prompt(ocr_hints),
         "images": [
             base64.b64encode(image_bytes).decode("ascii")
@@ -169,9 +218,11 @@ def analyze_with_ollama(image_variants, pass_index, ocr_hints):
         "stream": False,
         "format": RESPONSE_SCHEMA,
         "options": {
-            "temperature": (0.0, 0.05, 0.1)[pass_index],
-            "num_predict": 700,
-            "repeat_penalty": 1.05,
+            "temperature": (0.0, 0.0, 0.05)[pass_index],
+            "num_predict": 1000,
+            "repeat_penalty": 1.08,
+            "top_k": 20,
+            "top_p": 0.9,
         },
     }).encode("utf-8")
     request = urllib.request.Request(
@@ -193,15 +244,24 @@ def analyze_with_ollama(image_variants, pass_index, ocr_hints):
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise VisionModelError("Ollama 回覆格式無效") from error
 
-    if not isinstance(result, dict) or not isinstance(result.get("response"), str):
-        if isinstance(result, dict) and result.get("error"):
-            raise VisionModelError("Ollama 模型拒絕請求")
-        raise VisionModelError("Ollama 未回傳辨識結果")
+    if not isinstance(result, dict):
+        raise VisionModelError("Ollama 回覆無效")
+
+    if result.get("error"):
+        raise VisionModelError(f"Ollama 模型錯誤：{result['error']}")
+
+    response_text = result.get("response") or ""
+    if not response_text.strip() and result.get("thinking"):
+        response_text = result["thinking"]
+
+    if not response_text.strip():
+        raise VisionModelError("Ollama 未回傳可解析的辨識文字")
 
     try:
-        return normalize_analysis(json.loads(result["response"]))
+        parsed = _safe_parse_json(response_text)
+        return normalize_analysis(parsed)
     except (json.JSONDecodeError, ValueError) as error:
-        raise VisionModelError("視覺模型未依要求回傳有效 JSON") from error
+        raise VisionModelError(f"視覺模型未依要求回傳有效 JSON ({error})") from error
 
 
 def analyze_batch(prepared_images):
@@ -209,7 +269,8 @@ def analyze_batch(prepared_images):
         original_images = [image["original"] for image in prepared_images]
         standard_images = [image["standard"] for image in prepared_images]
         enhanced_images = [image["enhanced"] for image in prepared_images]
-        variants = (standard_images, enhanced_images, standard_images)
+        shadow_images = [image.get("shadow_boost", image["standard"]) for image in prepared_images]
+        variants = (standard_images, enhanced_images, shadow_images)
         passes = []
         errors = []
         ocr_hints = []
@@ -237,9 +298,10 @@ def analyze_batch(prepared_images):
                 continue
 
             if len(passes) == 2:
-                if analyses_agree(passes[0], passes[1]) and min(
-                    item["confidence"] for item in passes
-                ) >= 0.65:
+                agreed = analyses_agree(passes[0], passes[1])
+                is_empty = not passes[0].get("items") and not passes[1].get("items")
+                high_conf = min(item["confidence"] for item in passes) >= 0.65
+                if agreed and (is_empty or high_conf):
                     break
 
         if len(passes) < 2:
@@ -254,11 +316,21 @@ def analyze_batch(prepared_images):
         return items, uncertain, len(passes), errors
 
 
+@app.on_event("startup")
+def startup_warmup():
+    if OCR_ENABLED:
+        try:
+            from ai_service.ocr import get_ocr
+            get_ocr()
+        except Exception as e:
+            pass
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
-        "model": VISION_MODEL,
+        "model": get_preferred_vision_model(),
         "max_images": MAX_IMAGES,
         "minimum_confidence": MIN_RESULT_CONFIDENCE,
         "ocr_enabled": OCR_ENABLED,
@@ -293,6 +365,7 @@ async def analyze(files: list[UploadFile] = File(...)):
             content={"error": "沒有可分析的照片", "errors": image_errors},
         )
 
+    model_name = get_preferred_vision_model()
     try:
         items, uncertain, pass_count, model_errors = await run_in_threadpool(
             analyze_batch,
@@ -306,14 +379,14 @@ async def analyze(files: list[UploadFile] = File(...)):
                 "uncertain_items": [],
                 "error": str(error),
                 "errors": image_errors,
-                "model": VISION_MODEL,
+                "model": model_name,
             },
         )
 
     return JSONResponse({
         "items": items,
         "uncertain_items": uncertain,
-        "model": VISION_MODEL,
+        "model": model_name,
         "passes": pass_count,
         "minimum_confidence": MIN_RESULT_CONFIDENCE,
         "requires_unanimous_agreement": True,

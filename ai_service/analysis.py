@@ -18,10 +18,46 @@ NAME_ALIASES = {
     "牛乳": "牛奶",
     "牛奶盒": "牛奶",
     "利樂包牛奶": "牛奶",
+    "保久乳": "牛奶",
     "罐頭食品": "罐頭",
     "rice": "白米",
     "白飯": "白米",
     "米": "白米",
+    "白米飯": "白米",
+    "糙米": "白米",
+    "noodles": "麵條",
+    "麵": "麵條",
+    "意麵": "麵條",
+    "拉麵": "麵條",
+    "關廟麵": "麵條",
+    "冬粉": "冬粉",
+    "米粉": "米粉",
+    "泡麵": "泡麵",
+    "速食麵": "泡麵",
+    "即食麵": "泡麵",
+    "燕麥": "燕麥片",
+    "麥片": "燕麥片",
+    "oats": "燕麥片",
+    "oatmeal": "燕麥片",
+    "食用油": "食用油",
+    "沙拉油": "食用油",
+    "植物油": "食用油",
+    "大豆油": "食用油",
+    "醬油": "醬油",
+    "食鹽": "食鹽",
+    "鹽": "食鹽",
+    "砂糖": "砂糖",
+    "糖": "砂糖",
+    "鮪魚罐頭": "鮪魚罐頭",
+    "肉醬罐頭": "肉醬罐頭",
+    "鯖魚罐頭": "鯖魚罐頭",
+    "玉米罐頭": "玉米罐頭",
+    "魚罐頭": "罐頭",
+    "餅乾": "餅乾",
+    "蘇打餅": "餅乾",
+    "cookies": "餅乾",
+    "biscuits": "餅乾",
+    "奶粉": "奶粉",
 }
 
 UNIT_ALIASES = {
@@ -31,6 +67,8 @@ UNIT_ALIASES = {
     "pieces": "件",
     "can": "罐",
     "cans": "罐",
+    "tin": "罐",
+    "tins": "罐",
     "bottle": "瓶",
     "bottles": "瓶",
     "box": "盒",
@@ -39,12 +77,22 @@ UNIT_ALIASES = {
     "cartons": "盒",
     "pack": "包",
     "packs": "包",
+    "packet": "包",
+    "packets": "包",
     "袋": "包",
     "bag": "包",
     "bags": "包",
-    "cartons": "盒",
     "egg": "顆",
     "eggs": "顆",
+    "粒": "顆",
+    "顆": "顆",
+    "隻": "件",
+    "支": "件",
+    "份": "份",
+    "組": "組",
+    "set": "組",
+    "case": "箱",
+    "cases": "箱",
 }
 
 ALLOWED_UNITS = {"件", "包", "袋", "箱", "瓶", "盒", "份", "罐", "顆", "組"}
@@ -109,7 +157,7 @@ def refine_item_names_from_ocr(items, hints):
     candidates = []
     for values in grouped_hints.values():
         for start in range(len(values)):
-            for size in (3, 2):
+            for size in (3, 2, 1):
                 subset = values[start:start + size]
                 if len(subset) != size:
                     continue
@@ -124,10 +172,16 @@ def refine_item_names_from_ocr(items, hints):
     refined_items = []
     for item in items:
         refined = dict(item)
-        current_name = normalize_name(item.get("name"))
+        raw_name = str(item.get("name", "")).strip()
+        current_name = normalize_name(raw_name)
         for candidate in candidates:
-            if current_name in candidate["name"] and len(candidate["name"]) > len(current_name):
-                refined["name"] = candidate["name"]
+            cand_name = candidate["name"]
+            matches = (
+                (current_name and current_name in cand_name and len(cand_name) > len(current_name))
+                or (raw_name and raw_name in cand_name and len(cand_name) > len(raw_name))
+            )
+            if matches:
+                refined["name"] = cand_name
                 refined["ocr_name_confidence"] = round(candidate["confidence"], 3)
                 break
         refined_items.append(refined)
