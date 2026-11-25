@@ -135,6 +135,23 @@ class ImageAnalysisTests(unittest.TestCase):
         self.assertEqual(uncertain[0]["observed_quantities"], [8, 7])
         self.assertIn("沒有達成足夠共識", uncertain[0]["reason"])
 
+    def test_low_confidence_result_remains_available_for_manual_selection(self):
+        analyses = [
+            result([{"name": "雞蛋", "quantity": 10, "unit": "顆"}], 0.6),
+            result([{"name": "蛋", "quantity": 10, "unit": "顆"}], 0.6),
+        ]
+
+        accepted, uncertain = reconcile_analyses(analyses, 0.95)
+
+        self.assertEqual(accepted, [])
+        self.assertEqual(len(uncertain), 1)
+        self.assertEqual(
+            (uncertain[0]["name"], uncertain[0]["quantity"], uncertain[0]["unit"]),
+            ("雞蛋", 10, "顆"),
+        )
+        self.assertEqual(uncertain[0]["observed_quantities"], [10, 10])
+        self.assertIn("信心", uncertain[0]["reason"])
+
     def test_rejects_majority_when_any_tiebreaker_pass_disagrees(self):
         analyses = [
             result([{"name": "罐頭", "quantity": 8, "unit": "罐"}], 0.95),

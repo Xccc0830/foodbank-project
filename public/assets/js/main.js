@@ -822,13 +822,33 @@
                     const uncertainItems = Array.isArray(data.uncertain_items) ? data.uncertain_items : [];
 
                     if ((!data.items || !data.items.length) && !uncertainItems.length) {
-                        results.textContent = '辨識不到可確認的物資。請使用較清楚、正面且不重疊的照片，避免同一批物資互相遮擋。';
+                        results.textContent = '這次沒有辨識出物資建議，請手動填寫或換一張照片再試。';
+                        if (data.errors && data.errors.length) {
+                            results.textContent += ' 部分照片或辨識輪次未採用：' + data.errors.join('；');
+                        }
                         return;
                     }
 
                     const title = document.createElement('strong');
-                    title.textContent = '企業安全門檻 AI 建議（所有辨識輪次一致且信心達 95%）';
+                    title.textContent = 'AI 物資建議';
                     results.appendChild(title);
+
+                    const guidance = document.createElement('p');
+                    guidance.textContent = '請選擇要套用的項目，核對名稱、數量與單位並補上遺漏物資。候選可能重複或有誤，請勿重複計算。';
+                    results.appendChild(guidance);
+
+                    function addApplyButton(row, item) {
+                        const apply = document.createElement('button');
+                        apply.type = 'button';
+                        apply.className = 'btn btn-primary btn-sm';
+                        apply.textContent = '套用';
+                        apply.addEventListener('click', function () {
+                            applyDetectedItem(item);
+                            apply.disabled = true;
+                            apply.textContent = '已套用';
+                        });
+                        row.appendChild(apply);
+                    }
 
                     if (data.items && data.items.length) {
                         data.items.forEach(function (item) {
@@ -836,36 +856,23 @@
                             row.style.marginTop = '8px';
 
                             const label = document.createElement('span');
-                            const agreement = Math.round(Number(item.agreement || 0) * 100);
                             if (item.count_verified) {
                                 const counts = Array.isArray(item.count_observations) ? item.count_observations.join('／') : '';
                                 label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（數量複核：' + counts + '）';
                             } else {
-                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（信心 ' + Math.round(item.confidence * 100) + '%；一致率 ' + agreement + '%）';
+                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（各輪結果一致）';
                             }
                             label.style.marginRight = '8px';
 
-                            const apply = document.createElement('button');
-                            apply.type = 'button';
-                            apply.className = 'btn btn-primary btn-sm';
-                            apply.textContent = '套用';
-                            apply.addEventListener('click', function () {
-                                applyDetectedItem(item);
-                            });
-
                             row.appendChild(label);
-                            row.appendChild(apply);
+                            addApplyButton(row, item);
                             results.appendChild(row);
                         });
-                    } else {
-                        const noAccepted = document.createElement('p');
-                        noAccepted.textContent = '本次沒有達到套用門檻的結果。';
-                        results.appendChild(noAccepted);
                     }
 
                     if (uncertainItems.length) {
                         const uncertainTitle = document.createElement('strong');
-                        uncertainTitle.textContent = '以下結果數量不一致，不會自動套用：';
+                        uncertainTitle.textContent = '以下候選未通過一致性或信心檢查，套用後請特別核對：';
                         uncertainTitle.style.display = 'block';
                         uncertainTitle.style.marginTop = '12px';
                         results.appendChild(uncertainTitle);
@@ -876,7 +883,13 @@
                             const observations = Array.isArray(item.observed_quantities)
                                 ? item.observed_quantities.join('／')
                                 : '';
-                            row.textContent = item.name + '（各輪數量：' + observations + '）— 請重拍或人工確認';
+                            const label = document.createElement('span');
+                            label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit
+                                + '（各輪數量：' + observations + '；0 表示該輪未辨識）'
+                                + ' — ' + (item.reason || '請人工確認');
+                            label.style.marginRight = '8px';
+                            row.appendChild(label);
+                            addApplyButton(row, item);
                             results.appendChild(row);
                         });
                     }
@@ -905,7 +918,7 @@
             let target = itemRows.querySelector('.material-item-row:last-child');
             const firstName = target && target.querySelector('[name="item_name[]"]');
             const firstQuantity = target && target.querySelector('[name="item_quantity[]"]');
-            if (firstName && firstName.value.trim() !== '' && firstQuantity && firstQuantity.value !== '') {
+            if ((firstName && firstName.value.trim() !== '') || (firstQuantity && firstQuantity.value !== '')) {
                 const clone = target.cloneNode(true);
                 clone.querySelectorAll('input').forEach(function (input) {
                     input.value = '';
