@@ -24,15 +24,23 @@ app = FastAPI(title="Foodbank Local Material Vision")
 
 OLLAMA_URL = os.getenv("FOODBANK_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 VISION_MODEL = os.getenv("FOODBANK_VISION_MODEL", "gemma3:12b")
+FAST_VISION_MODEL = os.getenv("FOODBANK_FAST_VISION_MODEL", "gemma3:4b")
 OLLAMA_TIMEOUT = float(os.getenv("FOODBANK_OLLAMA_TIMEOUT", "90"))
+FAST_OLLAMA_TIMEOUT = float(os.getenv("FOODBANK_FAST_OLLAMA_TIMEOUT", "45"))
+OLLAMA_KEEP_ALIVE = os.getenv("FOODBANK_OLLAMA_KEEP_ALIVE", "30m")
 MIN_RESULT_CONFIDENCE = float(os.getenv("FOODBANK_AI_MIN_CONFIDENCE", "0.95"))
 MAX_IMAGES = int(os.getenv("FOODBANK_AI_MAX_IMAGES", "6"))
+MAX_ANALYSIS_PASSES = int(os.getenv("FOODBANK_AI_MAX_PASSES", "3"))
+FAST_ANALYSIS_PASSES = 2
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_IMAGE_SIDE = 2048
 MAX_IMAGE_PIXELS = 40_000_000
 MAX_RESPONSE_ITEMS = 100
 OCR_ENABLED = os.getenv("FOODBANK_OCR_ENABLED", "true").lower() not in {"0", "false", "no"}
 _analysis_lock = threading.Lock()
+
+if MAX_ANALYSIS_PASSES not in {2, 3}:
+    raise ValueError("FOODBANK_AI_MAX_PASSES 必須是 2 或 3")
 
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
@@ -158,15 +166,24 @@ def _ocr_prompt(hints):
     )
 
 
-def analyze_with_ollama(image_variants, pass_index, ocr_hints):
+def analyze_with_ollama(
+    image_variants,
+    pass_index,
+    ocr_hints,
+    vision_model=None,
+    timeout=None,
+):
+    vision_model = vision_model or VISION_MODEL
+    timeout = timeout or OLLAMA_TIMEOUT
     payload = json.dumps({
-        "model": VISION_MODEL,
+        "model": vision_model,
         "prompt": ANALYSIS_PROMPTS[pass_index] + _ocr_prompt(ocr_hints),
         "images": [
             base64.b64encode(image_bytes).decode("ascii")
             for image_bytes in image_variants
         ],
         "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
         "format": RESPONSE_SCHEMA,
         "options": {
             "temperature": (0.0, 0.05, 0.1)[pass_index],
@@ -182,7 +199,7 @@ def analyze_with_ollama(image_variants, pass_index, ocr_hints):
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         raise VisionModelError(f"Ollama 回覆 HTTP {error.code}") from error
@@ -204,7 +221,26 @@ def analyze_with_ollama(image_variants, pass_index, ocr_hints):
         raise VisionModelError("視覺模型未依要求回傳有效 JSON") from error
 
 
-def analyze_batch(prepared_images):
+def _analysis_profile(profile):
+    if profile == "fast":
+        return {
+            "model": FAST_VISION_MODEL,
+            "timeout": FAST_OLLAMA_TIMEOUT,
+            "max_passes": FAST_ANALYSIS_PASSES,
+            "ocr_enabled": False,
+        }
+    if profile == "strict":
+        return {
+            "model": VISION_MODEL,
+            "timeout": OLLAMA_TIMEOUT,
+            "max_passes": MAX_ANALYSIS_PASSES,
+            "ocr_enabled": OCR_ENABLED,
+        }
+    raise ValueError("辨識模式必須是 fast 或 strict")
+
+
+def analyze_batch(prepared_images, profile="strict"):
+    config = _analysis_profile(profile)
     with _analysis_lock:
         original_images = [image["original"] for image in prepared_images]
         standard_images = [image["standard"] for image in prepared_images]
@@ -214,7 +250,7 @@ def analyze_batch(prepared_images):
         errors = []
         ocr_hints = []
 
-        if OCR_ENABLED:
+        if config["ocr_enabled"]:
             for index, image_bytes in enumerate(original_images, start=1):
                 try:
                     for hint in extract_text_hints(image_bytes):
@@ -223,12 +259,14 @@ def analyze_batch(prepared_images):
                 except (ImportError, OSError, RuntimeError, ValueError) as error:
                     errors.append(f"OCR 第 {index} 張照片失敗：{error}")
 
-        for pass_index in range(3):
+        for pass_index in range(config["max_passes"]):
             try:
                 passes.append(analyze_with_ollama(
                     variants[pass_index],
                     pass_index,
                     ocr_hints,
+                    vision_model=config["model"],
+                    timeout=config["timeout"],
                 ))
             except VisionModelError as error:
                 errors.append(str(error))
@@ -237,9 +275,10 @@ def analyze_batch(prepared_images):
                 continue
 
             if len(passes) == 2:
-                if analyses_agree(passes[0], passes[1]) and min(
-                    item["confidence"] for item in passes
-                ) >= 0.65:
+                if config["max_passes"] == 2 or (
+                    analyses_agree(passes[0], passes[1])
+                    and min(item["confidence"] for item in passes) >= 0.65
+                ):
                     break
 
         if len(passes) < 2:
@@ -259,16 +298,27 @@ def health():
     return {
         "status": "ok",
         "model": VISION_MODEL,
+        "fast_model": FAST_VISION_MODEL,
         "max_images": MAX_IMAGES,
+        "max_passes": MAX_ANALYSIS_PASSES,
         "minimum_confidence": MIN_RESULT_CONFIDENCE,
         "ocr_enabled": OCR_ENABLED,
+        "fast_max_passes": FAST_ANALYSIS_PASSES,
+        "fast_ocr_enabled": False,
         "requires_unanimous_agreement": True,
         "requires_human_confirmation": True,
     }
 
 
 @app.post("/analyze")
-async def analyze(files: list[UploadFile] = File(...)):
+async def analyze(files: list[UploadFile] = File(...), profile: str = "strict"):
+    profile = profile.strip().lower()
+    if profile not in {"fast", "strict"}:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "辨識模式必須是 fast 或 strict"},
+        )
+
     if len(files) > MAX_IMAGES:
         return JSONResponse(
             status_code=400,
@@ -297,6 +347,7 @@ async def analyze(files: list[UploadFile] = File(...)):
         items, uncertain, pass_count, model_errors = await run_in_threadpool(
             analyze_batch,
             prepared_images,
+            profile,
         )
     except VisionModelError as error:
         return JSONResponse(
@@ -306,15 +357,17 @@ async def analyze(files: list[UploadFile] = File(...)):
                 "uncertain_items": [],
                 "error": str(error),
                 "errors": image_errors,
-                "model": VISION_MODEL,
+                "model": _analysis_profile(profile)["model"],
             },
         )
 
     return JSONResponse({
         "items": items,
         "uncertain_items": uncertain,
-        "model": VISION_MODEL,
+        "profile": profile,
+        "model": _analysis_profile(profile)["model"],
         "passes": pass_count,
+        "max_passes": _analysis_profile(profile)["max_passes"],
         "minimum_confidence": MIN_RESULT_CONFIDENCE,
         "requires_unanimous_agreement": True,
         "requires_human_confirmation": True,

@@ -785,16 +785,27 @@
                 formData.append('photos[]', file);
             });
 
+            const startedAt = Date.now();
+            const controller = new AbortController();
+            const requestTimeout = window.setTimeout(function () {
+                controller.abort();
+            }, 325000);
+            const progressTimer = window.setInterval(function () {
+                const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+                results.textContent = '照片已送出，本地 AI 正在分析…已等待 ' + elapsedSeconds + ' 秒';
+            }, 1000);
+
             button.disabled = true;
             results.hidden = false;
-            results.textContent = '本地 AI 正在分析照片…';
+            results.textContent = '照片已送出，本地 AI 正在分析…';
 
             fetch('?action=material_image_analyze&_t=' + encodeURIComponent(window.sessionStorage.getItem('tabToken') || ''), {
                 method: 'POST',
                 credentials: 'same-origin',
                 body: formData,
                 cache: 'no-store',
-                headers: { 'Accept': 'application/json' }
+                headers: { 'Accept': 'application/json' },
+                signal: controller.signal
             })
                 .then(function (response) {
                     return response.json().then(function (data) {
@@ -872,9 +883,13 @@
                     }
                 })
                 .catch(function (error) {
-                    results.textContent = error.message || '本地影像辨識暫時無法使用。';
+                    results.textContent = error.name === 'AbortError'
+                        ? '本次辨識等待超過 325 秒，已中止。請確認本機影像辨識服務後再試。'
+                        : (error.message || '本地影像辨識暫時無法使用。');
                 })
                 .finally(function () {
+                    window.clearInterval(progressTimer);
+                    window.clearTimeout(requestTimeout);
                     button.disabled = false;
                 });
         });

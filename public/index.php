@@ -473,7 +473,19 @@ if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST
     }
 
     $body .= "--{$boundary}--\r\n";
-    $ch = curl_init('http://127.0.0.1:8001/analyze');
+    $analysisProfile = strtolower(trim((string) getenv('FOODBANK_WEB_AI_PROFILE')));
+    if ($analysisProfile === '') {
+        $analysisProfile = 'fast';
+    }
+    if (!in_array($analysisProfile, ['fast', 'strict'], true)) {
+        http_response_code(500);
+        echo json_encode([
+            'error' => 'FOODBANK_WEB_AI_PROFILE 設定無效，只可使用 fast 或 strict',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $ch = curl_init('http://127.0.0.1:8001/analyze?profile=' . rawurlencode($analysisProfile));
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => $body,

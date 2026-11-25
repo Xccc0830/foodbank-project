@@ -1,5 +1,7 @@
 import unittest
+from unittest.mock import patch
 
+from ai_service import app
 from ai_service.analysis import (
     analyses_agree,
     normalize_analysis,
@@ -146,6 +148,45 @@ class ImageAnalysisTests(unittest.TestCase):
 
         self.assertEqual(len(refined), 1)
         self.assertEqual(refined[0]["name"], "黑珍珠粉圓")
+
+    def test_fast_profile_uses_light_model_and_stops_after_two_passes(self):
+        analyses = [
+            result([{"name": "白米", "quantity": 1, "unit": "包"}], 0.96),
+            result([{"name": "白米", "quantity": 2, "unit": "包"}], 0.96),
+        ]
+        with patch.object(app, "FAST_VISION_MODEL", "gemma3:test-fast"), \
+                patch.object(app, "analyze_with_ollama", side_effect=analyses) as model:
+            _, uncertain, passes, _ = app.analyze_batch([{
+                "original": b"original",
+                "standard": b"standard",
+                "enhanced": b"enhanced",
+            }], profile="fast")
+
+        self.assertEqual(passes, 2)
+        self.assertEqual(model.call_count, 2)
+        self.assertEqual(
+            {call.kwargs["vision_model"] for call in model.call_args_list},
+            {"gemma3:test-fast"},
+        )
+        self.assertEqual(uncertain[0]["observed_quantities"], [1, 2])
+
+    def test_strict_profile_keeps_third_audit_pass_on_disagreement(self):
+        analyses = [
+            result([{"name": "白米", "quantity": 1, "unit": "包"}], 0.96),
+            result([{"name": "白米", "quantity": 2, "unit": "包"}], 0.96),
+            result([{"name": "白米", "quantity": 1, "unit": "包"}], 0.96),
+        ]
+        with patch.object(app, "MAX_ANALYSIS_PASSES", 3), \
+                patch.object(app, "OCR_ENABLED", False), \
+                patch.object(app, "analyze_with_ollama", side_effect=analyses) as model:
+            _, _, passes, _ = app.analyze_batch([{
+                "original": b"original",
+                "standard": b"standard",
+                "enhanced": b"enhanced",
+            }])
+
+        self.assertEqual(passes, 3)
+        self.assertEqual(model.call_count, 3)
 
 
 if __name__ == "__main__":
