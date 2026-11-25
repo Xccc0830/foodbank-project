@@ -4670,27 +4670,45 @@ body {
 }
 
 .app-body:not(.page-dashboard) .content-shell {
-    animation: page-content-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: page-shell-enter 420ms ease backwards;
 }
 
-.app-body:not(.page-dashboard) .content-shell > * {
-    animation: page-child-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.app-body:not(.page-dashboard) .content-shell > *:not(.donation-form-overlay):not(.donation-detail-overlay):not(.app-modal-overlay):not(.map-modal-overlay):not(.modal-overlay):not(.donation-review-overlay):not(.donation-reward-toast):not(.donation-confetti-layer) {
+    animation: page-child-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
-.app-body:not(.page-dashboard) .content-shell > :nth-child(2) {
+.app-body:not(.page-dashboard) .content-shell > :nth-child(2):not(.donation-form-overlay):not(.donation-detail-overlay):not(.app-modal-overlay):not(.map-modal-overlay):not(.modal-overlay):not(.donation-review-overlay):not(.donation-reward-toast):not(.donation-confetti-layer) {
     animation-delay: 60ms;
 }
 
-.app-body:not(.page-dashboard) .content-shell > :nth-child(3) {
+.app-body:not(.page-dashboard) .content-shell > :nth-child(3):not(.donation-form-overlay):not(.donation-detail-overlay):not(.app-modal-overlay):not(.map-modal-overlay):not(.modal-overlay):not(.donation-review-overlay):not(.donation-reward-toast):not(.donation-confetti-layer) {
     animation-delay: 120ms;
 }
 
-.app-body:not(.page-dashboard) .content-shell > :nth-child(n+4) {
+.app-body:not(.page-dashboard) .content-shell > :nth-child(n+4):not(.donation-form-overlay):not(.donation-detail-overlay):not(.app-modal-overlay):not(.map-modal-overlay):not(.modal-overlay):not(.donation-review-overlay):not(.donation-reward-toast):not(.donation-confetti-layer) {
     animation-delay: 180ms;
 }
 
 .login-page .login-shell {
     animation: page-content-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.app-body .app-modal-overlay,
+.app-body .map-modal-overlay,
+.app-body .modal-overlay,
+.app-body .donation-form-overlay,
+.app-body .donation-detail-overlay,
+.app-body .donation-review-overlay {
+    z-index: 9000;
+}
+
+.app-body:has(.app-modal-overlay:not([hidden])),
+.app-body:has(.map-modal-overlay:not([hidden])),
+.app-body:has(.modal-overlay:not([hidden]):not([style*="display: none"])),
+.app-body:has(.donation-form-overlay.is-open),
+.app-body:has(.donation-detail-overlay),
+.app-body:has(.donation-review-overlay) {
+    overflow: hidden;
 }
 
 .app-body .nav-item {
@@ -4742,6 +4760,11 @@ body {
         opacity: 1;
         transform: none;
     }
+}
+
+@keyframes page-shell-enter {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 @keyframes page-child-enter {

@@ -26,6 +26,7 @@ while ($categoryResult && ($categoryRow = $categoryResult->fetch_assoc())) {
     $itemCategoryOptions[] = $categoryRow;
 }
 $formMessage = null;
+$donationSubmissionSucceeded = false;
 $defaultPickupAddress = $donationModel->getDefaultPickupAddress($currentUserId);
 $viewingDonation = null;
 $viewingItems = [];
@@ -284,6 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
                 }
             }
             $formMessage = ['type' => 'success', 'text' => '物資捐贈已送出，待食物銀行評估。'];
+            $donationSubmissionSucceeded = true;
         } else {
             $formMessage = ['type' => 'error', 'text' => '送出失敗，請稍後再試。'];
         }
@@ -396,7 +398,23 @@ $formatDateTime = static function ($value) {
 </div>
 
 <?php if ($formMessage): ?>
-    <div class="alert alert-<?php echo $formMessage['type']; ?>"><?php echo htmlspecialchars($formMessage['text']); ?></div>
+    <div class="alert alert-<?php echo $formMessage['type']; ?>"<?php echo $donationSubmissionSucceeded ? ' data-donation-success' : ''; ?>>
+        <?php echo htmlspecialchars($formMessage['text']); ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($donationSubmissionSucceeded): ?>
+    <div class="donation-reward-toast" data-donation-reward role="status" aria-live="polite">
+        <span class="donation-reward-coin"><i class="fas fa-heart" aria-hidden="true"></i></span>
+        <span>
+            <strong>捐贈送出成功！</strong>
+            <small>謝謝你讓下一份溫暖開始移動。</small>
+        </span>
+        <button type="button" class="donation-reward-close" aria-label="關閉獎勵提示">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+    </div>
+    <div class="donation-confetti-layer" data-donation-confetti aria-hidden="true"></div>
 <?php endif; ?>
 
 <?php if ($receivedThanks): ?>
@@ -826,12 +844,22 @@ $formatDateTime = static function ($value) {
         if (toggleButton && formSection) {
             toggleButton.addEventListener('click', function () {
                 formSection.classList.add('is-open');
+                document.body.classList.add('donation-modal-open');
+                window.setTimeout(function () {
+                    if (closeFormButton) {
+                        closeFormButton.focus();
+                    }
+                }, 80);
             });
         }
 
         const closeDonationForm = function () {
             if (formSection) {
                 formSection.classList.remove('is-open');
+                document.body.classList.remove('donation-modal-open');
+                if (toggleButton) {
+                    toggleButton.focus();
+                }
             }
         };
 
@@ -842,6 +870,11 @@ $formatDateTime = static function ($value) {
         if (formSection) {
             formSection.addEventListener('click', function (event) {
                 if (event.target === formSection) {
+                    closeDonationForm();
+                }
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && formSection.classList.contains('is-open')) {
                     closeDonationForm();
                 }
             });
@@ -949,6 +982,46 @@ $formatDateTime = static function ($value) {
                 }
             });
         }
+
+        const rewardToast = document.querySelector('[data-donation-reward]');
+        const confettiLayer = document.querySelector('[data-donation-confetti]');
+        if (rewardToast && confettiLayer) {
+            const colors = ['#F2A900', '#203B8F', '#0B8F83', '#FFC542', '#75D5C8'];
+            const shapes = ['donation-confetti-square', 'donation-confetti-ribbon', 'donation-confetti-coin'];
+            for (let index = 0; index < 34; index += 1) {
+                const particle = document.createElement('span');
+                const shape = shapes[index % shapes.length];
+                particle.className = 'donation-confetti-particle ' + shape;
+                particle.style.setProperty('--confetti-left', (4 + Math.random() * 92) + 'vw');
+                particle.style.setProperty('--confetti-delay', (Math.random() * 0.9) + 's');
+                particle.style.setProperty('--confetti-duration', (2.3 + Math.random() * 1.5) + 's');
+                particle.style.setProperty('--confetti-drift', ((Math.random() - 0.5) * 180) + 'px');
+                particle.style.setProperty('--confetti-rotation', (360 + Math.random() * 720) + 'deg');
+                particle.style.setProperty('--confetti-color', colors[index % colors.length]);
+                confettiLayer.appendChild(particle);
+            }
+
+            window.setTimeout(function () {
+                rewardToast.classList.add('is-visible');
+                confettiLayer.classList.add('is-active');
+            }, 100);
+            window.setTimeout(function () {
+                confettiLayer.classList.remove('is-active');
+                confettiLayer.replaceChildren();
+            }, 4500);
+            window.setTimeout(function () {
+                rewardToast.classList.remove('is-visible');
+            }, 6500);
+
+            const closeReward = rewardToast.querySelector('.donation-reward-close');
+            if (closeReward) {
+                closeReward.addEventListener('click', function () {
+                    rewardToast.classList.remove('is-visible');
+                    confettiLayer.classList.remove('is-active');
+                    confettiLayer.replaceChildren();
+                });
+            }
+        }
     })();
 </script>
 
@@ -1049,6 +1122,10 @@ $formatDateTime = static function ($value) {
 <?php endif; ?>
 
 <style>
+    body.donation-modal-open {
+        overflow: hidden;
+    }
+
     .donation-form-overlay {
         position: fixed;
         inset: 0;
@@ -1057,11 +1134,13 @@ $formatDateTime = static function ($value) {
         align-items: center;
         justify-content: center;
         padding: 24px;
-        background: rgba(15, 23, 42, 0.48);
+        background: rgba(32, 59, 143, 0.26);
+        backdrop-filter: blur(2px);
     }
 
     .donation-form-overlay.is-open {
         display: flex;
+        animation: donation-overlay-in 180ms ease both;
     }
 
     .donation-form-modal {
@@ -1070,14 +1149,184 @@ $formatDateTime = static function ($value) {
         max-height: 90vh;
         overflow-y: auto;
         background: #fff;
-        border-radius: 10px;
-        box-shadow: 0 20px 60px rgba(15, 23, 42, 0.24);
+        border: 1px solid rgba(32, 59, 143, 0.18);
+        border-radius: 12px;
+        box-shadow: 0 18px 50px rgba(23, 47, 117, 0.2);
+        animation: donation-modal-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
     .donation-form-modal .card-header {
+        position: sticky;
+        top: 0;
+        z-index: 3;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
+        background: #fff;
+    }
+
+    .donation-reward-toast {
+        position: fixed;
+        top: 92px;
+        left: 50%;
+        z-index: 11000;
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr) 30px;
+        align-items: center;
+        gap: 12px;
+        width: min(430px, calc(100vw - 32px));
+        padding: 14px 16px;
+        border: 1px solid rgba(242, 169, 0, 0.42);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 14px 36px rgba(23, 47, 117, 0.18);
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, -18px) scale(0.96);
+        transition: opacity 260ms ease, transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .donation-reward-toast.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, 0) scale(1);
+    }
+
+    .donation-reward-coin {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        place-items: center;
+        border: 3px solid var(--accent-light);
+        border-radius: 50%;
+        background: var(--accent-color);
+        color: var(--primary-dark);
+        font-size: 18px;
+        animation: donation-coin-bounce 1.8s ease-in-out infinite;
+    }
+
+    .donation-reward-toast > span:nth-child(2) {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .donation-reward-toast strong {
+        color: var(--gray-900);
+        font-size: 15px;
+    }
+
+    .donation-reward-toast small {
+        color: var(--gray-500);
+        line-height: 1.5;
+    }
+
+    .donation-reward-close {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--gray-500);
+        cursor: pointer;
+    }
+
+    .donation-confetti-layer {
+        position: fixed;
+        inset: 0;
+        z-index: 10999;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    .donation-confetti-particle {
+        position: absolute;
+        top: -24px;
+        left: var(--confetti-left);
+        width: 9px;
+        height: 14px;
+        background: var(--confetti-color);
+        opacity: 0;
+    }
+
+    .donation-confetti-layer.is-active .donation-confetti-particle {
+        animation: donation-confetti-fall var(--confetti-duration) var(--confetti-delay) cubic-bezier(0.2, 0.7, 0.3, 1) both;
+    }
+
+    .donation-confetti-ribbon {
+        width: 5px;
+        height: 16px;
+        border-radius: 3px;
+    }
+
+    .donation-confetti-coin {
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--accent-light);
+        border-radius: 50%;
+        background: var(--confetti-color);
+    }
+
+    @keyframes donation-overlay-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes donation-modal-in {
+        from { opacity: 0; transform: translateY(22px) scale(0.98); }
+        to { opacity: 1; transform: none; }
+    }
+
+    @keyframes donation-coin-bounce {
+        0%, 100% { transform: translateY(0) rotate(0); }
+        50% { transform: translateY(-5px) rotate(8deg); }
+    }
+
+    @keyframes donation-confetti-fall {
+        0% {
+            opacity: 0;
+            transform: translate3d(0, -24px, 0) rotate(0);
+        }
+        10% { opacity: 1; }
+        100% {
+            opacity: 0;
+            transform: translate3d(var(--confetti-drift), calc(100vh + 40px), 0) rotate(var(--confetti-rotation));
+        }
+    }
+
+    @media (max-width: 700px) {
+        .donation-form-overlay {
+            align-items: flex-end;
+            padding: 12px 0 0;
+        }
+
+        .donation-form-modal {
+            width: 100%;
+            max-height: 92vh;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .donation-reward-toast {
+            top: 76px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .donation-form-overlay,
+        .donation-form-modal,
+        .donation-reward-toast,
+        .donation-reward-coin,
+        .donation-confetti-particle {
+            animation: none !important;
+            transition-duration: 0.01ms !important;
+        }
+
+        .donation-confetti-layer {
+            display: none;
+        }
     }
 </style>
