@@ -1,0 +1,1451 @@
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- 主機： 127.0.0.1
+-- 產生時間： 2026-11-25 04:57:50
+-- 伺服器版本： 10.4.32-MariaDB
+-- PHP 版本： 8.2.12
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- 資料庫： `shinigyi_foodbank`
+--
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `activities`
+--
+
+CREATE TABLE `activities` (
+  `activity_id` int(11) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `activity_type` enum('donation_drive','briefing','cleanup','promotion','other') NOT NULL DEFAULT 'other',
+  `activity_type_detail` varchar(100) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `start_at` datetime NOT NULL,
+  `end_at` datetime DEFAULT NULL,
+  `capacity` int(11) DEFAULT NULL,
+  `status` enum('planned','ongoing','completed','cancelled') NOT NULL DEFAULT 'planned',
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `activities`
+--
+
+INSERT INTO `activities` (`activity_id`, `title`, `activity_type`, `activity_type_detail`, `description`, `start_at`, `end_at`, `capacity`, `status`, `created_by`, `created_at`) VALUES
+(3, '文山區惜食募集日', 'donation_drive', NULL, '協助整理與募集社區剩食物資。', '2026-09-17 14:02:07', '2026-09-17 18:02:07', 20, 'completed', NULL, '2026-09-15 06:02:07'),
+(4, '忠信GO RIDER食安運送說明會', 'briefing', NULL, '認識冷鏈運送、取貨拍照與異常回報流程。', '2026-09-20 14:02:07', '2026-09-20 16:02:07', 30, 'completed', NULL, '2026-09-15 06:02:07'),
+(5, '淨灘', 'cleanup', NULL, '白沙灣淨灘活動，天氣不佳則日期順延', '2026-09-30 14:57:00', NULL, 50, 'completed', 1, '2026-09-18 06:57:28');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `activity_assignments`
+--
+
+CREATE TABLE `activity_assignments` (
+  `assignment_id` int(11) NOT NULL,
+  `activity_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `status` enum('registered','attended','cancelled') NOT NULL DEFAULT 'registered',
+  `cancelled_at` datetime DEFAULT NULL,
+  `cancellation_reason` varchar(500) DEFAULT NULL,
+  `points` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `assignment_type` enum('individual','company') NOT NULL DEFAULT 'individual',
+  `organization_name` varchar(150) DEFAULT NULL,
+  `participant_count` int(11) NOT NULL DEFAULT 1,
+  `attendance_hours` decimal(5,2) DEFAULT NULL,
+  `attended_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `activity_assignments`
+--
+
+INSERT INTO `activity_assignments` (`assignment_id`, `activity_id`, `user_id`, `status`, `cancelled_at`, `cancellation_reason`, `points`, `created_at`, `assignment_type`, `organization_name`, `participant_count`, `attendance_hours`, `attended_at`) VALUES
+(4, 3, 12, 'registered', NULL, NULL, 0, '2026-09-16 08:41:39', 'individual', NULL, 1, NULL, NULL),
+(5, 4, 12, 'registered', NULL, NULL, 0, '2026-09-16 08:42:06', 'individual', NULL, 1, NULL, NULL),
+(6, 5, 4, 'registered', NULL, NULL, 0, '2026-09-18 07:05:28', 'individual', NULL, 1, NULL, NULL),
+(7, 4, 4, 'registered', NULL, NULL, 0, '2026-09-18 07:05:29', 'individual', NULL, 1, NULL, NULL),
+(8, 3, 4, 'registered', NULL, NULL, 0, '2026-09-18 07:05:30', 'individual', NULL, 1, NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `activity_participants`
+--
+
+CREATE TABLE `activity_participants` (
+  `participant_id` int(11) NOT NULL,
+  `assignment_id` int(11) NOT NULL,
+  `full_name` varchar(50) NOT NULL,
+  `phone` varchar(20) NOT NULL,
+  `id_number_encrypted` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `advertisements`
+--
+
+CREATE TABLE `advertisements` (
+  `ad_id` int(11) NOT NULL,
+  `advertiser_id` int(11) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `content` text NOT NULL,
+  `link_url` varchar(255) DEFAULT NULL,
+  `image_path` varchar(255) DEFAULT NULL,
+  `status` enum('pending','active','rejected','removed') NOT NULL DEFAULT 'pending',
+  `start_date` date DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `reject_reason` varchar(255) DEFAULT NULL,
+  `reviewed_by` int(11) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `fee_amount` decimal(10,2) DEFAULT NULL,
+  `policy_agreed_at` datetime DEFAULT NULL COMMENT '刊登者同意廣告刊登規範的時間',
+  `policy_flags` text DEFAULT NULL COMMENT '自動檢查出需審核人員注意的項目（JSON）'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `app_meta`
+--
+
+CREATE TABLE `app_meta` (
+  `meta_key` varchar(50) NOT NULL,
+  `meta_value` varchar(255) NOT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `app_meta`
+--
+
+INSERT INTO `app_meta` (`meta_key`, `meta_value`, `updated_at`) VALUES
+('schema_fingerprint', 'f123233e930247bfc9a1e2f95b64cd53', '2026-11-25 03:33:43');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `audit_logs`
+--
+
+CREATE TABLE `audit_logs` (
+  `log_id` int(11) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `action_type` varchar(100) NOT NULL,
+  `table_name` varchar(100) DEFAULT NULL,
+  `record_id` int(11) DEFAULT NULL,
+  `old_values` text DEFAULT NULL,
+  `new_values` text DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `action_timestamp` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `category_corrections`
+--
+
+CREATE TABLE `category_corrections` (
+  `correction_id` int(11) NOT NULL,
+  `item_name` varchar(150) NOT NULL,
+  `suggested_category_id` int(11) DEFAULT NULL,
+  `chosen_category_id` int(11) NOT NULL,
+  `source` enum('donation','inventory') NOT NULL,
+  `resolved` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `deliveries`
+--
+
+CREATE TABLE `deliveries` (
+  `delivery_id` int(11) NOT NULL,
+  `donation_id` int(11) DEFAULT NULL,
+  `allocation_id` int(11) DEFAULT NULL,
+  `delivery_method` enum('food_bank','volunteer') NOT NULL DEFAULT 'volunteer',
+  `created_by` int(11) DEFAULT NULL,
+  `volunteer_id` int(11) DEFAULT NULL,
+  `vehicle_type` enum('car','motorcycle') NOT NULL,
+  `foodbank_vehicle` varchar(30) DEFAULT NULL COMMENT '忠信派車的車種：motorcycle/car/small_truck/refrigerated_truck/frozen_truck',
+  `total_distance_km` decimal(8,2) NOT NULL DEFAULT 0.00,
+  `weight_kg` decimal(8,2) NOT NULL DEFAULT 0.00,
+  `urgency` enum('normal','priority','urgent') NOT NULL DEFAULT 'normal',
+  `points` int(11) NOT NULL DEFAULT 0,
+  `pickup_address` varchar(255) NOT NULL,
+  `delivery_address` varchar(255) NOT NULL,
+  `status` enum('open','claimed','arrived_pickup','picked_up','delivered','exception','cancelled') NOT NULL DEFAULT 'open',
+  `exception_notes` text DEFAULT NULL,
+  `exception_response` text DEFAULT NULL,
+  `exception_resolved_at` datetime DEFAULT NULL,
+  `exception_resolved_by` int(11) DEFAULT NULL,
+  `delivered_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `pickup_confirmed_at` datetime DEFAULT NULL,
+  `pickup_photo_path` varchar(255) DEFAULT NULL,
+  `estimated_arrival_start` datetime DEFAULT NULL,
+  `estimated_arrival_end` datetime DEFAULT NULL,
+  `overdue_notified_at` datetime DEFAULT NULL,
+  `item_category` varchar(50) DEFAULT NULL,
+  `item_description` text DEFAULT NULL,
+  `received_location` varchar(100) DEFAULT NULL,
+  `arrived_pickup_at` datetime DEFAULT NULL,
+  `arrived_dropoff_at` datetime DEFAULT NULL,
+  `received_confirmed_by` int(11) DEFAULT NULL,
+  `multi_stop_bonus` int(11) NOT NULL DEFAULT 0,
+  `is_cold_storage` tinyint(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `donations`
+--
+
+CREATE TABLE `donations` (
+  `donation_id` int(11) NOT NULL,
+  `order_number` varchar(30) DEFAULT NULL,
+  `donor_id` int(11) DEFAULT NULL,
+  `donor_name` varchar(100) NOT NULL,
+  `donation_type` enum('food','supplies','money','other') NOT NULL,
+  `quantity` decimal(10,2) DEFAULT NULL,
+  `unit` varchar(20) DEFAULT NULL,
+  `donation_date` datetime NOT NULL,
+  `received_by` int(11) DEFAULT NULL,
+  `status` enum('received','pending','assessed','approved','rejected','published','archived') DEFAULT 'pending',
+  `evaluation_status` enum('pending','approved_volunteer','approved_self_delivery','published','rejected') DEFAULT 'pending',
+  `delivery_method` enum('volunteer_assist','self_delivery') DEFAULT 'volunteer_assist',
+  `approval_notes` text DEFAULT NULL,
+  `approved_at` datetime DEFAULT NULL,
+  `approved_by` int(11) DEFAULT NULL,
+  `rejection_reason` text DEFAULT NULL,
+  `rejected_at` datetime DEFAULT NULL,
+  `published_at` datetime DEFAULT NULL,
+  `current_status` enum('waiting_pickup','volunteer_received','in_transit','at_foodbank','inspection_complete') DEFAULT 'waiting_pickup',
+  `status_updated_at` datetime DEFAULT NULL,
+  `split_count` int(11) DEFAULT 1,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `item_name` varchar(100) DEFAULT NULL,
+  `weight_kg` decimal(10,2) DEFAULT NULL,
+  `size_description` varchar(100) DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `pickup_deadline` datetime DEFAULT NULL,
+  `delivery_option` enum('food_bank_pickup','volunteer_delivery') NOT NULL DEFAULT 'volunteer_delivery',
+  `vehicle_type` enum('car','motorcycle','none') DEFAULT 'none',
+  `photo_path` varchar(255) DEFAULT NULL,
+  `evaluation_notes` text DEFAULT NULL,
+  `need_inspection` tinyint(1) DEFAULT 1,
+  `inspection_notes` text DEFAULT NULL,
+  `donor_address` varchar(255) DEFAULT NULL,
+  `reward_options` text DEFAULT NULL,
+  `delivery_date` date DEFAULT NULL,
+  `delivery_time` time DEFAULT NULL,
+  `delivery_address` varchar(255) DEFAULT NULL,
+  `estimated_distance_km` decimal(8,2) DEFAULT NULL,
+  `estimated_duration_minutes` smallint(5) UNSIGNED DEFAULT NULL,
+  `beneficiary_id` int(11) DEFAULT NULL,
+  `dispatch_contact_name` varchar(100) DEFAULT NULL,
+  `dispatch_contact_phone` varchar(30) DEFAULT NULL,
+  `dispatch_vehicle_info` varchar(150) DEFAULT NULL,
+  `revision_no` int(11) NOT NULL DEFAULT 1,
+  `is_urgent` tinyint(1) NOT NULL DEFAULT 0,
+  `rejected_fields` text DEFAULT NULL,
+  `urgency` enum('normal','priority','urgent') NOT NULL DEFAULT 'normal'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `donation_allocations`
+--
+
+CREATE TABLE `donation_allocations` (
+  `allocation_id` int(11) NOT NULL,
+  `donation_id` int(11) NOT NULL,
+  `allocation_number` int(11) NOT NULL DEFAULT 1,
+  `sub_order_number` varchar(40) DEFAULT NULL,
+  `length_cm` decimal(6,2) DEFAULT NULL,
+  `width_cm` decimal(6,2) DEFAULT NULL,
+  `height_cm` decimal(6,2) DEFAULT NULL,
+  `weight_kg` decimal(8,2) DEFAULT NULL,
+  `quantity` decimal(10,2) NOT NULL,
+  `unit` varchar(20) DEFAULT NULL,
+  `status` enum('pending','assigned','in_transit','completed') DEFAULT 'pending',
+  `assigned_to` int(11) DEFAULT NULL,
+  `assigned_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `donation_allocation_items`
+--
+
+CREATE TABLE `donation_allocation_items` (
+  `allocation_item_id` int(11) NOT NULL,
+  `allocation_id` int(11) NOT NULL,
+  `donation_item_id` int(11) NOT NULL,
+  `quantity` decimal(10,2) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `donation_items`
+--
+
+CREATE TABLE `donation_items` (
+  `item_id` int(11) NOT NULL,
+  `donation_id` int(11) NOT NULL,
+  `item_name` varchar(100) NOT NULL,
+  `brand` varchar(100) DEFAULT NULL,
+  `specification` varchar(150) DEFAULT NULL,
+  `quantity` decimal(10,2) NOT NULL,
+  `unit` varchar(20) NOT NULL DEFAULT '件',
+  `length_cm` decimal(6,2) DEFAULT NULL,
+  `width_cm` decimal(6,2) DEFAULT NULL,
+  `height_cm` decimal(6,2) DEFAULT NULL,
+  `item_weight_kg` decimal(8,2) DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `category_id` int(11) DEFAULT NULL,
+  `storage_condition` enum('room','chilled','frozen') NOT NULL DEFAULT 'room',
+  `package_state` enum('sealed','opened') NOT NULL DEFAULT 'sealed'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `donation_revisions`
+--
+
+CREATE TABLE `donation_revisions` (
+  `revision_id` int(11) NOT NULL,
+  `donation_id` int(11) NOT NULL,
+  `revision_no` int(11) NOT NULL,
+  `event` enum('submitted','approved','rejected','resubmitted') NOT NULL,
+  `snapshot` longtext DEFAULT NULL,
+  `reason` text DEFAULT NULL,
+  `rejected_fields` text DEFAULT NULL,
+  `actor_id` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `donor_reward_items`
+--
+
+CREATE TABLE `donor_reward_items` (
+  `item_id` int(11) NOT NULL,
+  `donor_id` int(11) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `description` text DEFAULT NULL,
+  `cost_points` int(11) NOT NULL,
+  `min_spend` int(10) UNSIGNED NOT NULL DEFAULT 0 COMMENT '最低消費金額門檻',
+  `discount_amount` int(10) UNSIGNED DEFAULT NULL COMMENT '滿額折抵金額 (1點折1元)',
+  `discount_rate` decimal(4,2) DEFAULT NULL COMMENT '折扣比例',
+  `stock` int(11) DEFAULT NULL,
+  `category` enum('discount','product','experience','other') DEFAULT 'other',
+  `rule_type` enum('direct_exchange','min_spend_discount','min_spend_percentage') NOT NULL DEFAULT 'direct_exchange',
+  `redemption_code` varchar(50) DEFAULT NULL,
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `retail_price` int(10) UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `donor_reward_items`
+--
+
+INSERT INTO `donor_reward_items` (`item_id`, `donor_id`, `title`, `description`, `cost_points`, `min_spend`, `discount_amount`, `discount_rate`, `stock`, `category`, `rule_type`, `redemption_code`, `status`, `created_at`, `updated_at`, `retail_price`) VALUES
+(2, 11, 'TEST1', '', 5, 50, 5, NULL, NULL, 'discount', 'min_spend_discount', NULL, 'active', '2026-11-17 20:22:21', '2026-11-17 20:22:21', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `donor_reward_redemptions`
+--
+
+CREATE TABLE `donor_reward_redemptions` (
+  `redemption_id` int(11) NOT NULL,
+  `item_id` int(11) NOT NULL,
+  `volunteer_id` int(11) NOT NULL,
+  `donor_id` int(11) NOT NULL,
+  `points_spent` int(11) NOT NULL,
+  `status` enum('pending','fulfilled','cancelled') NOT NULL DEFAULT 'pending',
+  `redemption_code_used` varchar(50) DEFAULT NULL,
+  `fulfilled_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `foodbank_profile`
+--
+
+CREATE TABLE `foodbank_profile` (
+  `profile_id` tinyint(4) NOT NULL,
+  `contact_name` varchar(100) DEFAULT NULL,
+  `contact_phone` varchar(30) DEFAULT NULL,
+  `address` varchar(255) DEFAULT NULL,
+  `open_days` varchar(20) DEFAULT NULL COMMENT '可收貨的星期，逗號分隔（1=週一…7=週日）',
+  `business_hours` varchar(100) DEFAULT NULL,
+  `closed_days` varchar(100) DEFAULT NULL,
+  `receiving_note` varchar(255) DEFAULT NULL COMMENT 'GO Rider 送達時看到的備註',
+  `updated_by` int(11) DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `geocode_cache`
+--
+
+CREATE TABLE `geocode_cache` (
+  `address_hash` char(32) NOT NULL,
+  `address` varchar(255) NOT NULL,
+  `lat` decimal(10,7) NOT NULL,
+  `lon` decimal(10,7) NOT NULL,
+  `approximate` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `inventory_receipts`
+--
+
+CREATE TABLE `inventory_receipts` (
+  `receipt_id` bigint(20) UNSIGNED NOT NULL,
+  `item_name` varchar(150) NOT NULL,
+  `category` varchar(50) NOT NULL,
+  `movement_type` enum('in','out') NOT NULL DEFAULT 'in',
+  `quantity` decimal(12,2) NOT NULL,
+  `unit` varchar(30) NOT NULL DEFAULT '件',
+  `donor_name` varchar(150) DEFAULT NULL,
+  `received_date` date NOT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `storage_location` varchar(150) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `received_by` int(11) NOT NULL,
+  `source_donation_id` int(11) DEFAULT NULL,
+  `source_item_id` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `item_categories`
+--
+
+CREATE TABLE `item_categories` (
+  `category_id` int(11) NOT NULL,
+  `category_name` varchar(50) NOT NULL,
+  `description` text DEFAULT NULL,
+  `keywords` text DEFAULT NULL,
+  `default_storage` enum('room','chilled','frozen') DEFAULT NULL,
+  `carbon_factor` decimal(6,2) DEFAULT NULL,
+  `expiry_alert_days` int(11) DEFAULT NULL,
+  `icon` varchar(50) DEFAULT NULL,
+  `display_order` int(11) DEFAULT 0,
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `item_categories`
+--
+
+INSERT INTO `item_categories` (`category_id`, `category_name`, `description`, `keywords`, `default_storage`, `carbon_factor`, `expiry_alert_days`, `icon`, `display_order`, `status`, `created_at`, `updated_at`) VALUES
+(1, '蔬菜', '新鮮蔬菜類', '高麗菜、白菜、青菜、菠菜、花椰菜、空心菜、地瓜葉、番茄、蕃茄、小黃瓜、黃瓜、胡蘿蔔、紅蘿蔔、蘿蔔、洋蔥、馬鈴薯、茄子、南瓜、玉米、香菇、菇、青椒、甜椒、蔥、蒜、薑、芹菜、豆芽、蔬菜、菜', NULL, NULL, NULL, 'fa-solid fa-leaf', 1, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(2, '水果', '新鮮水果類', '蘋果、香蕉、橘子、柳丁、柳橙、葡萄、芭樂、西瓜、鳳梨、芒果、奇異果、草莓、梨、桃、李、木瓜、火龍果、蓮霧、櫻桃、藍莓、檸檬、柚子、哈密瓜、香瓜、釋迦、荔枝、龍眼、水果', NULL, NULL, NULL, 'fa-solid fa-apple-whole', 2, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(3, '穀物', '米、麵粉等穀物類', '白米、糙米、米、麵粉、燕麥、麥片、麵包、吐司、饅頭、包子、麵條、義大利麵、泡麵、拉麵、烏龍麵、冬粉、米粉、麵、蛋糕、蛋捲、蛋餅', NULL, NULL, NULL, 'fa-solid fa-wheat-awn', 3, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(4, '乳製品', '牛奶、乳酪等乳製品', '牛奶、鮮奶、奶粉、優格、優酪、乳酪、起司、起士、奶油、鮮乳、保久乳', NULL, NULL, NULL, 'fa-solid fa-bottle-water', 4, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(5, '肉類', '肉品、雞蛋等蛋白質', '豬肉、牛肉、雞肉、羊肉、雞腿、雞胸、雞翅、排骨、絞肉、火腿、香腸、培根、雞蛋、鴨蛋、蛋、魚、蝦、蟹、花枝、魷魚、貝、肉', NULL, NULL, NULL, 'fa-solid fa-drumstick', 5, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(6, '罐頭食品', '罐頭、瓶裝食品', '罐頭、罐裝、玻璃罐', NULL, NULL, NULL, 'fa-solid fa-jar', 6, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(7, '乾貨', '乾物、豆類、堅果', '紅豆、綠豆、黃豆、黑豆、花生、堅果、杏仁、核桃、胡桃、腰果、餅乾、乾燥、海苔、木耳、香菇乾、蝦米、鳳梨酥、糖、鹽、醬油、油、乾', NULL, NULL, NULL, 'fa-solid fa-bowl-rice', 7, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(8, '飲料', '飲料、飲品類', '果汁、汁、茶、咖啡、汽水、可樂、飲料、礦泉水、飲用水、豆漿、運動飲料、氣泡水', NULL, NULL, NULL, 'fa-solid fa-mug-hot', 8, 'active', '2026-09-18 06:46:26', '2026-11-17 20:14:14'),
+(9, '其他', '其他物資', NULL, NULL, NULL, NULL, 'fa-solid fa-box', 99, 'active', '2026-09-18 06:46:26', '2026-09-18 06:46:26');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `notifications`
+--
+
+CREATE TABLE `notifications` (
+  `notification_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `message` text NOT NULL,
+  `type` enum('info','success','warning','error') NOT NULL DEFAULT 'info',
+  `read_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `channel` enum('web','push','line','sms') NOT NULL DEFAULT 'web',
+  `related_delivery_id` int(11) DEFAULT NULL,
+  `dedupe_key` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `notifications`
+--
+
+INSERT INTO `notifications` (`notification_id`, `user_id`, `title`, `message`, `type`, `read_at`, `created_at`, `channel`, `related_delivery_id`, `dedupe_key`) VALUES
+(26, 11, '新的心意幣兌換', 'GO Rider 已兌換「TEST1」，使用 5 枚心意幣，請至心意幣兌換頁面查看並核銷。', 'info', NULL, '2026-11-17 20:29:20', 'web', NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `otp_codes`
+--
+
+CREATE TABLE `otp_codes` (
+  `otp_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `phone` varchar(20) NOT NULL,
+  `purpose` enum('phone_verification','password_reset') NOT NULL,
+  `code_hash` varchar(64) NOT NULL,
+  `attempts` int(11) NOT NULL DEFAULT 0,
+  `expires_at` datetime NOT NULL,
+  `consumed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `partner_esg_reviews`
+--
+
+CREATE TABLE `partner_esg_reviews` (
+  `review_id` int(11) NOT NULL,
+  `donor_id` int(11) NOT NULL,
+  `quarter` char(7) NOT NULL,
+  `status` enum('certified','not_certified') NOT NULL,
+  `review_note` text NOT NULL,
+  `reviewed_by` int(11) NOT NULL,
+  `reviewed_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `permissions`
+--
+
+CREATE TABLE `permissions` (
+  `permission_key` varchar(50) NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `category` varchar(50) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `permissions`
+--
+
+INSERT INTO `permissions` (`permission_key`, `label`, `category`) VALUES
+('activity.publish', '發布公益活動', 'news'),
+('ad.publish', '刊登廣告', 'news'),
+('admin.manage_users', '管理帳號審核', 'admin'),
+('delivery.confirm_arrival', '確認配送已抵達並查收', 'delivery'),
+('delivery.manage', '發布／編輯／處理配送任務', 'delivery'),
+('donation.create', '刊登物資捐贈', 'donation'),
+('donation.review', '審查／拆單物資捐贈', 'donation'),
+('id.review', '審核身分證', 'admin'),
+('inventory.inspect', '完成物資清點', 'inventory'),
+('page.activities', '公益活動', 'page'),
+('page.activity_certificate', '活動證書', 'page'),
+('page.carbon_report', '永續報告', 'page'),
+('page.certificate', '證書', 'page'),
+('page.dashboard', '主頁', 'page'),
+('page.deliveries', '配送任務', 'page'),
+('page.donation_materials', '物資捐贈', 'page'),
+('page.donation_materials_review', '物資捐贈審查', 'page'),
+('page.id_verification', '身分驗證', 'page'),
+('page.inventory', '物資盤點', 'page'),
+('page.item_categories', '物資分類', 'page'),
+('page.material_transport', '物資運送', 'page'),
+('page.news', '最新消息公告', 'page'),
+('page.notifications', '通知中心', 'page'),
+('page.order_tracking', '訂單追蹤', 'page'),
+('page.reports', '數據分析／榮譽榜', 'page'),
+('page.rewards', '心意幣兌換', 'page'),
+('page.rider_application', '申請外送志工', 'page'),
+('page.rider_review', '外送志工審核', 'page'),
+('page.settings', '設置', 'page'),
+('page.users', '帳號審核', 'page'),
+('rider.accept_task', '承接 Rider 配送任務', 'delivery');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `point_transactions`
+--
+
+CREATE TABLE `point_transactions` (
+  `transaction_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `delivery_id` int(11) DEFAULT NULL,
+  `points` int(11) NOT NULL,
+  `transaction_type` enum('earned','redeemed','adjusted') NOT NULL DEFAULT 'earned',
+  `description` varchar(255) NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `point_transactions`
+--
+
+INSERT INTO `point_transactions` (`transaction_id`, `user_id`, `delivery_id`, `points`, `transaction_type`, `description`, `created_at`) VALUES
+(3, 4, NULL, -30, 'redeemed', '兌換獎勵', '2026-08-23 06:50:40'),
+(9, 12, NULL, 100, 'adjusted', 'Test grant: 100 points', '2026-11-17 20:28:55'),
+(10, 12, NULL, -5, 'redeemed', '兌換公益獎勵', '2026-11-17 20:29:20');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `reward_catalog`
+--
+
+CREATE TABLE `reward_catalog` (
+  `reward_id` int(11) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `description` text DEFAULT NULL,
+  `cost_points` int(11) NOT NULL,
+  `stock` int(11) DEFAULT NULL,
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `reward_claims`
+--
+
+CREATE TABLE `reward_claims` (
+  `claim_id` bigint(20) UNSIGNED NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `source_type` enum('foodbank','donor') NOT NULL,
+  `reward_id` int(11) DEFAULT NULL,
+  `donor_item_id` int(11) DEFAULT NULL,
+  `title` varchar(150) NOT NULL,
+  `points_spent` int(11) NOT NULL,
+  `bill_amount` decimal(10,2) DEFAULT NULL COMMENT '原消費總金額',
+  `final_cash_paid` decimal(10,2) DEFAULT NULL COMMENT '折抵後實收現金',
+  `rule_type` enum('direct_exchange','min_spend_discount','min_spend_percentage') DEFAULT NULL,
+  `min_spend` int(10) UNSIGNED DEFAULT NULL,
+  `discount_amount` int(10) UNSIGNED DEFAULT NULL,
+  `discount_rate` decimal(4,2) DEFAULT NULL,
+  `reward_description` text DEFAULT NULL,
+  `status` enum('pending','fulfilled','cancelled') NOT NULL DEFAULT 'pending',
+  `token_hash` char(64) NOT NULL,
+  `token_value` char(64) DEFAULT NULL,
+  `token_expires_at` datetime NOT NULL,
+  `redeemed_at` datetime DEFAULT NULL,
+  `redeemed_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `stock_reserved` tinyint(1) DEFAULT NULL,
+  `retail_price` int(10) UNSIGNED DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `reward_claims`
+--
+
+INSERT INTO `reward_claims` (`claim_id`, `user_id`, `source_type`, `reward_id`, `donor_item_id`, `title`, `points_spent`, `bill_amount`, `final_cash_paid`, `rule_type`, `min_spend`, `discount_amount`, `discount_rate`, `reward_description`, `status`, `token_hash`, `token_value`, `token_expires_at`, `redeemed_at`, `redeemed_by`, `created_at`, `stock_reserved`, `retail_price`) VALUES
+(1, 12, 'donor', NULL, 2, 'TEST1', 5, NULL, NULL, 'min_spend_discount', 50, 5, NULL, '', 'pending', '1996dc25d212777a985c83752bec008c1eea756dca2dfbc0fee781901b417e7f', 'c69a554e40bd8249e2170050268397d48247f4cd361a152a508a015c0f73ee18', '2026-11-18 04:55:28', NULL, NULL, '2026-11-17 20:29:20', NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `reward_redemptions`
+--
+
+CREATE TABLE `reward_redemptions` (
+  `redemption_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `reward_id` int(11) NOT NULL,
+  `points_spent` int(11) NOT NULL,
+  `status` enum('pending','fulfilled','cancelled') NOT NULL DEFAULT 'pending',
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `rider_applications`
+--
+
+CREATE TABLE `rider_applications` (
+  `application_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `vehicle_type` enum('motorcycle','car','both') NOT NULL,
+  `license_photo_path` varchar(255) NOT NULL,
+  `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  `review_notes` text DEFAULT NULL,
+  `reviewed_by` int(11) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `rider_locations`
+--
+
+CREATE TABLE `rider_locations` (
+  `volunteer_id` int(11) NOT NULL,
+  `lat` decimal(10,7) NOT NULL,
+  `lon` decimal(10,7) NOT NULL,
+  `updated_at` datetime NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `role_permission_defaults`
+--
+
+CREATE TABLE `role_permission_defaults` (
+  `role` enum('foodbank_staff','member') NOT NULL,
+  `member_type` enum('general','enterprise','clerk','') NOT NULL DEFAULT '',
+  `permission_key` varchar(50) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `role_permission_defaults`
+--
+
+INSERT INTO `role_permission_defaults` (`role`, `member_type`, `permission_key`) VALUES
+('foodbank_staff', 'clerk', 'delivery.confirm_arrival'),
+('foodbank_staff', 'clerk', 'inventory.inspect'),
+('foodbank_staff', 'clerk', 'page.dashboard'),
+('foodbank_staff', 'clerk', 'page.deliveries'),
+('foodbank_staff', 'clerk', 'page.inventory'),
+('foodbank_staff', 'clerk', 'page.notifications'),
+('foodbank_staff', 'clerk', 'page.order_tracking'),
+('foodbank_staff', '', 'activity.publish'),
+('foodbank_staff', '', 'ad.publish'),
+('foodbank_staff', '', 'admin.manage_users'),
+('foodbank_staff', '', 'delivery.confirm_arrival'),
+('foodbank_staff', '', 'delivery.manage'),
+('foodbank_staff', '', 'donation.review'),
+('foodbank_staff', '', 'id.review'),
+('foodbank_staff', '', 'inventory.inspect'),
+('foodbank_staff', '', 'page.activities'),
+('foodbank_staff', '', 'page.activity_certificate'),
+('foodbank_staff', '', 'page.carbon_report'),
+('foodbank_staff', '', 'page.certificate'),
+('foodbank_staff', '', 'page.dashboard'),
+('foodbank_staff', '', 'page.deliveries'),
+('foodbank_staff', '', 'page.donation_materials_review'),
+('foodbank_staff', '', 'page.id_verification'),
+('foodbank_staff', '', 'page.inventory'),
+('foodbank_staff', '', 'page.item_categories'),
+('foodbank_staff', '', 'page.news'),
+('foodbank_staff', '', 'page.notifications'),
+('foodbank_staff', '', 'page.order_tracking'),
+('foodbank_staff', '', 'page.reports'),
+('foodbank_staff', '', 'page.rewards'),
+('foodbank_staff', '', 'page.rider_review'),
+('foodbank_staff', '', 'page.settings'),
+('foodbank_staff', '', 'page.users'),
+('member', 'general', 'page.activities'),
+('member', 'general', 'page.activity_certificate'),
+('member', 'general', 'page.certificate'),
+('member', 'general', 'page.dashboard'),
+('member', 'general', 'page.id_verification'),
+('member', 'general', 'page.news'),
+('member', 'general', 'page.notifications'),
+('member', 'general', 'page.reports'),
+('member', 'general', 'page.rewards'),
+('member', 'general', 'page.rider_application'),
+('member', 'enterprise', 'activity.publish'),
+('member', 'enterprise', 'ad.publish'),
+('member', 'enterprise', 'donation.create'),
+('member', 'enterprise', 'page.activities'),
+('member', 'enterprise', 'page.activity_certificate'),
+('member', 'enterprise', 'page.carbon_report'),
+('member', 'enterprise', 'page.certificate'),
+('member', 'enterprise', 'page.dashboard'),
+('member', 'enterprise', 'page.donation_materials'),
+('member', 'enterprise', 'page.news'),
+('member', 'enterprise', 'page.notifications'),
+('member', 'enterprise', 'page.order_tracking'),
+('member', 'enterprise', 'page.rewards'),
+('member', 'enterprise', 'page.settings');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `thanks_messages`
+--
+
+CREATE TABLE `thanks_messages` (
+  `thanks_id` int(11) NOT NULL,
+  `delivery_id` int(11) NOT NULL,
+  `to_donor_id` int(11) NOT NULL,
+  `from_user_id` int(11) NOT NULL,
+  `message` varchar(300) NOT NULL,
+  `is_public` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `users`
+--
+
+CREATE TABLE `users` (
+  `user_id` int(11) NOT NULL,
+  `username` varchar(50) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `full_name` varchar(100) NOT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `role` enum('foodbank_staff','member') NOT NULL DEFAULT 'foodbank_staff',
+  `member_type` enum('general','enterprise') NOT NULL DEFAULT 'general',
+  `staff_type` enum('admin','clerk') DEFAULT NULL,
+  `tax_id` varchar(8) DEFAULT NULL,
+  `referral_source` varchar(50) DEFAULT NULL,
+  `blacklisted_at` datetime DEFAULT NULL,
+  `blacklist_reason` varchar(255) DEFAULT NULL,
+  `department` varchar(50) DEFAULT NULL,
+  `status` enum('active','inactive','suspended') DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `created_by` int(11) DEFAULT NULL,
+  `phone_verified` tinyint(1) NOT NULL DEFAULT 0,
+  `is_enterprise_verified` tinyint(1) DEFAULT 0,
+  `enterprise_name` varchar(150) DEFAULT NULL,
+  `enterprise_verified_at` datetime DEFAULT NULL,
+  `default_pickup_address` varchar(255) DEFAULT NULL,
+  `open_days` varchar(20) DEFAULT NULL,
+  `business_hours` varchar(100) DEFAULT NULL,
+  `closed_days` varchar(100) DEFAULT NULL,
+  `pickup_note` varchar(255) DEFAULT NULL,
+  `failed_login_count` int(11) NOT NULL DEFAULT 0,
+  `login_locked_until` datetime DEFAULT NULL,
+  `id_number_encrypted` text DEFAULT NULL,
+  `id_number_hash` char(64) DEFAULT NULL,
+  `id_verify_status` enum('none','pending','approved','rejected') NOT NULL DEFAULT 'none',
+  `id_verify_note` varchar(255) DEFAULT NULL,
+  `id_verified_by` int(11) DEFAULT NULL,
+  `id_verified_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `users`
+--
+
+INSERT INTO `users` (`user_id`, `username`, `password`, `email`, `full_name`, `phone`, `role`, `member_type`, `staff_type`, `tax_id`, `referral_source`, `blacklisted_at`, `blacklist_reason`, `department`, `status`, `created_at`, `updated_at`, `created_by`, `phone_verified`, `is_enterprise_verified`, `enterprise_name`, `enterprise_verified_at`, `default_pickup_address`, `open_days`, `business_hours`, `closed_days`, `pickup_note`, `failed_login_count`, `login_locked_until`, `id_number_encrypted`, `id_number_hash`, `id_verify_status`, `id_verify_note`, `id_verified_by`, `id_verified_at`) VALUES
+(1, 'admin', '$2y$10$mwRwKGIC21Jv1rzC99a/IOSMQqyLrggkn0JwceZ3cW.r0x01eh42e', 'admin@foodbank.local', '忠信食物銀行', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 16:12:45', '2026-09-15 06:14:35', NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(2, 'manager', '$2y$10$qr4hpiq8jbeuEg.QPiroieIfkLzAunBKU1ETYKdcy6TUt6UsvCQC2', 'manager@foodbank.local', '忠信食物銀行', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 16:46:44', '2026-09-16 08:46:08', NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(3, 'staff', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'staff@foodbank.local', '食物銀行人員', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 16:46:44', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(6, 'Xccc0830', '2e256634b197e5f0a14f7ceacd8db15359ae6f3ee6668977b256d557ad01a215', 'chesterhsu0830@gmail.com', '許策', NULL, 'member', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 17:00:06', '2026-08-18 17:00:45', NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(7, 'official', '3fae19dadf1a05245ffa9cd28f3e4530dc42d16511f743da4e0f5c70fdc12', 'official@foodbank.local', '官方審核人員', NULL, 'foodbank_staff', 'general', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(8, 'donor', '0df8b21212b360c2862c2cce12a4f3d883f13acdc4b59f43cf5b2fcfd2c30954', 'donor@foodbank.local', '捐贈店家', NULL, 'member', 'enterprise', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-08-18 17:03:08', '2026-09-15 06:26:24', NULL, 0, 0, '捐贈店家', NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(11, 'store_demo', '$2y$10$l2fieWAIhqoo36lLMbHbSeLb5sllWY8tO8hep5G98zkFLXO6yNMZS', 'store_demo@foodbank.local', '幸福超市', '0912345678', 'member', 'enterprise', NULL, NULL, NULL, NULL, NULL, '零售部門', 'active', '2026-09-16 07:17:33', '2026-11-22 05:44:41', NULL, 1, 0, '幸福超市', NULL, '242新北市新莊區三泰路60號', '1,2,3,4,5', '10:40~20:40', NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(12, 'courier_demo', '$2y$10$Cyxw98tLQPQtKnExEcNQj.7fF77aNUF3k43LHjqd8OfeeYRDqTZey', 'courier_demo@foodbank.local', '忠信GO RIDER A', '0923456789', 'member', 'general', NULL, NULL, NULL, NULL, NULL, '配送部門', 'active', '2026-09-16 07:17:33', '2026-09-16 07:17:33', NULL, 1, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL),
+(13, 'love_store_001', '$2y$10$H/gfMvpdwPze2NoQkZVBwOS1ccKHVOT/HNc0/pxSaP9/F6IOaYRLG', 'store001@foodbank.local', '愛心商家001', NULL, 'member', 'enterprise', NULL, NULL, NULL, NULL, NULL, NULL, 'active', '2026-09-18 07:16:10', '2026-09-18 07:17:17', NULL, 0, 0, '愛心商家001', NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, 'none', NULL, NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `user_permission_overrides`
+--
+
+CREATE TABLE `user_permission_overrides` (
+  `user_id` int(11) NOT NULL,
+  `permission_key` varchar(50) NOT NULL,
+  `granted` tinyint(1) NOT NULL DEFAULT 1,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `user_permission_overrides`
+--
+
+INSERT INTO `user_permission_overrides` (`user_id`, `permission_key`, `granted`, `updated_at`) VALUES
+(6, 'page.deliveries', 1, '2026-11-17 20:13:37'),
+(6, 'page.material_transport', 1, '2026-11-17 20:13:37'),
+(6, 'rider.accept_task', 1, '2026-11-25 03:33:55'),
+(12, 'page.deliveries', 1, '2026-11-17 20:13:37'),
+(12, 'page.material_transport', 1, '2026-11-17 20:13:37'),
+(12, 'rider.accept_task', 1, '2026-11-17 20:13:37');
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `volunteer_consents`
+--
+
+CREATE TABLE `volunteer_consents` (
+  `user_id` int(11) NOT NULL,
+  `agreed_disclaimer` tinyint(1) NOT NULL DEFAULT 0,
+  `agreed_mutual_aid` tinyint(1) NOT NULL DEFAULT 0,
+  `video_watched` tinyint(1) NOT NULL DEFAULT 0,
+  `completed_at` datetime DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `volunteer_consents`
+--
+
+INSERT INTO `volunteer_consents` (`user_id`, `agreed_disclaimer`, `agreed_mutual_aid`, `video_watched`, `completed_at`, `updated_at`) VALUES
+(12, 1, 1, 1, '2026-09-16 15:17:33', '2026-09-16 07:17:33');
+
+--
+-- 已傾印資料表的索引
+--
+
+--
+-- 資料表索引 `activities`
+--
+ALTER TABLE `activities`
+  ADD PRIMARY KEY (`activity_id`);
+
+--
+-- 資料表索引 `activity_assignments`
+--
+ALTER TABLE `activity_assignments`
+  ADD PRIMARY KEY (`assignment_id`),
+  ADD UNIQUE KEY `unique_activity_user` (`activity_id`,`user_id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `activity_status_cancelled_at` (`activity_id`,`user_id`,`status`,`cancelled_at`);
+
+--
+-- 資料表索引 `activity_participants`
+--
+ALTER TABLE `activity_participants`
+  ADD PRIMARY KEY (`participant_id`),
+  ADD KEY `idx_activity_participants_assignment` (`assignment_id`);
+
+--
+-- 資料表索引 `advertisements`
+--
+ALTER TABLE `advertisements`
+  ADD PRIMARY KEY (`ad_id`),
+  ADD KEY `idx_advertisements_status` (`status`,`created_at`),
+  ADD KEY `idx_advertisements_advertiser` (`advertiser_id`);
+
+--
+-- 資料表索引 `app_meta`
+--
+ALTER TABLE `app_meta`
+  ADD PRIMARY KEY (`meta_key`);
+
+--
+-- 資料表索引 `audit_logs`
+--
+ALTER TABLE `audit_logs`
+  ADD PRIMARY KEY (`log_id`),
+  ADD KEY `action_timestamp` (`action_timestamp`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `action_type` (`action_type`);
+
+--
+-- 資料表索引 `category_corrections`
+--
+ALTER TABLE `category_corrections`
+  ADD PRIMARY KEY (`correction_id`),
+  ADD KEY `idx_category_corrections_open` (`resolved`,`chosen_category_id`);
+
+--
+-- 資料表索引 `deliveries`
+--
+ALTER TABLE `deliveries`
+  ADD PRIMARY KEY (`delivery_id`),
+  ADD KEY `status` (`status`),
+  ADD KEY `volunteer_id` (`volunteer_id`),
+  ADD KEY `donation_id` (`donation_id`),
+  ADD KEY `idx_deliveries_allocation_id` (`allocation_id`);
+
+--
+-- 資料表索引 `donations`
+--
+ALTER TABLE `donations`
+  ADD PRIMARY KEY (`donation_id`),
+  ADD UNIQUE KEY `unique_order_number` (`order_number`),
+  ADD KEY `donation_date` (`donation_date`),
+  ADD KEY `status` (`status`),
+  ADD KEY `received_by` (`received_by`),
+  ADD KEY `idx_donations_status` (`status`),
+  ADD KEY `idx_donations_evaluation_status` (`evaluation_status`),
+  ADD KEY `idx_donations_published_at` (`published_at`);
+
+--
+-- 資料表索引 `donation_allocations`
+--
+ALTER TABLE `donation_allocations`
+  ADD PRIMARY KEY (`allocation_id`),
+  ADD UNIQUE KEY `uq_sub_order_number` (`sub_order_number`),
+  ADD KEY `donation_id` (`donation_id`),
+  ADD KEY `status` (`status`);
+
+--
+-- 資料表索引 `donation_allocation_items`
+--
+ALTER TABLE `donation_allocation_items`
+  ADD PRIMARY KEY (`allocation_item_id`),
+  ADD KEY `idx_dai_allocation_id` (`allocation_id`),
+  ADD KEY `idx_dai_donation_item_id` (`donation_item_id`);
+
+--
+-- 資料表索引 `donation_items`
+--
+ALTER TABLE `donation_items`
+  ADD PRIMARY KEY (`item_id`),
+  ADD KEY `idx_donation_items_donation_id` (`donation_id`);
+
+--
+-- 資料表索引 `donation_revisions`
+--
+ALTER TABLE `donation_revisions`
+  ADD PRIMARY KEY (`revision_id`),
+  ADD KEY `idx_donation_revisions_donation` (`donation_id`,`revision_no`);
+
+--
+-- 資料表索引 `donor_reward_items`
+--
+ALTER TABLE `donor_reward_items`
+  ADD PRIMARY KEY (`item_id`),
+  ADD KEY `donor_id` (`donor_id`),
+  ADD KEY `status` (`status`);
+
+--
+-- 資料表索引 `donor_reward_redemptions`
+--
+ALTER TABLE `donor_reward_redemptions`
+  ADD PRIMARY KEY (`redemption_id`),
+  ADD KEY `item_id` (`item_id`),
+  ADD KEY `volunteer_id` (`volunteer_id`),
+  ADD KEY `donor_id` (`donor_id`),
+  ADD KEY `status` (`status`);
+
+--
+-- 資料表索引 `foodbank_profile`
+--
+ALTER TABLE `foodbank_profile`
+  ADD PRIMARY KEY (`profile_id`);
+
+--
+-- 資料表索引 `geocode_cache`
+--
+ALTER TABLE `geocode_cache`
+  ADD PRIMARY KEY (`address_hash`);
+
+--
+-- 資料表索引 `inventory_receipts`
+--
+ALTER TABLE `inventory_receipts`
+  ADD PRIMARY KEY (`receipt_id`),
+  ADD UNIQUE KEY `uq_inventory_receipt_source` (`source_donation_id`,`source_item_id`),
+  ADD KEY `idx_inventory_receipts_item` (`item_name`,`category`,`unit`),
+  ADD KEY `idx_inventory_receipts_received_date` (`received_date`),
+  ADD KEY `idx_inventory_receipts_expiry_date` (`expiry_date`);
+
+--
+-- 資料表索引 `item_categories`
+--
+ALTER TABLE `item_categories`
+  ADD PRIMARY KEY (`category_id`),
+  ADD UNIQUE KEY `category_name` (`category_name`),
+  ADD KEY `status` (`status`);
+
+--
+-- 資料表索引 `notifications`
+--
+ALTER TABLE `notifications`
+  ADD PRIMARY KEY (`notification_id`),
+  ADD UNIQUE KEY `uniq_notification_dedupe` (`user_id`,`dedupe_key`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `read_at` (`read_at`);
+
+--
+-- 資料表索引 `otp_codes`
+--
+ALTER TABLE `otp_codes`
+  ADD PRIMARY KEY (`otp_id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `purpose` (`purpose`);
+
+--
+-- 資料表索引 `partner_esg_reviews`
+--
+ALTER TABLE `partner_esg_reviews`
+  ADD PRIMARY KEY (`review_id`),
+  ADD UNIQUE KEY `uq_partner_esg_quarter` (`donor_id`,`quarter`),
+  ADD KEY `idx_partner_esg_quarter` (`quarter`);
+
+--
+-- 資料表索引 `permissions`
+--
+ALTER TABLE `permissions`
+  ADD PRIMARY KEY (`permission_key`);
+
+--
+-- 資料表索引 `point_transactions`
+--
+ALTER TABLE `point_transactions`
+  ADD PRIMARY KEY (`transaction_id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `delivery_id` (`delivery_id`);
+
+--
+-- 資料表索引 `reward_catalog`
+--
+ALTER TABLE `reward_catalog`
+  ADD PRIMARY KEY (`reward_id`);
+
+--
+-- 資料表索引 `reward_claims`
+--
+ALTER TABLE `reward_claims`
+  ADD PRIMARY KEY (`claim_id`),
+  ADD UNIQUE KEY `uq_reward_claim_token` (`token_hash`),
+  ADD KEY `idx_reward_claim_user` (`user_id`),
+  ADD KEY `idx_reward_claim_status` (`status`);
+
+--
+-- 資料表索引 `reward_redemptions`
+--
+ALTER TABLE `reward_redemptions`
+  ADD PRIMARY KEY (`redemption_id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `reward_id` (`reward_id`);
+
+--
+-- 資料表索引 `rider_applications`
+--
+ALTER TABLE `rider_applications`
+  ADD PRIMARY KEY (`application_id`),
+  ADD KEY `idx_rider_applications_user` (`user_id`,`status`),
+  ADD KEY `idx_rider_applications_status` (`status`,`created_at`);
+
+--
+-- 資料表索引 `rider_locations`
+--
+ALTER TABLE `rider_locations`
+  ADD PRIMARY KEY (`volunteer_id`);
+
+--
+-- 資料表索引 `role_permission_defaults`
+--
+ALTER TABLE `role_permission_defaults`
+  ADD PRIMARY KEY (`role`,`member_type`,`permission_key`),
+  ADD KEY `idx_rpd_permission_key` (`permission_key`);
+
+--
+-- 資料表索引 `thanks_messages`
+--
+ALTER TABLE `thanks_messages`
+  ADD PRIMARY KEY (`thanks_id`),
+  ADD UNIQUE KEY `uniq_thanks_delivery` (`delivery_id`),
+  ADD KEY `idx_thanks_donor` (`to_donor_id`,`created_at`);
+
+--
+-- 資料表索引 `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`user_id`),
+  ADD UNIQUE KEY `username` (`username`),
+  ADD UNIQUE KEY `email` (`email`),
+  ADD KEY `idx_users_id_number_hash` (`id_number_hash`),
+  ADD KEY `role` (`role`),
+  ADD KEY `department` (`department`),
+  ADD KEY `status` (`status`),
+  ADD KEY `idx_users_role` (`role`);
+
+--
+-- 資料表索引 `user_permission_overrides`
+--
+ALTER TABLE `user_permission_overrides`
+  ADD PRIMARY KEY (`user_id`,`permission_key`),
+  ADD KEY `idx_upo_permission_key` (`permission_key`);
+
+--
+-- 資料表索引 `volunteer_consents`
+--
+ALTER TABLE `volunteer_consents`
+  ADD PRIMARY KEY (`user_id`);
+
+--
+-- 在傾印的資料表使用自動遞增(AUTO_INCREMENT)
+--
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `activities`
+--
+ALTER TABLE `activities`
+  MODIFY `activity_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `activity_assignments`
+--
+ALTER TABLE `activity_assignments`
+  MODIFY `assignment_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `activity_participants`
+--
+ALTER TABLE `activity_participants`
+  MODIFY `participant_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `advertisements`
+--
+ALTER TABLE `advertisements`
+  MODIFY `ad_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `audit_logs`
+--
+ALTER TABLE `audit_logs`
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `category_corrections`
+--
+ALTER TABLE `category_corrections`
+  MODIFY `correction_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `deliveries`
+--
+ALTER TABLE `deliveries`
+  MODIFY `delivery_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donations`
+--
+ALTER TABLE `donations`
+  MODIFY `donation_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donation_allocations`
+--
+ALTER TABLE `donation_allocations`
+  MODIFY `allocation_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donation_allocation_items`
+--
+ALTER TABLE `donation_allocation_items`
+  MODIFY `allocation_item_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donation_items`
+--
+ALTER TABLE `donation_items`
+  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donation_revisions`
+--
+ALTER TABLE `donation_revisions`
+  MODIFY `revision_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donor_reward_items`
+--
+ALTER TABLE `donor_reward_items`
+  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=77;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `donor_reward_redemptions`
+--
+ALTER TABLE `donor_reward_redemptions`
+  MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `inventory_receipts`
+--
+ALTER TABLE `inventory_receipts`
+  MODIFY `receipt_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `item_categories`
+--
+ALTER TABLE `item_categories`
+  MODIFY `category_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `notifications`
+--
+ALTER TABLE `notifications`
+  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=399;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `otp_codes`
+--
+ALTER TABLE `otp_codes`
+  MODIFY `otp_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `partner_esg_reviews`
+--
+ALTER TABLE `partner_esg_reviews`
+  MODIFY `review_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `point_transactions`
+--
+ALTER TABLE `point_transactions`
+  MODIFY `transaction_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=127;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `reward_catalog`
+--
+ALTER TABLE `reward_catalog`
+  MODIFY `reward_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `reward_claims`
+--
+ALTER TABLE `reward_claims`
+  MODIFY `claim_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=77;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `reward_redemptions`
+--
+ALTER TABLE `reward_redemptions`
+  MODIFY `redemption_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `rider_applications`
+--
+ALTER TABLE `rider_applications`
+  MODIFY `application_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `thanks_messages`
+--
+ALTER TABLE `thanks_messages`
+  MODIFY `thanks_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- 使用資料表自動遞增(AUTO_INCREMENT) `users`
+--
+ALTER TABLE `users`
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+
+--
+-- 已傾印資料表的限制式
+--
+
+--
+-- 資料表的限制式 `audit_logs`
+--
+ALTER TABLE `audit_logs`
+  ADD CONSTRAINT `audit_logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
+
+--
+-- 資料表的限制式 `donations`
+--
+ALTER TABLE `donations`
+  ADD CONSTRAINT `donations_ibfk_1` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`);
+
+--
+-- 資料表的限制式 `donation_allocations`
+--
+ALTER TABLE `donation_allocations`
+  ADD CONSTRAINT `donation_allocations_ibfk_1` FOREIGN KEY (`donation_id`) REFERENCES `donations` (`donation_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donation_allocation_items`
+--
+ALTER TABLE `donation_allocation_items`
+  ADD CONSTRAINT `donation_allocation_items_ibfk_1` FOREIGN KEY (`allocation_id`) REFERENCES `donation_allocations` (`allocation_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `donation_allocation_items_ibfk_2` FOREIGN KEY (`donation_item_id`) REFERENCES `donation_items` (`item_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donation_items`
+--
+ALTER TABLE `donation_items`
+  ADD CONSTRAINT `donation_items_ibfk_1` FOREIGN KEY (`donation_id`) REFERENCES `donations` (`donation_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donation_revisions`
+--
+ALTER TABLE `donation_revisions`
+  ADD CONSTRAINT `donation_revisions_ibfk_1` FOREIGN KEY (`donation_id`) REFERENCES `donations` (`donation_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donor_reward_items`
+--
+ALTER TABLE `donor_reward_items`
+  ADD CONSTRAINT `donor_reward_items_ibfk_1` FOREIGN KEY (`donor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `donor_reward_redemptions`
+--
+ALTER TABLE `donor_reward_redemptions`
+  ADD CONSTRAINT `donor_reward_redemptions_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `donor_reward_items` (`item_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `donor_reward_redemptions_ibfk_2` FOREIGN KEY (`volunteer_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `donor_reward_redemptions_ibfk_3` FOREIGN KEY (`donor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `role_permission_defaults`
+--
+ALTER TABLE `role_permission_defaults`
+  ADD CONSTRAINT `role_permission_defaults_ibfk_1` FOREIGN KEY (`permission_key`) REFERENCES `permissions` (`permission_key`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `thanks_messages`
+--
+ALTER TABLE `thanks_messages`
+  ADD CONSTRAINT `thanks_messages_ibfk_1` FOREIGN KEY (`delivery_id`) REFERENCES `deliveries` (`delivery_id`) ON DELETE CASCADE;
+
+--
+-- 資料表的限制式 `user_permission_overrides`
+--
+ALTER TABLE `user_permission_overrides`
+  ADD CONSTRAINT `user_permission_overrides_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `user_permission_overrides_ibfk_2` FOREIGN KEY (`permission_key`) REFERENCES `permissions` (`permission_key`) ON DELETE CASCADE;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
