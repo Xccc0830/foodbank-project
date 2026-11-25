@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主機： 127.0.0.1
--- 產生時間： 2026-11-25 05:31:50
+-- 產生時間： 2026-11-25 06:06:52
 -- 伺服器版本： 10.4.32-MariaDB
 -- PHP 版本： 8.2.12
 
@@ -140,7 +140,7 @@ CREATE TABLE `app_meta` (
 --
 
 INSERT INTO `app_meta` (`meta_key`, `meta_value`, `updated_at`) VALUES
-('schema_fingerprint', '1f4f0e907a10c1c51c3f4a3c6235be60', '2026-11-25 04:31:34');
+('schema_fingerprint', 'd2066bde4e10a13463e758533cf3b8d5', '2026-11-25 04:37:14');
 
 -- --------------------------------------------------------
 
@@ -284,7 +284,9 @@ CREATE TABLE `donations` (
 --
 
 INSERT INTO `donations` (`donation_id`, `order_number`, `donor_id`, `donor_name`, `donation_type`, `quantity`, `unit`, `donation_date`, `received_by`, `status`, `evaluation_status`, `delivery_method`, `approval_notes`, `approved_at`, `approved_by`, `rejection_reason`, `rejected_at`, `published_at`, `current_status`, `status_updated_at`, `split_count`, `notes`, `created_at`, `updated_at`, `item_name`, `weight_kg`, `size_description`, `expiry_date`, `pickup_deadline`, `delivery_option`, `vehicle_type`, `photo_path`, `evaluation_notes`, `need_inspection`, `inspection_notes`, `donor_address`, `reward_options`, `delivery_date`, `delivery_time`, `delivery_address`, `estimated_distance_km`, `estimated_duration_minutes`, `beneficiary_id`, `dispatch_contact_name`, `dispatch_contact_phone`, `dispatch_vehicle_info`, `revision_no`, `is_urgent`, `rejected_fields`, `urgency`) VALUES
-(38, 'FB-20261125-E9A2F0E5', 11, '幸福超市', 'food', 8.00, '件', '2026-11-25 12:31:38', NULL, 'pending', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-11-25 04:31:38', '2026-11-25 04:31:38', '牛奶', 0.00, NULL, NULL, '2026-11-25 16:33:00', 'volunteer_delivery', 'none', 'uploads/donations/donation_20261125_123138_3edef0bb4757.jpg', NULL, 1, NULL, '242新北市新莊區三泰路60號', NULL, '2026-11-25', '16:33:00', '臺北市文山區明義里興隆路四段42巷3號1樓', NULL, NULL, NULL, NULL, NULL, NULL, 1, 0, NULL, 'normal');
+(38, 'FB-20261125-E9A2F0E5', 11, '幸福超市', 'food', 8.00, '件', '2026-11-25 12:31:38', NULL, 'pending', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-11-25 04:31:38', '2026-11-25 04:31:38', '牛奶', 0.00, NULL, NULL, '2026-11-25 16:33:00', 'volunteer_delivery', 'none', 'uploads/donations/donation_20261125_123138_3edef0bb4757.jpg', NULL, 1, NULL, '242新北市新莊區三泰路60號', NULL, '2026-11-25', '16:33:00', '臺北市文山區明義里興隆路四段42巷3號1樓', NULL, NULL, NULL, NULL, NULL, NULL, 1, 0, NULL, 'normal'),
+(39, 'FB-20261125-D6BBDFCC', 11, '幸福超市', 'food', 8.00, '件', '2026-11-25 12:35:28', NULL, 'pending', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-11-25 04:35:28', '2026-11-25 04:35:28', '牛奶', 0.00, NULL, NULL, '2026-11-25 16:33:00', 'volunteer_delivery', 'none', 'uploads/donations/donation_20261125_123528_e38e794e84a9.jpg', NULL, 1, NULL, '242新北市新莊區三泰路60號', NULL, '2026-11-25', '16:33:00', '臺北市文山區明義里興隆路四段42巷3號1樓', NULL, NULL, NULL, NULL, NULL, NULL, 1, 0, NULL, 'normal'),
+(42, 'FB-20261125-1F984CD9', 11, '幸福超市', 'food', 8.00, '件', '2026-11-25 13:06:40', NULL, 'pending', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-11-25 05:06:40', '2026-11-25 05:06:40', '牛奶', 0.00, NULL, NULL, '2026-11-26 15:01:00', 'volunteer_delivery', 'none', 'uploads/donations/donation_20261125_130640_65cfc7bbb994.jpg', NULL, 1, NULL, '242新北市新莊區三泰路60號', NULL, '2026-11-26', '15:01:00', '臺北市文山區明義里興隆路四段42巷3號1樓', NULL, NULL, NULL, NULL, NULL, NULL, 1, 0, NULL, 'normal');
 
 -- --------------------------------------------------------
 
@@ -355,7 +357,11 @@ CREATE TABLE `donation_items` (
 
 INSERT INTO `donation_items` (`item_id`, `donation_id`, `item_name`, `brand`, `specification`, `quantity`, `unit`, `length_cm`, `width_cm`, `height_cm`, `item_weight_kg`, `expiry_date`, `notes`, `created_at`, `category_id`, `storage_condition`, `package_state`) VALUES
 (17, 38, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, 0.00, NULL, NULL, '2026-11-25 04:31:38', NULL, 'room', 'sealed'),
-(18, 38, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-25 04:31:38', 4, 'room', 'sealed');
+(18, 38, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-25 04:31:38', 4, 'room', 'sealed'),
+(19, 39, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, 0.00, NULL, NULL, '2026-11-25 04:35:28', NULL, 'room', 'sealed'),
+(20, 39, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-25 04:35:28', 4, 'room', 'sealed'),
+(23, 42, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, 0.00, NULL, NULL, '2026-11-25 05:06:40', NULL, 'room', 'sealed'),
+(24, 42, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-25 05:06:40', 4, 'room', 'sealed');
 
 -- --------------------------------------------------------
 
@@ -380,7 +386,9 @@ CREATE TABLE `donation_revisions` (
 --
 
 INSERT INTO `donation_revisions` (`revision_id`, `donation_id`, `revision_no`, `event`, `snapshot`, `reason`, `rejected_fields`, `actor_id`, `created_at`) VALUES
-(21, 38, 1, 'submitted', '{\"item_name\":\"牛奶\",\"quantity\":\"8.00\",\"unit\":\"件\",\"weight_kg\":\"0.00\",\"size_description\":null,\"expiry_date\":null,\"pickup_deadline\":\"2026-11-25 16:33:00\",\"photo_path\":\"uploads\\/donations\\/donation_20261125_123138_3edef0bb4757.jpg\",\"donor_address\":\"242新北市新莊區三泰路60號\",\"notes\":\"\"}', NULL, NULL, 11, '2026-11-25 04:31:38');
+(21, 38, 1, 'submitted', '{\"item_name\":\"牛奶\",\"quantity\":\"8.00\",\"unit\":\"件\",\"weight_kg\":\"0.00\",\"size_description\":null,\"expiry_date\":null,\"pickup_deadline\":\"2026-11-25 16:33:00\",\"photo_path\":\"uploads\\/donations\\/donation_20261125_123138_3edef0bb4757.jpg\",\"donor_address\":\"242新北市新莊區三泰路60號\",\"notes\":\"\"}', NULL, NULL, 11, '2026-11-25 04:31:38'),
+(22, 39, 1, 'submitted', '{\"item_name\":\"牛奶\",\"quantity\":\"8.00\",\"unit\":\"件\",\"weight_kg\":\"0.00\",\"size_description\":null,\"expiry_date\":null,\"pickup_deadline\":\"2026-11-25 16:33:00\",\"photo_path\":\"uploads\\/donations\\/donation_20261125_123528_e38e794e84a9.jpg\",\"donor_address\":\"242新北市新莊區三泰路60號\",\"notes\":\"\"}', NULL, NULL, 11, '2026-11-25 04:35:28'),
+(29, 42, 1, 'submitted', '{\"item_name\":\"牛奶\",\"quantity\":\"8.00\",\"unit\":\"件\",\"weight_kg\":\"0.00\",\"size_description\":null,\"expiry_date\":null,\"pickup_deadline\":\"2026-11-26 15:01:00\",\"photo_path\":\"uploads\\/donations\\/donation_20261125_130640_65cfc7bbb994.jpg\",\"donor_address\":\"242新北市新莊區三泰路60號\",\"notes\":\"\"}', NULL, NULL, 11, '2026-11-25 05:06:40');
 
 -- --------------------------------------------------------
 
@@ -554,7 +562,15 @@ INSERT INTO `notifications` (`notification_id`, `user_id`, `title`, `message`, `
 (399, 1, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL),
 (400, 2, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL),
 (401, 3, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL),
-(402, 7, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL);
+(402, 7, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL),
+(403, 1, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:35:28', 'web', NULL, NULL),
+(404, 2, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:35:28', 'web', NULL, NULL),
+(405, 3, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:35:28', 'web', NULL, NULL),
+(406, 7, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:35:28', 'web', NULL, NULL),
+(407, 1, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 05:06:40', 'web', NULL, NULL),
+(408, 2, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 05:06:40', 'web', NULL, NULL),
+(409, 3, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 05:06:40', 'web', NULL, NULL),
+(410, 7, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 05:06:40', 'web', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -717,7 +733,7 @@ CREATE TABLE `reward_claims` (
 --
 
 INSERT INTO `reward_claims` (`claim_id`, `user_id`, `source_type`, `reward_id`, `donor_item_id`, `title`, `points_spent`, `bill_amount`, `final_cash_paid`, `rule_type`, `min_spend`, `discount_amount`, `discount_rate`, `reward_description`, `status`, `token_hash`, `token_value`, `token_expires_at`, `redeemed_at`, `redeemed_by`, `created_at`, `stock_reserved`, `retail_price`) VALUES
-(1, 12, 'donor', NULL, 2, 'TEST1', 5, NULL, NULL, 'min_spend_discount', 50, 5, NULL, '', 'pending', '1996dc25d212777a985c83752bec008c1eea756dca2dfbc0fee781901b417e7f', 'c69a554e40bd8249e2170050268397d48247f4cd361a152a508a015c0f73ee18', '2026-11-18 04:55:28', NULL, NULL, '2026-11-17 20:29:20', NULL, NULL);
+(1, 12, 'donor', NULL, 2, 'TEST1', 5, NULL, NULL, 'min_spend_discount', 50, 5, NULL, '', 'pending', 'dc8ae39389c536f30420872f6fcfe7251ff7b6b99c990b9a98395bb519f2bc74', '8e493b5334706e64d0a7ae3e9a9074dcdeaf7512e1fc889243182ca84733622e', '2026-11-25 13:14:32', NULL, NULL, '2026-11-17 20:29:20', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -935,7 +951,7 @@ CREATE TABLE `user_permission_overrides` (
 INSERT INTO `user_permission_overrides` (`user_id`, `permission_key`, `granted`, `updated_at`) VALUES
 (6, 'page.deliveries', 1, '2026-11-17 20:13:37'),
 (6, 'page.material_transport', 1, '2026-11-17 20:13:37'),
-(6, 'rider.accept_task', 1, '2026-11-25 04:24:47'),
+(6, 'rider.accept_task', 1, '2026-11-25 05:05:41'),
 (12, 'page.deliveries', 1, '2026-11-17 20:13:37'),
 (12, 'page.material_transport', 1, '2026-11-17 20:13:37'),
 (12, 'rider.accept_task', 1, '2026-11-17 20:13:37');
@@ -1287,7 +1303,7 @@ ALTER TABLE `deliveries`
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donations`
 --
 ALTER TABLE `donations`
-  MODIFY `donation_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
+  MODIFY `donation_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=43;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donation_allocations`
@@ -1305,13 +1321,13 @@ ALTER TABLE `donation_allocation_items`
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donation_items`
 --
 ALTER TABLE `donation_items`
-  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donation_revisions`
 --
 ALTER TABLE `donation_revisions`
-  MODIFY `revision_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `revision_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donor_reward_items`
@@ -1341,7 +1357,7 @@ ALTER TABLE `item_categories`
 -- 使用資料表自動遞增(AUTO_INCREMENT) `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=403;
+  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=411;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `otp_codes`
