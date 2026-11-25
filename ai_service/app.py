@@ -37,7 +37,7 @@ MAX_IMAGES = int(os.getenv("FOODBANK_AI_MAX_IMAGES", "6"))
 MAX_ANALYSIS_PASSES = int(os.getenv("FOODBANK_AI_MAX_PASSES", "3"))
 FAST_ANALYSIS_PASSES = 2
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
-MAX_IMAGE_SIDE = 2048
+MAX_IMAGE_SIDE = 1280
 MAX_IMAGE_PIXELS = 40_000_000
 MAX_RESPONSE_ITEMS = 100
 OCR_ENABLED = os.getenv("FOODBANK_OCR_ENABLED", "true").lower() not in {"0", "false", "no"}
@@ -541,6 +541,11 @@ def analyze_batch(prepared_images, profile="strict"):
                     break
                 continue
 
+            if profile == "fast" and len(passes) == 1:
+                first_pass = passes[0]
+                if first_pass.get("items") and first_pass.get("confidence", 0) >= MIN_RESULT_CONFIDENCE:
+                    break
+
             if len(passes) == 2:
                 agreed = analyses_agree(passes[0], passes[1])
                 is_empty = not passes[0].get("items") and not passes[1].get("items")
@@ -548,7 +553,17 @@ def analyze_batch(prepared_images, profile="strict"):
                 if config["max_passes"] == 2 or (agreed and (is_empty or high_conf)):
                     break
 
-        if len(passes) < 2:
+        min_required_passes = (
+            1
+            if (
+                profile == "fast"
+                and len(passes) == 1
+                and passes[0].get("items")
+                and passes[0].get("confidence", 0) >= MIN_RESULT_CONFIDENCE
+            )
+            else 2
+        )
+        if len(passes) < min_required_passes:
             raise VisionModelError("；".join(dict.fromkeys(errors)) or "模型未完成足夠的獨立辨識")
 
         items, uncertain = reconcile_analyses(

@@ -144,12 +144,24 @@ def _clean_text(value, limit=80):
     return text if text and len(text) <= limit else ""
 
 
+MILK_INCLUDE_MARKERS = ("牛奶", "鮮乳", "鮮奶", "牛乳", "保久乳")
+MILK_EXCLUDE_MARKERS = (
+    "奶粉", "乳粉", "奶精", "煉乳", "奶油", "奶酪",
+    "餅", "糖", "麵包", "吐司", "蛋糕", "派", "巧克力", "茶", "咖啡", "麥片",
+)
+
+
 def normalize_name(value):
     name = _clean_text(value)
     if not name:
         return ""
     lookup = name.casefold()
-    return NAME_ALIASES.get(lookup, NAME_ALIASES.get(name, name))
+    aliased = NAME_ALIASES.get(lookup, NAME_ALIASES.get(name))
+    if aliased:
+        return aliased
+    if any(m in name for m in MILK_INCLUDE_MARKERS) and not any(m in name for m in MILK_EXCLUDE_MARKERS):
+        return "牛奶"
+    return name
 
 
 def normalize_unit(value):

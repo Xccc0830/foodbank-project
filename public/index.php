@@ -475,7 +475,7 @@ if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST
     $body .= "--{$boundary}--\r\n";
     $analysisProfile = strtolower(trim((string) getenv('FOODBANK_WEB_AI_PROFILE')));
     if ($analysisProfile === '') {
-        $analysisProfile = 'fast';
+        $analysisProfile = 'strict';
     }
     if (!in_array($analysisProfile, ['fast', 'strict'], true)) {
         http_response_code(500);

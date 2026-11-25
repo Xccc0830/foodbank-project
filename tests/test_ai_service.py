@@ -51,7 +51,7 @@ class ImageAnalysisTests(unittest.TestCase):
 
     def test_independent_package_count_corrects_a_single_item_suggestion(self):
         analyses = [
-            result([{"name": "牛奶", "quantity": 7, "unit": "盒"}], 0.99),
+            result([{"name": "牛奶", "quantity": 7, "unit": "盒"}], 0.94),
             result([
                 {"name": "牛奶", "quantity": 7, "unit": "盒"},
                 {"name": "Whole Milk", "quantity": 1, "unit": "瓶"},
@@ -249,8 +249,8 @@ class ImageAnalysisTests(unittest.TestCase):
 
     def test_fast_profile_uses_light_model_and_stops_after_two_passes(self):
         analyses = [
-            result([{"name": "白米", "quantity": 1, "unit": "包"}], 0.96),
-            result([{"name": "白米", "quantity": 2, "unit": "包"}], 0.96),
+            result([{"name": "白米", "quantity": 1, "unit": "包"}], 0.90),
+            result([{"name": "白米", "quantity": 2, "unit": "包"}], 0.90),
         ]
         with patch.object(app, "FAST_VISION_MODEL", "gemma3:test-fast"), \
                 patch.object(app, "analyze_with_ollama", side_effect=analyses) as model:
