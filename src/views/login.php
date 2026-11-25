@@ -94,5 +94,6 @@ $clerkConfigured = $clerkUsername !== '' && $clerkPassword !== '';
         });
     </script>
     <?php endif; ?>
+    <script src="<?php echo htmlspecialchars(APP_URL . '/assets/js/page-transitions.js?v=' . filemtime(BASE_PATH . '/public/assets/js/page-transitions.js')); ?>"></script>
 </body>
 </html>

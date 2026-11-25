@@ -753,7 +753,7 @@ ob_start();
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
-<body class="app-body" data-notification-poll-url="?action=notifications_poll" data-notification-last-id="<?php echo (int) $latestNotificationId; ?>">
+<body class="app-body page-<?php echo htmlspecialchars($page, ENT_QUOTES, 'UTF-8'); ?>" data-notification-poll-url="?action=notifications_poll" data-notification-last-id="<?php echo (int) $latestNotificationId; ?>">
     <div class="app-wrapper">
         <!-- 側邊欄 -->
         <aside class="sidebar" id="appSidebar" aria-label="主要導覽">
@@ -895,6 +895,7 @@ ob_start();
 
     <script src="assets/js/google-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/google-map.js'); ?>"></script>
     <script src="assets/js/main.js?v=<?php echo filemtime(__DIR__ . '/assets/js/main.js'); ?>"></script>
+    <script src="assets/js/page-transitions.js?v=<?php echo filemtime(__DIR__ . '/assets/js/page-transitions.js'); ?>"></script>
     <?php if ($page === 'dashboard'): ?>
         <script src="assets/js/dashboard-animations.js?v=<?php echo filemtime(__DIR__ . '/assets/js/dashboard-animations.js'); ?>"></script>
     <?php endif; ?>

@@ -29,5 +29,6 @@ $resetCssVersion = file_exists($resetCssPath) ? filemtime($resetCssPath) : time(
             <p class="login-hint register-back"><a href="?action=login"><i class="fa-solid fa-arrow-left"></i> 返回登入</a></p>
         </section>
     </main>
+    <script src="<?php echo htmlspecialchars(APP_URL . '/assets/js/page-transitions.js?v=' . filemtime(BASE_PATH . '/public/assets/js/page-transitions.js')); ?>"></script>
 </body>
 </html>
