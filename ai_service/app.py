@@ -7,6 +7,7 @@ import threading
 import urllib.error
 import urllib.request
 
+import numpy as np
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 from PIL import Image, ImageEnhance, ImageOps, UnidentifiedImageError
@@ -124,6 +125,30 @@ RESPONSE_SCHEMA = {
     },
 }
 
+PACKAGE_COUNT_LABELS = {
+    "牛奶": "milk packages (cartons or bottles)",
+    "白米": "rice packages (bags or boxes)",
+    "泡麵": "instant noodle packages",
+    "麵條": "noodle packages",
+    "米粉": "rice noodle packages",
+    "冬粉": "glass noodle packages",
+    "燕麥片": "oatmeal packages",
+    "餅乾": "cookie packages",
+    "奶粉": "milk powder packages",
+    "食用油": "cooking oil bottles",
+    "醬油": "soy sauce bottles",
+    "鮪魚罐頭": "cans of tuna",
+}
+
+PACKAGE_COUNT_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["count"],
+    "properties": {
+        "count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    },
+}
+
 
 class VisionModelError(RuntimeError):
     pass
@@ -133,6 +158,42 @@ def _encode_jpeg(image):
     output = io.BytesIO()
     image.save(output, format="JPEG", quality=95, optimize=True)
     return output.getvalue()
+
+
+def _find_reflection_boundary(image):
+    if image.height < 128:
+        return None
+
+    scale = min(1.0, 256 / image.width)
+    sample = image.resize(
+        (round(image.width * scale), round(image.height * scale)),
+        Image.Resampling.BILINEAR,
+    )
+    pixels = np.asarray(sample.convert("L"), dtype=np.float32)
+    height = pixels.shape[0]
+    patch_height = max(8, round(height * 0.12))
+    start = max(patch_height, round(height * 0.5))
+    end = min(height - patch_height, round(height * 0.9))
+    correlations = []
+
+    for boundary in range(start, end):
+        above = pixels[boundary - patch_height:boundary]
+        below = pixels[boundary:boundary + patch_height][::-1]
+        above = above - above.mean()
+        below = below - below.mean()
+        denominator = above.std() * below.std()
+        correlation = float(np.mean(above * below) / denominator) if denominator else 0
+        correlations.append((correlation, boundary))
+
+    if not correlations:
+        return None
+
+    best_correlation, best_boundary = max(correlations)
+    median_correlation = float(np.median([score for score, _ in correlations]))
+    if best_correlation < 0.72 or best_correlation - median_correlation < 0.10:
+        return None
+
+    return round(best_boundary / height * image.height)
 
 
 def prepare_image(image_bytes):
@@ -169,6 +230,10 @@ def prepare_image(image_bytes):
             Image.Resampling.LANCZOS,
         )
 
+    reflection_boundary = _find_reflection_boundary(corrected)
+    if reflection_boundary is not None:
+        corrected = corrected.crop((0, 0, corrected.width, reflection_boundary))
+
     contrast_balanced = ImageOps.autocontrast(corrected, cutoff=0.5)
     enhanced = ImageEnhance.Sharpness(contrast_balanced).enhance(1.20)
     enhanced = ImageEnhance.Contrast(enhanced).enhance(1.08)
@@ -179,6 +244,7 @@ def prepare_image(image_bytes):
 
     return {
         "original": image_bytes,
+        "analysis_original": _encode_jpeg(corrected),
         "standard": _encode_jpeg(corrected),
         "enhanced": _encode_jpeg(enhanced),
         "shadow_boost": _encode_jpeg(shadow_boost),
@@ -201,37 +267,10 @@ def _ocr_prompt(hints):
     )
 
 
-def analyze_with_ollama(
-    image_variants,
-    pass_index,
-    ocr_hints,
-    vision_model=None,
-    timeout=None,
-):
-    vision_model = vision_model or get_preferred_vision_model()
-    timeout = timeout or OLLAMA_TIMEOUT
-    payload = json.dumps({
-        "model": vision_model,
-        "system": "You are a precise foodbank inventory engine. Output strict JSON only matching the schema. Do not output any thoughts, reasoning, markdown or explanation.",
-        "prompt": ANALYSIS_PROMPTS[pass_index] + _ocr_prompt(ocr_hints),
-        "images": [
-            base64.b64encode(image_bytes).decode("ascii")
-            for image_bytes in image_variants
-        ],
-        "stream": False,
-        "keep_alive": OLLAMA_KEEP_ALIVE,
-        "format": RESPONSE_SCHEMA,
-        "options": {
-            "temperature": (0.0, 0.0, 0.05)[pass_index],
-            "num_predict": 1000,
-            "repeat_penalty": 1.08,
-            "top_k": 20,
-            "top_p": 0.9,
-        },
-    }).encode("utf-8")
+def _request_ollama(payload, timeout):
     request = urllib.request.Request(
         OLLAMA_URL + "/api/generate",
-        data=payload,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
@@ -250,22 +289,98 @@ def analyze_with_ollama(
 
     if not isinstance(result, dict):
         raise VisionModelError("Ollama 回覆無效")
-
     if result.get("error"):
         raise VisionModelError(f"Ollama 模型錯誤：{result['error']}")
 
     response_text = result.get("response") or ""
     if not response_text.strip() and result.get("thinking"):
         response_text = result["thinking"]
-
     if not response_text.strip():
         raise VisionModelError("Ollama 未回傳可解析的辨識文字")
 
     try:
-        parsed = _safe_parse_json(response_text)
-        return normalize_analysis(parsed)
+        return _safe_parse_json(response_text)
     except (json.JSONDecodeError, ValueError) as error:
+        raise VisionModelError(f"視覺模型未回傳有效 JSON ({error})") from error
+
+
+def analyze_with_ollama(
+    image_variants,
+    pass_index,
+    ocr_hints,
+    vision_model=None,
+    timeout=None,
+):
+    vision_model = vision_model or get_preferred_vision_model()
+    timeout = timeout or OLLAMA_TIMEOUT
+    payload = {
+        "model": vision_model,
+        "system": "You are a precise foodbank inventory engine. Output strict JSON only matching the schema. Do not output any thoughts, reasoning, markdown or explanation.",
+        "prompt": ANALYSIS_PROMPTS[pass_index] + _ocr_prompt(ocr_hints),
+        "images": [
+            base64.b64encode(image_bytes).decode("ascii")
+            for image_bytes in image_variants
+        ],
+        "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "format": RESPONSE_SCHEMA,
+        "options": {
+            "temperature": (0.0, 0.0, 0.05)[pass_index],
+            "num_predict": 1000,
+            "repeat_penalty": 1.08,
+            "top_k": 20,
+            "top_p": 0.9,
+        },
+    }
+    try:
+        return normalize_analysis(_request_ollama(payload, timeout))
+    except ValueError as error:
         raise VisionModelError(f"視覺模型未依要求回傳有效 JSON ({error})") from error
+
+
+def count_item_packages(image_variants, item_name, vision_model=None, timeout=None):
+    label = PACKAGE_COUNT_LABELS.get(item_name)
+    if not label:
+        raise ValueError(f"尚未設定「{item_name}」的獨立數量辨識名稱")
+
+    prompt = (
+        f"Count the separate physical {label} visible in THIS image crop. "
+        "Count each real package body once; ignore all printed package pictures, "
+        "logos, text, reflections, and labels. Do not estimate from brands. "
+    )
+    if len(image_variants) > 1:
+        prompt += "If multiple views show the same batch, do not count a package twice. "
+    prompt += "Reply only JSON with integer total count."
+    payload = {
+        "model": vision_model or get_preferred_vision_model(),
+        "prompt": prompt,
+        "images": [
+            base64.b64encode(image_bytes).decode("ascii")
+            for image_bytes in image_variants
+        ],
+        "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "format": PACKAGE_COUNT_SCHEMA,
+        "options": {
+            "temperature": 0,
+            "num_predict": 100,
+        },
+    }
+
+    try:
+        result = _request_ollama(payload, timeout or OLLAMA_TIMEOUT)
+    except VisionModelError:
+        raise
+
+    count = result.get("count") if isinstance(result, dict) else None
+    if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 10000:
+        raise VisionModelError("包裝數量複核未回傳有效整數")
+    return count
+
+
+def _is_milk_variant(item_name):
+    name = str(item_name).casefold()
+    return any(marker in name for marker in ("milk", "奶", "乳"))
 
 
 def _safe_parse_json(text):
@@ -302,7 +417,10 @@ def _analysis_profile(profile):
 def analyze_batch(prepared_images, profile="strict"):
     config = _analysis_profile(profile)
     with _analysis_lock:
-        original_images = [image["original"] for image in prepared_images]
+        original_images = [
+            image.get("analysis_original", image["original"])
+            for image in prepared_images
+        ]
         standard_images = [image["standard"] for image in prepared_images]
         enhanced_images = [image["enhanced"] for image in prepared_images]
         shadow_images = [image.get("shadow_boost", image["standard"]) for image in prepared_images]
@@ -351,6 +469,36 @@ def analyze_batch(prepared_images, profile="strict"):
         )
         items = refine_item_names_from_ocr(items, ocr_hints)
         uncertain = refine_item_names_from_ocr(uncertain, ocr_hints)
+        if len(items) == 1 and items[0]["name"] in PACKAGE_COUNT_LABELS:
+            item = items[0]
+            count_checks = []
+            try:
+                for image_variant in (standard_images, enhanced_images):
+                    count_checks.append(count_item_packages(
+                        image_variant,
+                        item["name"],
+                        vision_model=get_preferred_vision_model(),
+                    ))
+            except VisionModelError as error:
+                errors.append(f"物資數量複核失敗：{error}")
+            else:
+                if count_checks[0] == count_checks[1] and count_checks[0] > 0:
+                    item["quantity"] = count_checks[0]
+                    item["unit"] = "件"
+                    item["model_observed_quantities"] = item.get("observed_quantities", [])
+                    item["observed_quantities"] = count_checks
+                    item["count_verified"] = True
+                    item["count_observations"] = count_checks
+                    if item["name"] == "牛奶":
+                        uncertain = [
+                            candidate for candidate in uncertain
+                            if not _is_milk_variant(candidate["name"])
+                        ]
+                else:
+                    items = []
+                    item["observed_quantities"] = count_checks
+                    item["reason"] = "獨立物件計數結果不一致，請人工核對照片"
+                    uncertain.append(item)
         return items, uncertain, len(passes), errors
 
 

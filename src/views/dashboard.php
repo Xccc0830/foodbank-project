@@ -48,6 +48,9 @@ require_once BASE_PATH . '/src/models/AdvertisementModel.php';
 require_once BASE_PATH . '/src/models/ActivityModel.php';
 
 $homeAds = array_slice((new AdvertisementModel())->getActiveAds(3), 0, 3);
+if (!$homeAds) {
+    $homeAds = AdvertisementModel::demoAds();
+}
 
 $homeDonationRecords = [];
 $homeDonationResult = $connection->query(
@@ -75,207 +78,365 @@ $leaderboardResult = $connection->query(
 while ($leaderboardResult && ($leaderboardRow = $leaderboardResult->fetch_assoc())) {
     $riderLeaderboard[] = $leaderboardRow;
 }
+
+$canAcceptRiderTasks = $authService->can('rider.accept_task');
+
+if ($isEnterpriseMember) {
+    $dashboardHero = [
+        'eyebrow' => '企業公益行動中心',
+        'title' => '把企業剩食，轉化為看得見的公益影響。',
+        'description' => '集中管理物資捐贈、追蹤配送進度，並查看每一次惜食行動帶來的永續成果。',
+        'primary' => ['href' => '?page=donation_materials', 'label' => '新增物資捐贈', 'icon' => 'fa-box-open'],
+        'secondary' => ['href' => '?page=carbon_report', 'label' => '查看永續報告', 'icon' => 'fa-leaf'],
+    ];
+    $dashboardHeroSteps = [
+        ['icon' => 'fa-box-open', 'label' => '送出物資'],
+        ['icon' => 'fa-clipboard-check', 'label' => '完成媒合'],
+        ['icon' => 'fa-earth-asia', 'label' => '累積影響'],
+    ];
+    $dashboardActionDefinitions = [
+        ['page' => 'donation_materials', 'icon' => 'fa-box-open', 'title' => '新增捐贈', 'description' => '建立剩食與物資捐贈'],
+        ['page' => 'carbon_report', 'icon' => 'fa-leaf', 'title' => '永續報告', 'description' => '查看減碳與公益成效'],
+        ['page' => 'activities', 'icon' => 'fa-calendar-check', 'title' => '公益活動', 'description' => '參與企業公益行動'],
+        ['page' => 'rewards', 'icon' => 'fa-gift', 'title' => '心意幣回饋', 'description' => '瀏覽合作獎勵與兌換'],
+    ];
+} elseif ($dashboardRole === 'foodbank_staff') {
+    $dashboardHero = [
+        'eyebrow' => '食物銀行管理工作台',
+        'title' => '讓每一份善意，都能即時抵達下一站。',
+        'description' => '集中處理捐贈審查、物流配送與活動安排，讓團隊合作保持清楚而有效率。',
+        'primary' => ['href' => '?page=donation_materials_review', 'label' => '處理捐贈審查', 'icon' => 'fa-clipboard-check'],
+        'secondary' => ['href' => '?page=deliveries', 'label' => '查看配送任務', 'icon' => 'fa-route'],
+    ];
+    $dashboardHeroSteps = [
+        ['icon' => 'fa-hand-holding-heart', 'label' => '接收捐贈'],
+        ['icon' => 'fa-clipboard-check', 'label' => '審查整理'],
+        ['icon' => 'fa-truck-fast', 'label' => '安排配送'],
+    ];
+    $dashboardActionDefinitions = [
+        ['page' => 'donation_materials_review', 'icon' => 'fa-clipboard-check', 'title' => '捐贈審查', 'description' => '檢視待評估的捐贈物資'],
+        ['page' => 'deliveries', 'icon' => 'fa-route', 'title' => '配送任務', 'description' => '追蹤取貨、配送與完成狀態'],
+        ['page' => 'activities', 'icon' => 'fa-calendar-check', 'title' => '公益活動', 'description' => '安排活動與參與名單'],
+        ['page' => 'inventory', 'icon' => 'fa-boxes-stacked', 'title' => '物資盤點', 'description' => '掌握庫存與到期提醒'],
+    ];
+} else {
+    $dashboardHero = [
+        'eyebrow' => $canAcceptRiderTasks ? 'GO Rider 公益服務中心' : '會員公益行動中心',
+        'title' => $canAcceptRiderTasks
+            ? '用一趟運送，完成一段惜食旅程。'
+            : '從一次參與，開始你的惜食行動。',
+        'description' => $canAcceptRiderTasks
+            ? '查看待配送任務、接單前往取貨，並累積每一趟運送帶來的心意回饋。'
+            : '瀏覽最新消息與公益活動；準備好後，也可以申請加入 GO Rider。',
+        'primary' => $canAcceptRiderTasks
+            ? ['href' => '?page=deliveries', 'label' => '查看可接任務', 'icon' => 'fa-route']
+            : ['href' => '?page=activities', 'label' => '探索公益活動', 'icon' => 'fa-calendar-check'],
+        'secondary' => $canAcceptRiderTasks
+            ? ['href' => '?page=activities', 'label' => '瀏覽公益活動', 'icon' => 'fa-calendar-check']
+            : ['href' => '?page=rider_application', 'label' => '申請 GO Rider', 'icon' => 'fa-id-card'],
+    ];
+    $dashboardHeroSteps = $canAcceptRiderTasks
+        ? [
+            ['icon' => 'fa-list-check', 'label' => '瀏覽任務'],
+            ['icon' => 'fa-location-dot', 'label' => '前往取貨'],
+            ['icon' => 'fa-circle-check', 'label' => '完成配送'],
+        ]
+        : [
+            ['icon' => 'fa-magnifying-glass', 'label' => '探索活動'],
+            ['icon' => 'fa-hands-helping', 'label' => '參與行動'],
+            ['icon' => 'fa-heart', 'label' => '累積回饋'],
+        ];
+    $dashboardActionDefinitions = $canAcceptRiderTasks
+        ? [
+            ['page' => 'deliveries', 'icon' => 'fa-route', 'title' => '配送任務', 'description' => '查看並接取待運送物資'],
+            ['page' => 'activities', 'icon' => 'fa-calendar-check', 'title' => '公益活動', 'description' => '參與最新的公益行動'],
+            ['page' => 'rewards', 'icon' => 'fa-gift', 'title' => '心意幣兌換', 'description' => '使用累積回饋兌換獎勵'],
+            ['page' => 'notifications', 'icon' => 'fa-bell', 'title' => '通知中心', 'description' => '查看任務與平台更新'],
+        ]
+        : [
+            ['page' => 'activities', 'icon' => 'fa-calendar-check', 'title' => '公益活動', 'description' => '查看並報名公益行動'],
+            ['page' => 'rider_application', 'icon' => 'fa-id-card', 'title' => '申請 GO Rider', 'description' => '加入物資配送服務'],
+            ['page' => 'news', 'icon' => 'fa-newspaper', 'title' => '最新消息', 'description' => '掌握平台與合作資訊'],
+            ['page' => 'notifications', 'icon' => 'fa-bell', 'title' => '通知中心', 'description' => '查看個人化平台提醒'],
+        ];
+}
+
+$dashboardQuickActions = array_values(array_filter(
+    $dashboardActionDefinitions,
+    static fn (array $action): bool => $authService->can('page.' . $action['page'])
+));
+$dashboardAdIcons = ['fa-bowl-rice', 'fa-hand-holding-heart', 'fa-truck-fast'];
 ?>
 
-<div class="view-header">
-    <div>
-        <h1 class="view-title">主頁</h1>
-        <p class="view-subtitle"><?php echo date('Y-m-d'); ?>，歡迎 <?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?>（<?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '管理介面'); ?>）</p>
-    </div>
-    <?php if ($isEnterpriseMember): ?>
-    <a class="btn btn-primary" href="?page=donation_materials">
-        <i class="fas fa-plus"></i> 新增捐贈
-    </a>
-    <?php endif; ?>
-</div>
-
-<?php include BASE_PATH . '/src/views/partials/marquee.php'; ?>
-
-<div class="home-columns">
-    <div class="card">
-        <div class="card-header"><h2>企業廣告</h2><p>最新刊登的廣告</p></div>
-        <div class="card-body">
-            <?php
-            // Demo 廣告：僅供預覽效果，資料庫沒有廣告時顯示
-            if (!$homeAds) {
-                $homeAds = AdvertisementModel::demoAds();
-            }
-            ?>
-            <?php if ($homeAds): ?>
-                <?php $adIcons = ['fa-bowl-rice', 'fa-hand-holding-heart', 'fa-truck-fast']; ?>
-                <div class="fancy-ad-list">
-                <?php foreach ($homeAds as $adIndex => $homeAd): ?>
-                    <div class="fancy-ad fancy-ad-<?php echo $adIndex % 3; ?>">
-                        <div class="fancy-ad-icon"><i class="fas <?php echo $adIcons[$adIndex % 3]; ?>"></i></div>
-                        <div class="fancy-ad-text">
-                            <span class="fancy-ad-badge">AD</span>
-                            <strong><?php echo htmlspecialchars($homeAd['title']); ?></strong>
-                            <p><?php echo htmlspecialchars(mb_strimwidth($homeAd['content'], 0, 80, '…')); ?></p>
-                            <small><i class="fas fa-building"></i> <?php echo htmlspecialchars($homeAd['advertiser_name'] ?? ''); ?></small>
-                        </div>
-                    </div>
+<div class="dashboard-page">
+    <section class="dashboard-hero" aria-labelledby="dashboard-hero-title">
+        <div class="dashboard-hero-copy">
+            <span class="dashboard-eyebrow"><?php echo htmlspecialchars($dashboardHero['eyebrow']); ?></span>
+            <h1 id="dashboard-hero-title"><?php echo htmlspecialchars($dashboardHero['title']); ?></h1>
+            <p class="dashboard-hero-description"><?php echo htmlspecialchars($dashboardHero['description']); ?></p>
+            <div class="dashboard-hero-meta">
+                <span><i class="fas fa-calendar-day" aria-hidden="true"></i><?php echo date('Y 年 n 月 j 日'); ?></span>
+                <span><i class="fas fa-user" aria-hidden="true"></i><?php echo htmlspecialchars($currentUser['full_name'] ?? '使用者'); ?></span>
+                <span><?php echo htmlspecialchars($dashboardRoleLabels[$dashboardRole] ?? '管理介面'); ?></span>
+            </div>
+            <div class="dashboard-hero-actions">
+                <a class="btn btn-accent" href="<?php echo htmlspecialchars($dashboardHero['primary']['href'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <i class="fas <?php echo htmlspecialchars($dashboardHero['primary']['icon']); ?>" aria-hidden="true"></i>
+                    <?php echo htmlspecialchars($dashboardHero['primary']['label']); ?>
+                </a>
+                <a class="btn btn-hero-secondary" href="<?php echo htmlspecialchars($dashboardHero['secondary']['href'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <i class="fas <?php echo htmlspecialchars($dashboardHero['secondary']['icon']); ?>" aria-hidden="true"></i>
+                    <?php echo htmlspecialchars($dashboardHero['secondary']['label']); ?>
+                </a>
+            </div>
+        </div>
+        <div class="dashboard-hero-visual" aria-label="物資服務流程">
+            <div class="dashboard-flow-header">
+                <span>共同完成</span>
+                <strong>一趟有溫度的媒合</strong>
+            </div>
+            <ol class="dashboard-hero-steps">
+                <?php foreach ($dashboardHeroSteps as $stepIndex => $step): ?>
+                    <li>
+                        <span class="dashboard-hero-step-number"><?php echo $stepIndex + 1; ?></span>
+                        <span class="dashboard-hero-step-icon"><i class="fas <?php echo htmlspecialchars($step['icon']); ?>" aria-hidden="true"></i></span>
+                        <strong><?php echo htmlspecialchars($step['label']); ?></strong>
+                    </li>
                 <?php endforeach; ?>
-                </div>
-                <a href="?page=news#ads" class="btn btn-secondary btn-sm">更多廣告</a>
-            <?php else: ?>
-                <div class="empty-state"><i class="fas fa-rectangle-ad"></i><p>目前沒有刊登中的廣告</p></div>
-            <?php endif; ?>
+            </ol>
+            <div class="dashboard-hero-note">
+                <span class="dashboard-hero-note-icon"><i class="fas fa-heart" aria-hidden="true"></i></span>
+                <span><strong>每一份物資</strong>都有下一站</span>
+            </div>
         </div>
-    </div>
-    <div class="card">
-        <div class="card-header"><h2>企業捐贈紀錄</h2><p>已送達的愛心物資</p></div>
-        <div class="card-body">
-            <?php if ($homeDonationRecords): ?>
-                <ul class="leaderboard-list">
-                    <?php foreach ($homeDonationRecords as $record): ?>
-                        <li>
-                            <span class="leaderboard-name"><strong><?php echo htmlspecialchars($record['donor_name']); ?></strong><br><small><?php echo htmlspecialchars($record['item_name']); ?> · <?php echo htmlspecialchars(rtrim(rtrim(number_format((float) $record['quantity'], 2, '.', ''), '0'), '.')); ?> <?php echo htmlspecialchars($record['unit']); ?></small></span>
-                            <small><?php echo htmlspecialchars(substr((string) $record['donation_date'], 0, 10)); ?></small>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php else: ?>
-                <div class="empty-state"><i class="fas fa-box-open"></i><p>目前沒有已送達的捐贈紀錄</p></div>
-            <?php endif; ?>
-        </div>
-    </div>
-    <div class="card">
-        <div class="card-header"><h2>GO Rider 運送任務排行榜</h2><p>依完成運送任務數排序</p></div>
-        <div class="card-body">
-            <?php if ($riderLeaderboard): ?>
-                <ol class="leaderboard-list">
-                    <?php foreach ($riderLeaderboard as $index => $rider): ?>
-                        <li>
-                            <span class="leaderboard-rank"><?php echo $index + 1; ?></span>
-                            <span class="leaderboard-name"><?php echo htmlspecialchars($rider['full_name']); ?></span>
-                            <strong><?php echo (int) $rider['delivery_count']; ?> 趟</strong>
-                        </li>
-                    <?php endforeach; ?>
-                </ol>
-            <?php else: ?>
-                <div class="empty-state"><i class="fas fa-ranking-star"></i><p>尚無完成的運送任務</p></div>
-            <?php endif; ?>
-        </div>
-    </div>
-</div>
+    </section>
 
-<div class="card role-intro mb-20">
-    <div class="card-body">
-        <?php if ($dashboardRole === 'member' && !$isEnterpriseMember): ?>
-            <?php if ($authService->can('rider.accept_task')): ?>
-                <h2>你的公益任務</h2><p>報名公益活動，或前往配送任務接單；完成配送後會記錄心意幣。</p>
-                <a href="?page=deliveries" class="btn btn-primary btn-sm">查看可接任務</a>
-            <?php else: ?>
-                <h2>你的公益任務</h2><p>瀏覽並參加公益活動；想協助運送物資，可以申請成為 GO Rider。</p>
-                <a href="?page=news" class="btn btn-primary btn-sm">查看最新消息</a>
-                <a href="?page=rider_application" class="btn btn-secondary btn-sm">申請 GO Rider</a>
-            <?php endif; ?>
-        <?php elseif ($dashboardRole === 'foodbank_staff'): ?>
-            <h2>管理介面</h2><p>處理物資審查、配送與公益活動，確保物資完成媒合。</p>
-            <a href="?page=rewards" class="btn btn-secondary btn-sm">管理心意幣兌換</a>
-        <?php elseif ($isEnterpriseMember): ?>
-            <h2>企業惜食行動</h2><p>報名公益活動，也可將企業剩餘食物或物資捐贈給食物銀行。</p>
-            <a href="?page=donation_materials" class="btn btn-primary btn-sm">上架剩食物資</a>
-        <?php else: ?>
-            <h2>食物銀行管理員</h2><p>管理平台模組、帳號權限、稽核紀錄與整體公益服務成效。</p>
-            <a href="?page=settings" class="btn btn-primary btn-sm">前往系統設置</a>
-        <?php endif; ?>
-    </div>
-</div>
+    <?php include BASE_PATH . '/src/views/partials/marquee.php'; ?>
 
-<div class="grid-2 mt-32">
-    <?php if ($canViewDonations): ?>
-    <div class="card">
-        <div class="card-header">
-            <h2>最近捐贈</h2>
-            <p>最新捐贈紀錄</p>
+    <section class="dashboard-section" aria-labelledby="dashboard-updates-title">
+        <div class="dashboard-section-heading">
+            <div>
+                <span class="dashboard-section-kicker">平台脈動</span>
+                <h2 id="dashboard-updates-title">看見正在發生的公益行動</h2>
+            </div>
+            <a class="dashboard-text-link" href="?page=news">
+                查看最新消息 <i class="fas fa-arrow-right" aria-hidden="true"></i>
+            </a>
         </div>
-        <div class="card-body recent-donations-body">
-            <?php if (!empty($recentDonations)): ?>
-                <table class="data-table recent-donations-table">
-                    <thead>
-                        <tr>
-                            <th>捐贈者</th>
-                            <th>類型</th>
-                            <th>數量</th>
-                            <th>狀態</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($recentDonations as $donation): ?>
-                            <?php
-                            $donationTypeLabels = [
-                                'food' => '食物',
-                                'supplies' => '用品',
-                                'other' => '其他',
-                            ];
-                            $donationStatusLabels = [
-                                'pending' => '待評估',
-                                'assessed' => '已評估',
-                                'approved' => '已批准',
-                                'received' => '已收貨',
-                                'rejected' => '已拒絕',
-                                'published' => '已發布',
-                                'archived' => '已封存',
-                            ];
-                            $donationStatus = strtolower((string) ($donation['status'] ?? ''));
-                            $donationStatusLabel = $donationStatusLabels[$donationStatus] ?? '其他狀態';
-                            ?>
-                            <tr>
-                                <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type']] ?? $donation['donation_type']); ?></td>
-                                <td><?php echo htmlspecialchars($donation['quantity']); ?> <?php echo htmlspecialchars($donation['unit']); ?></td>
-                                <td><span class="status <?php echo htmlspecialchars('status-' . str_replace(' ', '_', $donationStatus)); ?>"><?php echo htmlspecialchars($donationStatusLabel); ?></span></td>
-                            </tr>
+
+        <div class="dashboard-insight-grid">
+            <article class="card dashboard-insight-card dashboard-insight-card-ads">
+                <header class="dashboard-card-heading">
+                    <span class="dashboard-card-icon dashboard-card-icon-gold"><i class="fas fa-rectangle-ad" aria-hidden="true"></i></span>
+                    <span>
+                        <h3>企業合作訊息</h3>
+                        <p>最新刊登的合作與活動</p>
+                    </span>
+                    <span class="dashboard-count-badge"><?php echo count($homeAds); ?> 則</span>
+                </header>
+                <div class="dashboard-card-content">
+                    <div class="fancy-ad-list">
+                        <?php foreach ($homeAds as $adIndex => $homeAd): ?>
+                            <article class="fancy-ad fancy-ad-<?php echo $adIndex % 3; ?>">
+                                <div class="fancy-ad-icon"><i class="fas <?php echo $dashboardAdIcons[$adIndex % 3]; ?>" aria-hidden="true"></i></div>
+                                <div class="fancy-ad-text">
+                                    <span class="fancy-ad-badge">合作訊息</span>
+                                    <strong><?php echo htmlspecialchars($homeAd['title']); ?></strong>
+                                    <p><?php echo htmlspecialchars(mb_strimwidth($homeAd['content'], 0, 72, '…')); ?></p>
+                                    <small><i class="fas fa-building" aria-hidden="true"></i> <?php echo htmlspecialchars($homeAd['advertiser_name'] ?? ''); ?></small>
+                                </div>
+                            </article>
                         <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <div class="mt-20">
-                    <a href="?page=<?php echo htmlspecialchars($donationListPage, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-secondary btn-sm">查看全部</a>
+                    </div>
+                    <a href="?page=news#ads" class="dashboard-text-link">
+                        瀏覽所有合作訊息 <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                    </a>
                 </div>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-inbox"></i>
-                    <p>目前沒有捐贈記錄</p>
+            </article>
+
+            <article class="card dashboard-insight-card">
+                <header class="dashboard-card-heading">
+                    <span class="dashboard-card-icon dashboard-card-icon-teal"><i class="fas fa-box-open" aria-hidden="true"></i></span>
+                    <span>
+                        <h3>企業捐贈紀錄</h3>
+                        <p>已完成配送的愛心物資</p>
+                    </span>
+                    <span class="dashboard-count-badge"><?php echo count($homeDonationRecords); ?> 筆</span>
+                </header>
+                <div class="dashboard-card-content">
+                    <?php if ($homeDonationRecords): ?>
+                        <ul class="dashboard-feed-list">
+                            <?php foreach ($homeDonationRecords as $record): ?>
+                                <?php $donationTimestamp = strtotime((string) $record['donation_date']); ?>
+                                <li>
+                                    <span class="dashboard-feed-mark"><i class="fas fa-box" aria-hidden="true"></i></span>
+                                    <span class="dashboard-feed-copy">
+                                        <strong><?php echo htmlspecialchars($record['donor_name']); ?></strong>
+                                        <small><?php echo htmlspecialchars($record['item_name']); ?> · <?php echo htmlspecialchars(rtrim(rtrim(number_format((float) $record['quantity'], 2, '.', ''), '0'), '.')); ?> <?php echo htmlspecialchars($record['unit']); ?></small>
+                                    </span>
+                                    <time datetime="<?php echo htmlspecialchars((string) $record['donation_date']); ?>">
+                                        <?php echo $donationTimestamp ? htmlspecialchars(date('m/d', $donationTimestamp)) : '—'; ?>
+                                    </time>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?>
+                        <div class="empty-state"><i class="fas fa-box-open" aria-hidden="true"></i><p>目前沒有已送達的捐贈紀錄</p></div>
+                    <?php endif; ?>
                 </div>
-            <?php endif; ?>
+            </article>
+
+            <article class="card dashboard-insight-card">
+                <header class="dashboard-card-heading">
+                    <span class="dashboard-card-icon dashboard-card-icon-blue"><i class="fas fa-ranking-star" aria-hidden="true"></i></span>
+                    <span>
+                        <h3>GO Rider 榜單</h3>
+                        <p>依完成配送任務數排序</p>
+                    </span>
+                    <span class="dashboard-count-badge"><?php echo count($riderLeaderboard); ?> 位</span>
+                </header>
+                <div class="dashboard-card-content">
+                    <?php if ($riderLeaderboard): ?>
+                        <ol class="dashboard-leaderboard-list">
+                            <?php foreach ($riderLeaderboard as $index => $rider): ?>
+                                <li>
+                                    <span class="dashboard-leaderboard-rank dashboard-rank-<?php echo min($index + 1, 4); ?>"><?php echo $index + 1; ?></span>
+                                    <span class="dashboard-rider-avatar"><?php echo htmlspecialchars(mb_substr($rider['full_name'], 0, 1)); ?></span>
+                                    <span class="dashboard-rider-name">
+                                        <strong><?php echo htmlspecialchars($rider['full_name']); ?></strong>
+                                        <small><?php echo number_format((float) $rider['total_weight'], 1); ?> kg 物資</small>
+                                    </span>
+                                    <strong class="dashboard-delivery-count"><?php echo (int) $rider['delivery_count']; ?> 趟</strong>
+                                </li>
+                            <?php endforeach; ?>
+                        </ol>
+                    <?php else: ?>
+                        <div class="empty-state"><i class="fas fa-ranking-star" aria-hidden="true"></i><p>尚無完成的運送任務</p></div>
+                    <?php endif; ?>
+                </div>
+            </article>
         </div>
-    </div>
+    </section>
+
+    <?php if ($isEnterpriseMember): ?>
+        <section class="dashboard-impact-section" aria-labelledby="dashboard-impact-title">
+            <div class="dashboard-impact-copy">
+                <span class="dashboard-section-kicker">企業永續成果</span>
+                <h2 id="dashboard-impact-title">讓每一次捐贈都留下可追蹤的影響</h2>
+                <p>依已完成配送的物資，估算公益投入、環境效益與運送里程。</p>
+                <a class="btn btn-primary" href="?page=carbon_report">
+                    <i class="fas fa-chart-line" aria-hidden="true"></i> 查看年度報告
+                </a>
+            </div>
+            <div class="dashboard-impact-stats">
+                <div><span>完成配送</span><strong><?php echo number_format($enterpriseSustainability['delivery_count']); ?></strong><small>趟次</small></div>
+                <div><span>捐贈重量</span><strong><?php echo number_format($enterpriseSustainability['total_weight'], 1); ?></strong><small>公斤</small></div>
+                <div><span>避免浪費估算</span><strong><?php echo number_format($enterpriseSustainability['food_waste_avoided'], 1); ?></strong><small>kgCO2e</small></div>
+                <div><span>配送里程</span><strong><?php echo number_format($enterpriseSustainability['total_distance'], 1); ?></strong><small>公里</small></div>
+            </div>
+        </section>
     <?php endif; ?>
-</div>
 
-<?php if ($isEnterpriseMember): ?>
-<div class="card mt-32">
-    <div class="card-header">
-        <h2>我的永續報告</h2>
-        <p>依企業會員已完成配送的物資估算公益與環境效益</p>
-    </div>
-    <div class="card-body">
-        <div class="stats-grid">
-            <div class="stat-card"><h3>完成配送</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['delivery_count']); ?></div><p class="stat-label">趟次</p></div>
-            <div class="stat-card"><h3>捐贈重量</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['total_weight'], 1); ?></div><p class="stat-label">公斤</p></div>
-            <div class="stat-card"><h3>避免浪費估算</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['food_waste_avoided'], 1); ?></div><p class="stat-label">kgCO2e</p></div>
-            <div class="stat-card"><h3>配送里程</h3><div class="stat-number"><?php echo number_format($enterpriseSustainability['total_distance'], 1); ?></div><p class="stat-label">公里</p></div>
+    <section class="dashboard-workspace <?php echo $canViewDonations ? '' : 'dashboard-workspace-single'; ?>" aria-labelledby="dashboard-workspace-title">
+        <div class="dashboard-section-heading dashboard-workspace-heading">
+            <div>
+                <span class="dashboard-section-kicker">工作區</span>
+                <h2 id="dashboard-workspace-title"><?php echo $canViewDonations ? '從最近捐贈，接續下一步' : '開始你的下一個公益行動'; ?></h2>
+            </div>
         </div>
-        <a class="btn btn-secondary btn-sm mt-20" href="?page=carbon_report"><i class="fas fa-arrow-right"></i> 查看年度報告</a>
-    </div>
-</div>
-<?php endif; ?>
 
-<div class="card mt-32">
-    <div class="card-header">
-        <h2>快速操作</h2>
-        <p>常用管理功能</p>
-    </div>
-    <div class="card-body">
-        <div class="grid-4">
-            <?php if ($isEnterpriseMember): ?>
-            <a class="btn btn-primary" href="?page=donation_materials"><i class="fas fa-gift"></i> 新增捐贈</a>
+        <div class="dashboard-workspace-grid">
+            <?php if ($canViewDonations): ?>
+                <article class="card dashboard-recent-card">
+                    <header class="dashboard-card-heading">
+                        <span class="dashboard-card-icon dashboard-card-icon-blue"><i class="fas fa-inbox" aria-hidden="true"></i></span>
+                        <span>
+                            <h3>最近捐贈</h3>
+                            <p>最新建立的物資捐贈紀錄</p>
+                        </span>
+                        <a class="dashboard-text-link" href="?page=<?php echo htmlspecialchars($donationListPage, ENT_QUOTES, 'UTF-8'); ?>">查看全部</a>
+                    </header>
+                    <div class="dashboard-card-content recent-donations-body">
+                        <?php if (!empty($recentDonations)): ?>
+                            <table class="data-table recent-donations-table">
+                                <thead>
+                                    <tr>
+                                        <th>捐贈者</th>
+                                        <th>類型</th>
+                                        <th>數量</th>
+                                        <th>狀態</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($recentDonations as $donation): ?>
+                                        <?php
+                                        $donationTypeLabels = [
+                                            'food' => '食物',
+                                            'supplies' => '用品',
+                                            'other' => '其他',
+                                        ];
+                                        $donationStatusLabels = [
+                                            'pending' => '待評估',
+                                            'assessed' => '已評估',
+                                            'approved' => '已批准',
+                                            'received' => '已收貨',
+                                            'rejected' => '已拒絕',
+                                            'published' => '已發布',
+                                            'archived' => '已封存',
+                                        ];
+                                        $donationStatus = strtolower((string) ($donation['status'] ?? ''));
+                                        $donationStatusLabel = $donationStatusLabels[$donationStatus] ?? '其他狀態';
+                                        ?>
+                                        <tr>
+                                            <td><strong><?php echo htmlspecialchars($donation['donor_name']); ?></strong></td>
+                                            <td><?php echo htmlspecialchars($donationTypeLabels[$donation['donation_type']] ?? $donation['donation_type']); ?></td>
+                                            <td><?php echo htmlspecialchars($donation['quantity']); ?> <?php echo htmlspecialchars($donation['unit']); ?></td>
+                                            <td><span class="status <?php echo htmlspecialchars('status-' . str_replace(' ', '_', $donationStatus)); ?>"><?php echo htmlspecialchars($donationStatusLabel); ?></span></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php else: ?>
+                            <div class="empty-state">
+                                <i class="fas fa-inbox" aria-hidden="true"></i>
+                                <p>目前沒有捐贈記錄</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </article>
             <?php endif; ?>
-            <?php if ($authService->can('page.settings')): ?>
-            <a href="?page=settings" class="btn btn-secondary"><i class="fas fa-gear"></i> 系統設置</a>
-            <?php endif; ?>
-            <button class="btn btn-secondary" onclick="printTable()"><i class="fas fa-print"></i> 列印報告</button>
+
+            <aside class="card dashboard-quick-card" aria-labelledby="dashboard-quick-title">
+                <header class="dashboard-card-heading">
+                    <span class="dashboard-card-icon dashboard-card-icon-gold"><i class="fas fa-bolt" aria-hidden="true"></i></span>
+                    <span>
+                        <h3 id="dashboard-quick-title">快速操作</h3>
+                        <p>前往你最常使用的功能</p>
+                    </span>
+                </header>
+                <div class="dashboard-card-content">
+                    <div class="dashboard-quick-actions">
+                        <?php foreach ($dashboardQuickActions as $action): ?>
+                            <a class="dashboard-quick-action" href="?page=<?php echo htmlspecialchars($action['page'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <span class="dashboard-quick-action-icon"><i class="fas <?php echo htmlspecialchars($action['icon']); ?>" aria-hidden="true"></i></span>
+                                <span>
+                                    <strong><?php echo htmlspecialchars($action['title']); ?></strong>
+                                    <small><?php echo htmlspecialchars($action['description']); ?></small>
+                                </span>
+                                <i class="fas fa-arrow-right dashboard-quick-action-arrow" aria-hidden="true"></i>
+                            </a>
+                        <?php endforeach; ?>
+                        <button class="dashboard-quick-action dashboard-quick-action-button" type="button" onclick="printTable()">
+                            <span class="dashboard-quick-action-icon"><i class="fas fa-print" aria-hidden="true"></i></span>
+                            <span>
+                                <strong>列印目前頁面</strong>
+                                <small>輸出成紙本或 PDF 報告</small>
+                            </span>
+                            <i class="fas fa-arrow-right dashboard-quick-action-arrow" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+            </aside>
         </div>
-    </div>
+    </section>
 </div>

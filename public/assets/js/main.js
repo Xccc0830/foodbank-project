@@ -835,7 +835,12 @@
 
                             const label = document.createElement('span');
                             const agreement = Math.round(Number(item.agreement || 0) * 100);
-                            label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（信心 ' + Math.round(item.confidence * 100) + '%；一致率 ' + agreement + '%）';
+                            if (item.count_verified) {
+                                const counts = Array.isArray(item.count_observations) ? item.count_observations.join('／') : '';
+                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（數量複核：' + counts + '）';
+                            } else {
+                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（信心 ' + Math.round(item.confidence * 100) + '%；一致率 ' + agreement + '%）';
+                            }
                             label.style.marginRight = '8px';
 
                             const apply = document.createElement('button');

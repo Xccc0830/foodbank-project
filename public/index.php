@@ -753,13 +753,13 @@ ob_start();
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/assets/css/style.css'); ?>">
 </head>
-<body data-notification-poll-url="?action=notifications_poll" data-notification-last-id="<?php echo (int) $latestNotificationId; ?>">
+<body class="app-body" data-notification-poll-url="?action=notifications_poll" data-notification-last-id="<?php echo (int) $latestNotificationId; ?>">
     <div class="app-wrapper">
         <!-- 側邊欄 -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="appSidebar" aria-label="主要導覽">
             <div class="sidebar-header">
                 <div class="logo">
-                    <img class="logo-image" src="assets/images/foundation-logo.jpg" alt="">
+                    <img class="logo-image" src="assets/images/foundation-logo.jpg" alt="<?php echo htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8'); ?>">
                     <span class="logo-text"><?php echo APP_NAME; ?></span>
                 </div>
             </div>
@@ -807,7 +807,7 @@ ob_start();
 
             <div class="sidebar-footer">
                 <div class="user-profile">
-                    <div class="avatar"><?php echo htmlspecialchars(strtoupper(substr($currentUser['full_name'], 0, 2))); ?></div>
+                    <div class="avatar"><?php echo htmlspecialchars(strtoupper(mb_substr($currentUser['full_name'], 0, 2))); ?></div>
                     <div class="user-info">
                         <div class="user-name"><?php echo htmlspecialchars($currentUser['full_name']); ?></div>
                         <div class="user-role"><?php echo htmlspecialchars($roleLabels[$role] ?? $role); ?></div>
@@ -822,10 +822,12 @@ ob_start();
             <!-- 頂部欄 -->
             <header class="topbar">
                 <div class="topbar-left">
-                    <button class="sidebar-toggle" id="sidebarToggle">
-                        <i class="fas fa-bars"></i>
+                    <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="開啟主要導覽" aria-controls="appSidebar">
+                        <i class="fas fa-bars" aria-hidden="true"></i>
                     </button>
                     <div class="breadcrumb">
+                        <span class="breadcrumb-context">食物銀行服務平台</span>
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
                         <span class="page-title" id="pageTitle">
                             <?php echo $menu_items[$page]['label'] ?? '頁面'; ?>
                         </span>
@@ -833,17 +835,19 @@ ob_start();
                 </div>
                 
                 <div class="topbar-right">
-                    <div class="search-box">
-                        <input type="text" placeholder="搜尋紀錄、名稱、編號" class="search-input">
-                        <i class="fas fa-search"></i>
+                    <div class="topbar-date">
+                        <i class="fas fa-calendar-day" aria-hidden="true"></i>
+                        <span><small>今日</small><strong><?php echo date('n 月 j 日'); ?></strong></span>
                     </div>
                     <a href="?page=notifications" class="icon-btn" title="通知" aria-label="查看通知中心">
                         <i class="fas fa-bell"></i>
                         <span class="notification-badge" data-notification-badge <?php echo $unreadNotificationCount > 0 ? '' : 'hidden'; ?>><?php echo (int) $unreadNotificationCount; ?></span>
                     </a>
-                    <a href="?page=settings" class="icon-btn" title="設置" aria-label="前往設置">
-                        <i class="fas fa-cog"></i>
-                    </a>
+                    <?php if ($authService->can('page.settings')): ?>
+                        <a href="?page=settings" class="icon-btn" title="設置" aria-label="前往設置">
+                            <i class="fas fa-cog"></i>
+                        </a>
+                    <?php endif; ?>
                 </div>
             </header>
 

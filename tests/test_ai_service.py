@@ -1,5 +1,9 @@
+import io
 import unittest
 from unittest.mock import patch
+
+import numpy as np
+from PIL import Image
 
 from ai_service import app
 from ai_service.analysis import (
@@ -15,6 +19,82 @@ def result(items, confidence=0.9):
 
 
 class ImageAnalysisTests(unittest.TestCase):
+    def test_prepare_image_removes_a_detected_mirror_reflection(self):
+        rng = np.random.default_rng(42)
+        pixels = rng.integers(30, 230, size=(192, 256, 3), dtype=np.uint8)
+        boundary = 154
+        reflected_height = pixels.shape[0] - boundary
+        pixels[boundary:] = (
+            pixels[boundary - reflected_height:boundary][::-1].astype(np.float32) * 0.65
+            + 35
+        ).clip(0, 255).astype(np.uint8)
+        image_buffer = io.BytesIO()
+        Image.fromarray(pixels).save(image_buffer, format="PNG")
+
+        prepared = app.prepare_image(image_buffer.getvalue())
+
+        self.assertLess(prepared["height"], pixels.shape[0])
+        self.assertGreater(prepared["height"], pixels.shape[0] * 0.7)
+        with Image.open(io.BytesIO(prepared["analysis_original"])) as cleaned:
+            self.assertEqual(cleaned.height, prepared["height"])
+
+    def test_prepare_image_keeps_a_photo_without_a_mirror_reflection(self):
+        rng = np.random.default_rng(7)
+        pixels = rng.integers(30, 230, size=(240, 320, 3), dtype=np.uint8)
+        image_buffer = io.BytesIO()
+        Image.fromarray(pixels).save(image_buffer, format="PNG")
+
+        prepared = app.prepare_image(image_buffer.getvalue())
+
+        self.assertEqual(prepared["height"], pixels.shape[0])
+
+    def test_independent_package_count_corrects_a_single_item_suggestion(self):
+        analyses = [
+            result([{"name": "牛奶", "quantity": 7, "unit": "盒"}], 0.99),
+            result([
+                {"name": "牛奶", "quantity": 7, "unit": "盒"},
+                {"name": "Whole Milk", "quantity": 1, "unit": "瓶"},
+                {"name": "燕麥片", "quantity": 2, "unit": "盒"},
+            ], 0.99),
+        ]
+        prepared = [{
+            "original": b"original",
+            "standard": b"standard",
+            "enhanced": b"enhanced",
+        }]
+        with patch.object(app, "analyze_with_ollama", side_effect=analyses), \
+                patch.object(app, "count_item_packages", side_effect=[8, 8]), \
+                patch.object(app, "get_preferred_vision_model", return_value="gemma3:test"):
+            accepted, uncertain, _, _ = app.analyze_batch(prepared, profile="fast")
+
+        self.assertEqual(len(accepted), 1)
+        self.assertEqual(accepted[0]["quantity"], 8)
+        self.assertEqual(accepted[0]["unit"], "件")
+        self.assertEqual(accepted[0]["observed_quantities"], [8, 8])
+        self.assertEqual(accepted[0]["model_observed_quantities"], [7, 7])
+        self.assertTrue(accepted[0]["count_verified"])
+        self.assertEqual(accepted[0]["count_observations"], [8, 8])
+        self.assertEqual([item["name"] for item in uncertain], ["燕麥片"])
+
+    def test_disagreeing_package_count_moves_suggestion_to_manual_review(self):
+        analyses = [
+            result([{"name": "牛奶", "quantity": 7, "unit": "盒"}], 0.99),
+            result([{"name": "牛奶", "quantity": 7, "unit": "盒"}], 0.99),
+        ]
+        prepared = [{
+            "original": b"original",
+            "standard": b"standard",
+            "enhanced": b"enhanced",
+        }]
+        with patch.object(app, "analyze_with_ollama", side_effect=analyses), \
+                patch.object(app, "count_item_packages", side_effect=[8, 7]), \
+                patch.object(app, "get_preferred_vision_model", return_value="gemma3:test"):
+            accepted, uncertain, _, _ = app.analyze_batch(prepared, profile="fast")
+
+        self.assertEqual(accepted, [])
+        self.assertEqual(uncertain[0]["observed_quantities"], [8, 7])
+        self.assertIn("獨立物件計數結果不一致", uncertain[0]["reason"])
+
     def test_normalizes_common_names_units_and_duplicate_lines(self):
         normalized = normalize_analysis(result([
             {"name": "蛋", "quantity": 5, "unit": "eggs"},
