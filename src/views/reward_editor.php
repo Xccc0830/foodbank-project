@@ -24,7 +24,7 @@ if ($editing) {
 }
 
 $templates = [
-    'direct_exchange' => ['商品直換', '固定點數兌換商品，不需現金。', '例如：80 點換價值 80 元的便當'],
+    'direct_exchange' => ['商品直換', '固定點數兌換商品，不需現金。', '所需點數不得高於商品一般售價'],
     'min_spend_discount' => ['滿額現金折抵', '達最低消費後，每點折抵 1 元。', '例如：滿 100 元，花 20 點折 20 元'],
     'min_spend_percentage' => ['滿額點數打折', '達最低消費後，以點數解鎖整單折扣。', '例如：滿 150 元，花 15 點享 9 折'],
 ];
@@ -91,9 +91,17 @@ $escape = static function ($value) {
             </div>
             <?php if ($template === 'direct_exchange'): ?>
                 <div class="form-group">
-                    <label for="reward-points">兌換所需點數 *</label>
-                    <input id="reward-points" type="number" name="cost_points" min="1" max="2147483647" step="1" value="<?php echo $escape($values['cost_points'] ?? ''); ?>" placeholder="例如 80" required>
-                    <small>1 點相當於 1 元商品價值；商品直換不需現金。</small>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label for="reward-points">兌換所需點數 *</label>
+                            <input id="reward-points" type="number" name="cost_points" min="1" max="99999999" step="1" value="<?php echo $escape($values['cost_points'] ?? ''); ?>" placeholder="例如 80" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reward-retail-price">商品一般售價（元）*</label>
+                            <input id="reward-retail-price" type="number" name="retail_price" min="1" max="99999999" step="1" value="<?php echo $escape($values['retail_price'] ?? ''); ?>" placeholder="例如 100" required>
+                        </div>
+                    </div>
+                    <small>1 點相當於 1 元商品價值；兌換點數不得高於商品一般售價。</small>
                 </div>
             <?php else: ?>
                 <div class="form-group">
@@ -115,7 +123,7 @@ $escape = static function ($value) {
                         <div class="form-group">
                             <label for="reward-rate">折扣比例 *</label>
                             <select id="reward-rate" name="discount_rate" required>
-                                <?php for ($i = 99; $i >= 1; $i--): $rate = number_format($i / 100, 2, '.', ''); ?>
+                                <?php for ($i = 95; $i >= 70; $i--): $rate = number_format($i / 100, 2, '.', ''); ?>
                                     <option value="<?php echo $rate; ?>" <?php echo $rate === ($values['discount_rate'] ?? '0.90') ? 'selected' : ''; ?>><?php echo rtrim(rtrim(number_format($i / 10, 1), '0'), '.'); ?> 折</option>
                                 <?php endfor; ?>
                             </select>

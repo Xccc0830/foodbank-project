@@ -25,7 +25,10 @@ function rewardRuleText($reward) {
     if ($rule === 'min_spend_percentage') {
         return '【滿額打折】滿 ' . (int) $reward['min_spend'] . ' 元享 ' . rtrim(rtrim(number_format((float) $reward['discount_rate'] * 10, 1), '0'), '.') . ' 折（需 ' . $points . ' 點）';
     }
-    return '【商品直換】' . $points . ' 點，無需現金';
+    $retailPrice = isset($reward['retail_price']) ? (int) $reward['retail_price'] : 0;
+    return '【商品直換】' . $points . ' 點'
+        . ($retailPrice > 0 ? '，商品售價 ' . $retailPrice . ' 元' : '')
+        . '，無需現金';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -46,7 +49,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['reward_claim_id'] = $claim['claim_id'];
                 $message = ['type' => 'success', 'text' => '已扣除點數，請出示兌換編號，並由店家核實。'];
             } else {
-                $message = ['type' => 'error', 'text' => '兌換失敗，請確認店家、點數餘額及優惠庫存。'];
+                $rateLimited = $sourceType === 'donor' && $rewardModel->isStoreRedemptionLimited(
+                    (int) $currentUser['user_id'],
+                    (int) ($_POST['source_id'] ?? 0)
+                );
+                $message = ['type' => 'error', 'text' => $rateLimited
+                    ? '同一商家 30 分鐘內已連續核銷 3 次，暫停此店兌換，請稍後再試。'
+                    : '兌換失敗，請確認店家、點數餘額及優惠庫存。'];
             }
         }
     } elseif ($action === 'cancel_claim' && $isVolunteer) {
@@ -99,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'stock' => $_POST['stock'] ?? null,
             'rule_type' => $_POST['rule_type'] ?? 'direct_exchange',
             'min_spend' => $_POST['min_spend'] ?? 0,
+            'retail_price' => $_POST['retail_price'] ?? null,
             'discount_amount' => $_POST['discount_amount'] ?? null,
             'discount_rate' => $_POST['discount_rate'] ?? null,
         ];
@@ -118,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'category' => $_POST['category'] ?? 'other',
             'rule_type' => $_POST['rule_type'] ?? 'direct_exchange',
             'min_spend' => $_POST['min_spend'] ?? 0,
+            'retail_price' => $_POST['retail_price'] ?? null,
             'discount_amount' => $_POST['discount_amount'] ?? null,
             'discount_rate' => $_POST['discount_rate'] ?? null,
         ])
@@ -143,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['editor_flow'] ?? '') === '1' && in_array($action, ['create_donor_reward', 'update_donor_reward'], true)) {
         unset($_SESSION['reward_editor_input']);
         if (($message['type'] ?? '') === 'error') {
-            $fields = ['title', 'description', 'category', 'stock', 'cost_points', 'min_spend', 'discount_amount', 'discount_rate', 'rule_type'];
+            $fields = ['title', 'description', 'category', 'stock', 'cost_points', 'min_spend', 'retail_price', 'discount_amount', 'discount_rate', 'rule_type'];
             $input = [];
             foreach ($fields as $field) {
                 if (isset($_POST[$field]) && is_scalar($_POST[$field])) {
@@ -282,12 +293,19 @@ if ($isDonor) {
         <?php if ($catalog): ?>
             <div class="reward-grid">
                 <?php foreach ($catalog as $reward): ?>
+                    <?php
+                    $rewardCost = (int) $reward['cost_points'];
+                    $invalidDirectExchangePrice = $reward['source_type'] === 'donor'
+                        && ($reward['rule_type'] ?? 'direct_exchange') === 'direct_exchange'
+                        && ($reward['retail_price'] === null || $rewardCost > (int) $reward['retail_price']);
+                    ?>
                     <div class="reward-card" id="reward-<?php echo $reward['source_type'] === 'donor' ? 'donor' : 'foodbank'; ?>-<?php echo (int) $reward['source_id']; ?>">
                         <h3><?php echo htmlspecialchars($reward['title']); ?></h3>
                         <?php if ($reward['source_type'] === 'donor'): ?><p class="toolbar-meta">提供店家：<?php echo htmlspecialchars($reward['donor_name'] ?? '未知店家'); ?></p><?php endif; ?>
                         <p><?php echo htmlspecialchars($reward['description'] ?? ''); ?></p>
                         <span class="reward-cost"><?php echo (int) $reward['cost_points']; ?> 點</span>
                         <?php if ($reward['source_type'] === 'donor'): ?><p><strong class="status status-info"><?php echo htmlspecialchars(rewardRuleText($reward)); ?></strong></p><?php endif; ?>
+                        <?php if ($invalidDirectExchangePrice): ?><p role="alert">店家尚未補登有效售價，此方案暫停兌換。</p><?php endif; ?>
                         <?php if ($reward['stock'] !== null): ?><p class="toolbar-meta">剩餘 <?php echo (int) $reward['stock']; ?> 份</p><?php endif; ?>
                         <?php if ($canCreateCatalogReward && $reward['source_type'] === 'foodbank'): ?>
                             <button class="btn btn-secondary btn-sm" type="button" data-action="edit-reward">編輯品項</button>
@@ -320,13 +338,15 @@ if ($isDonor) {
                             </form>
                         <?php endif; ?>
                         <?php if ($isVolunteer): ?>
+                            <?php $pointsShort = max(0, $rewardCost - $balance); ?>
+                            <p class="toolbar-meta"><?php echo $pointsShort === 0 ? '可立即兌換' : '還差 ' . $pointsShort . ' 點'; ?></p>
                             <form method="post" onsubmit="return confirm('確認使用 <?php echo (int) $reward['cost_points']; ?> 點兌換此優惠？');">
                                 <?php echo csrfField(); ?>
                                 <input type="hidden" name="action" value="redeem_reward">
                                 <input type="hidden" name="source_type" value="<?php echo htmlspecialchars($reward['source_type']); ?>">
                                 <input type="hidden" name="source_id" value="<?php echo (int) $reward['source_id']; ?>">
                                 <?php if ($storeRequested && $storeId > 0): ?><input type="hidden" name="store_id" value="<?php echo $storeId; ?>"><?php endif; ?>
-                                <button class="btn btn-primary btn-sm" type="submit" <?php echo ($balance < (int) $reward['cost_points'] || ($reward['stock'] !== null && (int) $reward['stock'] <= 0)) ? 'disabled' : ''; ?>><?php echo $storeRequested ? '確認扣點' : '立即兌換'; ?></button>
+                                <button class="btn btn-primary btn-sm" type="submit" <?php echo ($pointsShort > 0 || $invalidDirectExchangePrice || ($reward['stock'] !== null && (int) $reward['stock'] <= 0)) ? 'disabled' : ''; ?>><?php echo $storeRequested ? '確認扣點' : '立即兌換'; ?></button>
                             </form>
                         <?php endif; ?>
                     </div>

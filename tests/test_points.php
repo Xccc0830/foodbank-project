@@ -12,16 +12,34 @@ function check($name, $actual, $expected) {
     }
 }
 
-check('motorcycle 4.5km 12kg urgent', DeliveryModel::calculatePoints('motorcycle', 4.5, 12, 'urgent'), 18);
-check('motorcycle short light normal', DeliveryModel::calculatePoints('motorcycle', 1, 3, 'normal'), 6);
-check('car short light normal', DeliveryModel::calculatePoints('car', 1, 3, 'normal'), 8);
-check('car 10km 10kg priority', DeliveryModel::calculatePoints('car', 10, 10, 'priority'), 17);
-check('car far heavy urgent', DeliveryModel::calculatePoints('car', 12, 25, 'urgent'), 30);
-check('distance boundary 2km stays in first tier', DeliveryModel::calculatePoints('motorcycle', 2, 5, 'normal'), 6);
-check('distance just over 2km moves to next tier', DeliveryModel::calculatePoints('motorcycle', 2.1, 5, 'normal'), 8);
-check('unknown urgency adds nothing', DeliveryModel::calculatePoints('motorcycle', 1, 3, 'whatever'), 6);
-check('cold storage adds 2', DeliveryModel::calculatePoints('motorcycle', 1, 3, 'normal', true), 8);
-check('weight bonus capped at 15', DeliveryModel::calculatePoints('car', 1, 200, 'normal'), 20);
+check('motorcycle normal carbon formula rounds down', DeliveryModel::calculatePoints('motorcycle', 5, 10, 'normal'), 16);
+check('motorcycle urgent carbon formula', DeliveryModel::calculatePoints('motorcycle', 10, 20, 'urgent'), 42);
+check('car normal carbon formula', DeliveryModel::calculatePoints('car', 5, 10, 'normal'), 18);
+check('car urgent formula is capped at 60', DeliveryModel::calculatePoints('car', 15, 50, 'urgent'), 60);
+check('priority multiplier', DeliveryModel::calculatePoints('motorcycle', 0, 0, 'priority'), 6);
+check('motorcycle weight limit', DeliveryModel::maximumWeightForVehicle('motorcycle'), 20.0);
+check('car weight limit', DeliveryModel::maximumWeightForVehicle('car'), 50.0);
+
+try {
+    DeliveryModel::calculatePoints('motorcycle', 1, 20.01, 'normal');
+    check('motorcycle over-limit weight rejected', false, true);
+} catch (InvalidArgumentException $exception) {
+    check('motorcycle over-limit weight rejected', true, true);
+}
+
+try {
+    DeliveryModel::calculatePoints('car', 1, 50.01, 'normal');
+    check('car over-limit weight rejected', false, true);
+} catch (InvalidArgumentException $exception) {
+    check('car over-limit weight rejected', true, true);
+}
+
+try {
+    DeliveryModel::calculatePoints('motorcycle', 1, 1, 'unknown');
+    check('unknown urgency rejected', false, true);
+} catch (InvalidArgumentException $exception) {
+    check('unknown urgency rejected', true, true);
+}
 
 if ($failures > 0) {
     echo "{$failures} test(s) failed.\n";

@@ -19,7 +19,6 @@ class DonationModel extends BaseModel {
             $this->ensureRevisionSupport();
         }
     }
-
     /** 物資單可由商家重送時，允許修改的欄位 */
     const RESUBMIT_FIELDS = [
         'item_name', 'quantity', 'unit', 'weight_kg', 'size_description',
@@ -147,8 +146,11 @@ class DonationModel extends BaseModel {
     /** 商家本月已申請的緊急運送單數（每月上限 URGENT_MONTHLY_LIMIT，避免濫用加成） */
     public function countUrgentThisMonth($donorId) {
         $donorId = (int) $donorId;
-        $result = $this->db->query("SELECT COUNT(*) AS total FROM donations WHERE donor_id = {$donorId} AND is_urgent = 1 AND donation_date >= DATE_FORMAT(NOW(), '%Y-%m-01')");
-        return (int) ($result ? ($result->fetch_assoc()['total'] ?? 0) : 0);
+        $result = $this->db->query("SELECT COUNT(*) AS total FROM donations WHERE donor_id = {$donorId} AND (urgency = 'urgent' OR is_urgent = 1) AND donation_date >= DATE_FORMAT(NOW(), '%Y-%m-01')");
+        if (!$result) {
+            throw new RuntimeException('無法檢查商家本月緊急配送額度: ' . $this->db->error);
+        }
+        return (int) ($result->fetch_assoc()['total'] ?? 0);
     }
 
     public function setDefaultPickupAddress($userId, $address) {
@@ -190,6 +192,7 @@ class DonationModel extends BaseModel {
         $columns = [
             'revision_no' => "ALTER TABLE donations ADD revision_no INT NOT NULL DEFAULT 1",
             'is_urgent' => "ALTER TABLE donations ADD is_urgent TINYINT(1) NOT NULL DEFAULT 0",
+            'urgency' => "ALTER TABLE donations ADD urgency ENUM('normal','priority','urgent') NOT NULL DEFAULT 'normal'",
             'rejected_fields' => "ALTER TABLE donations ADD rejected_fields TEXT NULL",
         ];
         foreach ($columns as $column => $alterSql) {
@@ -197,6 +200,9 @@ class DonationModel extends BaseModel {
             if ($result && $result->num_rows === 0) {
                 $this->db->query($alterSql);
             }
+        }
+        if (!$this->db->query("UPDATE donations SET urgency = 'urgent' WHERE is_urgent = 1 AND urgency = 'normal'")) {
+            throw new RuntimeException('無法遷移舊緊急捐贈資料: ' . $this->db->error);
         }
 
         $this->db->query(
@@ -355,32 +361,118 @@ class DonationModel extends BaseModel {
      * 新增捐贈記錄
      */
     public function addDonation($donor_data) {
-        $donor_data['donation_date'] = date('Y-m-d H:i:s');
-        $donor_data['order_number'] = $this->generateOrderNumber();
-        $itemData = [
-            'item_name' => $donor_data['item_name'] ?? null,
-            'donation_type' => $donor_data['donation_type'] ?? 'other',
-            'quantity' => $donor_data['quantity'] ?? null,
-            'unit' => $donor_data['unit'] ?? null,
-            'weight_kg' => $donor_data['weight_kg'] ?? null,
-            'size_description' => $donor_data['size_description'] ?? null,
-            'expiry_date' => $donor_data['expiry_date'] ?? null,
-            'photo_path' => $donor_data['photo_path'] ?? null,
-        ];
-        $donationId = $this->insert($donor_data);
-        if ($donationId) {
+        $urgency = $donor_data['urgency'] ?? 'normal';
+        if (!in_array($urgency, ['normal', 'priority', 'urgent'], true)) {
+            return false;
+        }
+        if (!Transaction::begin($this->db)) {
+            error_log('無法開始捐贈申請交易');
+            return false;
+        }
+        $donorId = (int) ($donor_data['donor_id'] ?? 0);
+        try {
+            if ($urgency === 'urgent') {
+                if ($donorId <= 0) {
+                    Transaction::rollback($this->db);
+                    return false;
+                }
+                $donorLock = $this->db->query("SELECT user_id FROM users WHERE user_id = {$donorId} FOR UPDATE");
+                if (!$donorLock || !$donorLock->fetch_assoc()) {
+                    Transaction::rollback($this->db);
+                    return false;
+                }
+                if ($this->countUrgentThisMonth($donorId) >= self::URGENT_MONTHLY_LIMIT) {
+                    Transaction::rollback($this->db);
+                    $this->logUrgentLimitAttempt($donorId);
+                    return false;
+                }
+            }
+            $donor_data['urgency'] = $urgency;
+            $donor_data['is_urgent'] = $urgency === 'urgent' ? 1 : 0;
+            $donor_data['donation_date'] = date('Y-m-d H:i:s');
+            $donor_data['order_number'] = $this->generateOrderNumber();
+            $donationId = $this->insert($donor_data);
+            if (!$donationId) {
+                throw new RuntimeException('無法建立捐贈申請。');
+            }
             $this->recordRevision($donationId, 'submitted', null, [], $donor_data['donor_id'] ?? null);
+            if ($this->hasDonationItemsTable()) {
+                $this->insertDonationItem($donationId, $donor_data);
+            }
+            if (!Transaction::commit($this->db)) {
+                throw new RuntimeException('無法儲存捐贈申請。');
+            }
+            return $donationId;
+        } catch (Throwable $exception) {
+            Transaction::rollback($this->db);
+            error_log('建立捐贈申請失敗: ' . $exception->getMessage());
+            return false;
         }
-        if ($donationId && $this->hasDonationItemsTable()) {
-            $columns = array_keys($itemData);
-            $values = array_map(function ($value) {
-                return $value === null ? 'NULL' : "'" . $this->db->real_escape_string((string) $value) . "'";
-            }, $itemData);
-            $this->db->query(
-                "INSERT INTO donation_items (donation_id, " . implode(', ', $columns) . ") VALUES (" . (int) $donationId . ", " . implode(', ', $values) . ")"
-            );
+    }
+
+    private function insertDonationItem($donationId, array $donationData) {
+        $columnsResult = $this->db->query('SHOW COLUMNS FROM donation_items');
+        if (!$columnsResult) {
+            throw new RuntimeException('無法檢查捐贈物資明細欄位: ' . $this->db->error);
         }
-        return $donationId;
+        $available = [];
+        while ($column = $columnsResult->fetch_assoc()) {
+            $available[$column['Field']] = true;
+        }
+        $candidateData = [
+            'item_name' => $donationData['item_name'] ?? null,
+            'donation_type' => $donationData['donation_type'] ?? 'other',
+            'quantity' => $donationData['quantity'] ?? null,
+            'unit' => $donationData['unit'] ?? null,
+            'weight_kg' => $donationData['weight_kg'] ?? null,
+            'item_weight_kg' => $donationData['weight_kg'] ?? null,
+            'size_description' => $donationData['size_description'] ?? null,
+            'specification' => $donationData['size_description'] ?? null,
+            'expiry_date' => $donationData['expiry_date'] ?? null,
+            'photo_path' => $donationData['photo_path'] ?? null,
+        ];
+        $itemData = array_intersect_key($candidateData, $available);
+        if (!$itemData || !isset($itemData['item_name'])) {
+            throw new RuntimeException('捐贈物資明細表缺少必要欄位。');
+        }
+        $columns = array_keys($itemData);
+        $values = array_map(function ($value) {
+            return $value === null ? 'NULL' : "'" . $this->db->real_escape_string((string) $value) . "'";
+        }, $itemData);
+        if (!$this->db->query(
+            "INSERT INTO donation_items (donation_id, " . implode(', ', $columns) . ")
+             VALUES (" . (int) $donationId . ", " . implode(', ', $values) . ")"
+        )) {
+            throw new RuntimeException('無法儲存捐贈物資明細: ' . $this->db->error);
+        }
+    }
+
+    private function logUrgentLimitAttempt($donorId) {
+        $details = json_encode([
+            'donor_id' => (int) $donorId,
+            'monthly_limit' => self::URGENT_MONTHLY_LIMIT,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $stmt = $this->db->prepare(
+            "INSERT INTO audit_logs (user_id, action_type, table_name, new_values)
+             VALUES (?, 'policy_urgent_limit_attempt', 'donations', ?)"
+        );
+        if (!$stmt) {
+            error_log('無法準備緊急運送額度稽核紀錄: ' . $this->db->error);
+            return;
+        }
+        $stmt->bind_param('is', $donorId, $details);
+        if (!$stmt->execute()) {
+            error_log('無法寫入緊急運送額度稽核紀錄: ' . $stmt->error);
+            return;
+        }
+        $message = $this->db->real_escape_string("商家 #{$donorId} 嘗試超過本月緊急運送上限，系統已拒絕申請並記錄稽核。");
+        if (!$this->db->query(
+            "INSERT INTO notifications (user_id, title, message, type)
+             SELECT user_id, '緊急運送額度稽核', '{$message}', 'warning'
+             FROM users WHERE role = 'foodbank_staff' AND status = 'active'"
+        )) {
+            error_log('緊急運送額度稽核通知失敗: ' . $this->db->error);
+        }
     }
 
     /** 一張物資單底下的所有物資明細（含分類名稱），依填寫順序排列。 */
@@ -712,13 +804,19 @@ class DonationModel extends BaseModel {
             : 'motorcycle';
         $weight = ((float) ($publishData['weight_kg'] ?? $existingDonation['weight_kg'] ?? 0)) / $splitCount;
         $distance = max(0, (float) ($existingDonation['estimated_distance_km'] ?? 0));
-        // 緊急加成：商家勾選緊急運送，且食物銀行審核時同意（預設同意，可取消）
-        $urgency = (!empty($existingDonation['is_urgent']) && !empty($publishData['urgent_approved'])) ? 'urgent' : 'normal';
+        $urgency = in_array(($existingDonation['urgency'] ?? ''), ['normal', 'priority', 'urgent'], true)
+            ? $existingDonation['urgency']
+            : (!empty($existingDonation['is_urgent']) ? 'urgent' : 'normal');
         $coldResult = $this->db->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) $donation_id . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
         $isCold = $coldResult && $coldResult->num_rows > 0;
-        $points = $deliveryMethod === 'volunteer'
-            ? max(0, DeliveryModel::calculatePoints($vehicleType, $distance, $weight, $urgency, $isCold))
-            : 0;
+        try {
+            $points = $deliveryMethod === 'volunteer'
+                ? DeliveryModel::calculatePoints($vehicleType, $distance, $weight, $urgency)
+                : 0;
+        } catch (InvalidArgumentException $exception) {
+            Transaction::rollback($this->db);
+            return false;
+        }
         $pickupAddress = trim((string) (($existingDonation['donor_address'] ?? '') !== '' ? $existingDonation['donor_address'] : ($publishData['donor_address'] ?? '')));
         if ($pickupAddress === '') {
             $pickupAddress = (string) ($publishData['donor_name'] ?? $existingDonation['donor_name'] ?? '商家取貨地點');

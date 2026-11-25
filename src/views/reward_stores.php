@@ -89,6 +89,7 @@ $displayValue = static function ($value) {
                                 <li>
                                     <strong><?php echo $displayValue($offer['title']); ?></strong>
                                     <p><span class="status status-info"><?php echo htmlspecialchars(rewardRuleText($offer), ENT_QUOTES, 'UTF-8'); ?></span></p>
+                                    <?php if ($offer['rule_type'] === 'direct_exchange' && ($offer['retail_price'] === null || (int) $offer['cost_points'] > (int) $offer['retail_price'])): ?><p role="alert">店家尚未補登有效售價，此方案暫停兌換。</p><?php endif; ?>
                                     <?php if ($offer['stock'] !== null && (int) $offer['stock'] <= 0): ?><p>已兌完，已領取的券仍可核銷。</p><?php endif; ?>
                                     <?php if (trim((string) $offer['description']) !== ''): ?><p><?php echo nl2br(htmlspecialchars($offer['description'], ENT_QUOTES, 'UTF-8')); ?></p><?php endif; ?>
                                     <a class="btn btn-secondary btn-sm" href="?page=rewards#reward-donor-<?php echo (int) $offer['item_id']; ?>">查看兌換</a>

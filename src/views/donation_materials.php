@@ -181,7 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         'delivery_address' => $deliveryAddress !== '' ? $deliveryAddress : null,
         'estimated_distance_km' => $estimatedDistanceKm,
         'estimated_duration_minutes' => $estimatedDurationMinutes,
-        'is_urgent' => !empty($_POST['is_urgent']) ? 1 : 0,
+        'urgency' => in_array(($_POST['urgency'] ?? 'normal'), ['normal', 'priority', 'urgent'], true) ? $_POST['urgency'] : '',
+        'is_urgent' => ($_POST['urgency'] ?? 'normal') === 'urgent' ? 1 : 0,
     ];
 
     $hasInvalidItem = empty($items);
@@ -191,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
             break;
         }
     }
-    $urgentRequested = !empty($_POST['is_urgent']);
+    $urgentRequested = ($donationData['urgency'] ?? '') === 'urgent';
     $openDays = $donationModel->getBusinessProfile($currentUserId)['open_days'] ?? '';
     $aiSuggestionApplied = ($_POST['ai_suggestion_applied'] ?? '') === '1';
     $aiSuggestionConfirmed = ($_POST['ai_suggestion_confirmed'] ?? '') === '1';
@@ -206,14 +207,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
             . DonationModel::formatOpenDays($foodbankProfile['open_days']) . '），請改選其他日期。';
     }
     $addressError = validateAddress($donorAddress, '取貨地址') ?? validateAddress($deliveryAddress, '送達地址');
-    if ($numberError !== null) {
+    if ($donationData['urgency'] === '') {
+        $formMessage = ['type' => 'error', 'text' => '請選擇有效的任務緊急度。'];
+    } elseif ($numberError !== null) {
         $formMessage = ['type' => 'error', 'text' => $numberError];
     } elseif ($closedDayError !== null) {
         $formMessage = ['type' => 'error', 'text' => $closedDayError];
     } elseif ($foodbankClosedError !== null) {
         $formMessage = ['type' => 'error', 'text' => $foodbankClosedError];
     } elseif ($urgentRequested && $donationModel->countUrgentThisMonth($currentUserId) >= DonationModel::URGENT_MONTHLY_LIMIT) {
-        $formMessage = ['type' => 'error', 'text' => '本月緊急運送已達 ' . DonationModel::URGENT_MONTHLY_LIMIT . ' 單上限，請取消勾選「緊急運送」後再送出。'];
+        $formMessage = ['type' => 'error', 'text' => '本月緊急運送已達 ' . DonationModel::URGENT_MONTHLY_LIMIT . ' 單上限，請選擇一般或優先配送。'];
     } elseif ($addressError !== null) {
         $formMessage = ['type' => 'error', 'text' => $addressError];
     } elseif ($aiSuggestionApplied && !$aiSuggestionConfirmed) {
@@ -462,7 +465,7 @@ $formatDateTime = static function ($value) {
                 <div class="form-group"><label for="deliveryAddress">送達地址 <span class="required-mark">*</span></label><input id="deliveryAddress" type="text" name="delivery_address" value="<?php echo htmlspecialchars($deliveryAddress, ENT_QUOTES, 'UTF-8'); ?>" placeholder="物資送到哪裡" required minlength="5" maxlength="255" autocomplete="off" data-address-input data-address-label="送達地址">
                     <?php $foodbankReceiving = FoodbankProfileModel::receivingSummary($foodbankProfile); ?>
                     <p class="form-hint">預設為<?php echo htmlspecialchars(FoodbankProfileModel::NAME); ?>的收貨地址<?php echo $foodbankReceiving !== '' ? '（' . htmlspecialchars($foodbankReceiving) . '）' : ''; ?>。</p></div>
-                <div class="form-group form-check-row"><label><input type="checkbox" name="is_urgent" value="1"> 緊急運送（需要提前送出；食物銀行審核通過後，志工可多得心意幣。每月限 <?php echo (int) DonationModel::URGENT_MONTHLY_LIMIT; ?> 單）</label></div>
+                <div class="form-group"><label for="donationUrgency">配送緊急度 <span class="required-mark">*</span></label><select id="donationUrgency" name="urgency" required><option value="normal">一般（×1.0）</option><option value="priority">優先（×1.2）</option><option value="urgent">緊急（×1.5；每月最多 <?php echo (int) DonationModel::URGENT_MONTHLY_LIMIT; ?> 單）</option></select><p class="form-hint">請依物資保存狀況誠實標示；不實標示將列入違規稽核。</p></div>
                 <div class="form-group distance-estimate" id="distanceEstimate" data-distance-estimate hidden>
                     <label>預計運送距離與時間</label>
                     <div class="distance-estimate-box">

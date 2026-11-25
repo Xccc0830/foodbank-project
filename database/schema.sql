@@ -67,6 +67,8 @@ CREATE TABLE `activity_assignments` (
   `cancelled_at` datetime DEFAULT NULL,
   `cancellation_reason` varchar(500) DEFAULT NULL,
   `points` int(11) NOT NULL DEFAULT 0,
+  `attendance_hours` decimal(5,2) DEFAULT NULL,
+  `attended_at` datetime DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `assignment_type` enum('individual','company') NOT NULL DEFAULT 'individual',
   `organization_name` varchar(150) DEFAULT NULL,
@@ -211,6 +213,7 @@ CREATE TABLE `donations` (
   `dispatch_vehicle_info` varchar(150) DEFAULT NULL,
   `revision_no` int(11) NOT NULL DEFAULT 1,
   `is_urgent` tinyint(1) NOT NULL DEFAULT 0,
+  `urgency` enum('normal','priority','urgent') NOT NULL DEFAULT 'normal',
   `rejected_fields` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -274,6 +277,7 @@ CREATE TABLE `donor_reward_items` (
   `title` varchar(150) NOT NULL,
   `description` text DEFAULT NULL,
   `cost_points` int(11) NOT NULL,
+  `retail_price` int unsigned DEFAULT NULL COMMENT '商品一般售價；直換點數不得超過售價',
   `min_spend` int unsigned NOT NULL DEFAULT 0 COMMENT '最低消費金額門檻',
   `discount_amount` int unsigned DEFAULT NULL COMMENT '滿額折抵金額 (1點折1元)',
   `discount_rate` decimal(4,2) DEFAULT NULL COMMENT '折扣比例',
@@ -452,6 +456,7 @@ CREATE TABLE `reward_claims` (
   `final_cash_paid` decimal(10,2) DEFAULT NULL COMMENT '折抵後實收現金',
   `rule_type` enum('direct_exchange','min_spend_discount','min_spend_percentage') DEFAULT NULL,
   `min_spend` int unsigned DEFAULT NULL,
+  `retail_price` int unsigned DEFAULT NULL COMMENT '領券時商品一般售價快照',
   `discount_amount` int unsigned DEFAULT NULL,
   `discount_rate` decimal(4,2) DEFAULT NULL,
   `reward_description` text DEFAULT NULL,
@@ -462,6 +467,26 @@ CREATE TABLE `reward_claims` (
   `redeemed_at` datetime DEFAULT NULL,
   `redeemed_by` int(11) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- 資料表結構 `partner_esg_reviews`
+--
+
+DROP TABLE IF EXISTS `partner_esg_reviews`;
+CREATE TABLE `partner_esg_reviews` (
+  `review_id` int(11) NOT NULL AUTO_INCREMENT,
+  `donor_id` int(11) NOT NULL,
+  `quarter` char(7) NOT NULL,
+  `status` enum('certified','not_certified') NOT NULL,
+  `review_note` text NOT NULL,
+  `reviewed_by` int(11) NOT NULL,
+  `reviewed_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`review_id`),
+  UNIQUE KEY `uq_partner_esg_quarter` (`donor_id`,`quarter`),
+  KEY `idx_partner_esg_quarter` (`quarter`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------

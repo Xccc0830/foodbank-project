@@ -21,6 +21,7 @@ class RewardModel extends BaseModel {
             'donor_reward_items' => [
                 'rule_type' => "ENUM('direct_exchange','min_spend_discount','min_spend_percentage') NOT NULL DEFAULT 'direct_exchange'",
                 'min_spend' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+                'retail_price' => 'INT UNSIGNED DEFAULT NULL',
                 'discount_amount' => 'INT UNSIGNED DEFAULT NULL',
                 'discount_rate' => 'DECIMAL(4,2) DEFAULT NULL',
             ],
@@ -30,6 +31,7 @@ class RewardModel extends BaseModel {
                 'final_cash_paid' => 'DECIMAL(10,2) DEFAULT NULL',
                 'rule_type' => "ENUM('direct_exchange','min_spend_discount','min_spend_percentage') DEFAULT NULL",
                 'min_spend' => 'INT UNSIGNED DEFAULT NULL',
+                'retail_price' => 'INT UNSIGNED DEFAULT NULL',
                 'discount_amount' => 'INT UNSIGNED DEFAULT NULL',
                 'discount_rate' => 'DECIMAL(4,2) DEFAULT NULL',
                 'reward_description' => 'TEXT DEFAULT NULL',
@@ -100,15 +102,52 @@ class RewardModel extends BaseModel {
         return $result->fetch_all(MYSQLI_ASSOC);
     }
 
+    private function hasThreeRecentRedemptionsAtStore($userId, $donorId) {
+        $userId = (int) $userId;
+        $donorId = (int) $donorId;
+        $result = $this->db->query(
+            "SELECT rc.source_type, dri.donor_id
+             FROM reward_claims rc
+             LEFT JOIN donor_reward_items dri ON dri.item_id = rc.donor_item_id
+             WHERE rc.user_id = {$userId} AND rc.status = 'fulfilled'
+               AND rc.redeemed_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+             ORDER BY rc.redeemed_at DESC, rc.claim_id DESC
+             LIMIT 3"
+        );
+        if (!$result) {
+            throw new RuntimeException('無法檢查商家兌換頻率: ' . $this->db->error);
+        }
+        $rows = $result->fetch_all(MYSQLI_ASSOC);
+        if (count($rows) !== 3) {
+            return false;
+        }
+        foreach ($rows as $row) {
+            if ($row['source_type'] !== 'donor' || (int) $row['donor_id'] !== $donorId) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public function isStoreRedemptionLimited($userId, $itemId) {
+        $itemId = (int) $itemId;
+        $result = $this->db->query("SELECT donor_id FROM donor_reward_items WHERE item_id = {$itemId} LIMIT 1");
+        if (!$result) {
+            throw new RuntimeException('無法檢查商家兌換限制: ' . $this->db->error);
+        }
+        $row = $result ? $result->fetch_assoc() : null;
+        return $row && $this->hasThreeRecentRedemptionsAtStore((int) $userId, (int) $row['donor_id']);
+    }
+
     public function getAvailableRewards() {
         return $this->query(
             "SELECT reward_id AS source_id, 'foodbank' AS source_type, NULL AS source_owner_id, title, description, cost_points, stock,
-                    NULL AS category, NULL AS rule_type, 0 AS min_spend, NULL AS discount_amount, NULL AS discount_rate, NULL AS donor_name
+                    NULL AS category, NULL AS rule_type, 0 AS min_spend, NULL AS retail_price, NULL AS discount_amount, NULL AS discount_rate, NULL AS donor_name
              FROM reward_catalog
              WHERE status = 'active'
              UNION ALL
              SELECT dri.item_id AS source_id, 'donor' AS source_type, dri.donor_id AS source_owner_id, dri.title, dri.description, dri.cost_points, dri.stock,
-                    dri.category, dri.rule_type, dri.min_spend, dri.discount_amount, dri.discount_rate, COALESCE(NULLIF(u.enterprise_name, ''), u.full_name) AS donor_name
+                    dri.category, dri.rule_type, dri.min_spend, dri.retail_price, dri.discount_amount, dri.discount_rate, COALESCE(NULLIF(u.enterprise_name, ''), u.full_name) AS donor_name
              FROM donor_reward_items dri
              JOIN users u ON u.user_id = dri.donor_id
              WHERE dri.status = 'active' AND u.status = 'active' AND u.role = 'member' AND u.member_type = 'enterprise'
@@ -120,7 +159,7 @@ class RewardModel extends BaseModel {
         $result = $this->db->query(
             "SELECT u.user_id AS donor_id, COALESCE(NULLIF(u.enterprise_name, ''), u.full_name) AS donor_name,
                     u.default_pickup_address, u.open_days, u.business_hours, u.closed_days,
-                    dri.item_id, dri.title, dri.description, dri.cost_points, dri.stock, dri.rule_type,
+                    dri.item_id, dri.title, dri.description, dri.cost_points, dri.stock, dri.rule_type, dri.retail_price,
                     dri.min_spend, dri.discount_amount, dri.discount_rate
              FROM donor_reward_items dri
              JOIN users u ON u.user_id = dri.donor_id
@@ -185,6 +224,11 @@ class RewardModel extends BaseModel {
                 return false;
             }
             if ($sourceType === 'donor') {
+                if ($reward['rule_type'] === 'direct_exchange'
+                    && ($reward['retail_price'] === null || (int) $reward['cost_points'] > (int) $reward['retail_price'])) {
+                    Transaction::rollback($this->db);
+                    return false;
+                }
                 $ownerId = (int) $reward['donor_id'];
                 if ($expectedDonorId !== null && $ownerId !== (int) $expectedDonorId) {
                     Transaction::rollback($this->db);
@@ -196,6 +240,10 @@ class RewardModel extends BaseModel {
                 }
                 $owner = $ownerResult->fetch_assoc();
                 if (!$owner || $owner['status'] !== 'active' || $owner['role'] !== 'member' || $owner['member_type'] !== 'enterprise') {
+                    Transaction::rollback($this->db);
+                    return false;
+                }
+                if ($this->hasThreeRecentRedemptionsAtStore($userId, $ownerId)) {
                     Transaction::rollback($this->db);
                     return false;
                 }
@@ -224,11 +272,12 @@ class RewardModel extends BaseModel {
             $minSpend = $sourceType === 'donor' ? (int) $reward['min_spend'] : 'NULL';
             $discountAmount = $sourceType === 'donor' && $reward['discount_amount'] !== null ? (int) $reward['discount_amount'] : 'NULL';
             $discountRate = $sourceType === 'donor' && $reward['discount_rate'] !== null ? "'" . $this->db->real_escape_string($reward['discount_rate']) . "'" : 'NULL';
+            $retailPrice = $sourceType === 'donor' && $reward['retail_price'] !== null ? (int) $reward['retail_price'] : 'NULL';
             $description = $sourceType === 'donor' && $reward['description'] !== null ? "'" . $this->db->real_escape_string($reward['description']) . "'" : 'NULL';
             $stockReserved = $reward['stock'] === null ? 0 : 1;
             $claimCreated = $this->db->query(
-                "INSERT INTO reward_claims (user_id, source_type, reward_id, donor_item_id, title, points_spent, stock_reserved, token_hash, token_value, token_expires_at, rule_type, min_spend, discount_amount, discount_rate, reward_description)
-                 VALUES ({$userId}, '{$sourceType}', " . ($sourceType === 'foodbank' ? $sourceId : 'NULL') . ", " . ($sourceType === 'donor' ? $sourceId : 'NULL') . ", '{$title}', {$cost}, {$stockReserved}, '{$tokenHash}', '{$token}', '{$expiresAt}', {$ruleType}, {$minSpend}, {$discountAmount}, {$discountRate}, {$description})"
+                "INSERT INTO reward_claims (user_id, source_type, reward_id, donor_item_id, title, points_spent, stock_reserved, token_hash, token_value, token_expires_at, rule_type, min_spend, retail_price, discount_amount, discount_rate, reward_description)
+                 VALUES ({$userId}, '{$sourceType}', " . ($sourceType === 'foodbank' ? $sourceId : 'NULL') . ", " . ($sourceType === 'donor' ? $sourceId : 'NULL') . ", '{$title}', {$cost}, {$stockReserved}, '{$tokenHash}', '{$token}', '{$expiresAt}', {$ruleType}, {$minSpend}, {$retailPrice}, {$discountAmount}, {$discountRate}, {$description})"
             );
             if (!$claimCreated) {
                 throw new RuntimeException('建立兌換券失敗');
@@ -472,21 +521,74 @@ class RewardModel extends BaseModel {
             $finalSql = number_format($final, 2, '.', '');
         }
 
-        $currentTime = $this->db->real_escape_string(date('Y-m-d H:i:s'));
-        $tokenHash = $this->db->real_escape_string($claim['token_hash']);
-        $updated = $this->db->query(
-            "UPDATE reward_claims SET status = 'fulfilled', redeemed_at = NOW(), redeemed_by = {$verifierId}, bill_amount = {$billSql}, final_cash_paid = {$finalSql}
-             WHERE claim_id = " . (int) $claim['claim_id'] . " AND token_hash = '{$tokenHash}' AND status = 'pending' AND token_expires_at > '{$currentTime}'"
-        );
-        if ($updated && $this->db->affected_rows === 1) {
-            $this->notifyVolunteerFulfilled((int) $claim['user_id'], $claim['title'], $claim['source_type']);
-            return ['success' => true, 'message' => '兌換完成，憑證已核銷。'];
+        if (!Transaction::begin($this->db)) {
+            error_log('無法開始商家優惠核銷交易');
+            return ['success' => false, 'message' => '核銷失敗，請稍後再試。'];
         }
-        if (!$updated) {
-            error_log('核銷更新失敗: ' . $this->db->error);
+        $rateLimitTriggered = false;
+        try {
+            $userId = (int) $claim['user_id'];
+            $userResult = $this->db->query("SELECT user_id FROM users WHERE user_id = {$userId} FOR UPDATE");
+            if (!$userResult || !$userResult->fetch_assoc()) {
+                throw new RuntimeException('無法鎖定兌換會員。');
+            }
+            $claimId = (int) $claim['claim_id'];
+            $tokenHash = $this->db->real_escape_string($claim['token_hash']);
+            $lockedResult = $this->db->query(
+                "SELECT * FROM reward_claims
+                 WHERE claim_id = {$claimId} AND token_hash = '{$tokenHash}'
+                 FOR UPDATE"
+            );
+            $lockedClaim = $lockedResult ? $lockedResult->fetch_assoc() : null;
+            if (!$lockedClaim || $lockedClaim['status'] !== 'pending' || strtotime($lockedClaim['token_expires_at']) <= time()) {
+                Transaction::rollback($this->db);
+                return ['success' => false, 'message' => '兌換憑證狀態已變更或逾時，請重新掃描。'];
+            }
+
+            $donorId = 0;
+            if ($lockedClaim['source_type'] === 'donor') {
+                $ownerResult = $this->db->query("SELECT donor_id FROM donor_reward_items WHERE item_id = " . (int) $lockedClaim['donor_item_id'] . " LIMIT 1");
+                $owner = $ownerResult ? $ownerResult->fetch_assoc() : null;
+                if (!$owner) {
+                    throw new RuntimeException('無法確認優惠店家。');
+                }
+                $donorId = (int) $owner['donor_id'];
+                if ($this->hasThreeRecentRedemptionsAtStore($userId, $donorId)) {
+                    Transaction::rollback($this->db);
+                    return ['success' => false, 'message' => '同一商家 30 分鐘內已連續核銷 3 次，暫停此店兌換，請稍後再試。'];
+                }
+            }
+
+            $updated = $this->db->query(
+                "UPDATE reward_claims SET status = 'fulfilled', redeemed_at = NOW(), redeemed_by = {$verifierId}, bill_amount = {$billSql}, final_cash_paid = {$finalSql}
+                 WHERE claim_id = {$claimId} AND token_hash = '{$tokenHash}' AND status = 'pending' AND token_expires_at > NOW()"
+            );
+            if (!$updated || $this->db->affected_rows !== 1) {
+                throw new RuntimeException('兌換憑證已變更或核銷更新失敗。');
+            }
+            $rateLimitTriggered = $donorId > 0 && $this->hasThreeRecentRedemptionsAtStore($userId, $donorId);
+            if (!Transaction::commit($this->db)) {
+                throw new RuntimeException('無法儲存核銷交易。');
+            }
+        } catch (Throwable $exception) {
+            Transaction::rollback($this->db);
+            error_log('核銷失敗: ' . $exception->getMessage());
             return ['success' => false, 'message' => '核銷儲存失敗，請稍後再試。'];
         }
-        return ['success' => false, 'message' => '兌換憑證狀態已變更，請重新掃描。'];
+
+        $this->notifyVolunteerFulfilled($userId, $claim['title'], $claim['source_type']);
+        if ($rateLimitTriggered) {
+            $message = $this->db->real_escape_string("會員 #{$userId} 於同一愛心商家 30 分鐘內連續核銷 3 次，系統已限制後續兌換。");
+            if (!$this->db->query(
+                "INSERT INTO notifications (user_id, title, message, type)
+                 SELECT user_id, '商家兌換頻率稽核', '{$message}', 'warning'
+                 FROM users WHERE role = 'foodbank_staff' AND status = 'active'"
+            )) {
+                error_log('商家兌換頻率通知寫入失敗: ' . $this->db->error);
+            }
+            return ['success' => true, 'message' => '兌換完成；同一商家 30 分鐘內已連續核銷 3 次，後續兌換暫停並通知食物銀行稽核。'];
+        }
+        return ['success' => true, 'message' => '兌換完成，憑證已核銷。'];
     }
 
     private function notifyRedemptionCreated($volunteerId, $sourceType, $sourceId, $title, $cost) {
@@ -542,6 +644,7 @@ class RewardModel extends BaseModel {
         $minSpend = $data['min_spend'] ?? 0;
         $amount = $data['discount_amount'] ?? null;
         $rate = $data['discount_rate'] ?? null;
+        $retailPrice = $data['retail_price'] ?? null;
         $integer = static function ($value, $max) {
             return is_scalar($value) && preg_match('/^\d+$/D', (string) $value) && (float) $value <= $max;
         };
@@ -552,14 +655,16 @@ class RewardModel extends BaseModel {
             return false;
         }
         if ($rule === 'direct_exchange') {
-            if ((int) $minSpend !== 0) return false;
+            if ((int) $minSpend !== 0 || !$integer($retailPrice, 99999999) || (int) $retailPrice <= 0 || (int) $cost > (int) $retailPrice) return false;
             $amount = $rate = null;
         } elseif ($rule === 'min_spend_discount') {
+            $retailPrice = null;
             if (!$integer($amount, 2147483647) || (int) $amount !== (int) $cost || (int) $minSpend < (int) $amount) return false;
             $amount = (int) $amount;
             $rate = null;
         } else {
-            if ((int) $minSpend <= 0 || !is_scalar($rate) || !preg_match('/^0\.\d{1,2}$/D', (string) $rate) || (float) $rate < 0.01 || (float) $rate > 0.99) return false;
+            $retailPrice = null;
+            if ((int) $minSpend <= 0 || !is_scalar($rate) || !preg_match('/^0\.\d{1,2}$/D', (string) $rate) || (float) $rate < 0.70 || (float) $rate > 0.95) return false;
             $amount = null;
             $rate = number_format((float) $rate, 2, '.', '');
         }
@@ -571,6 +676,7 @@ class RewardModel extends BaseModel {
             'category' => $category,
             'rule_type' => $rule,
             'min_spend' => (int) $minSpend,
+            'retail_price' => $retailPrice === null ? null : (int) $retailPrice,
             'discount_amount' => $amount,
             'discount_rate' => $rate,
         ];

@@ -29,7 +29,7 @@ function renderStoreList($rewardModel, $params) {
 Transaction::begin($db);
 try {
     $db->query("UPDATE users SET default_pickup_address = '測試店址', open_days = '1,3,5', business_hours = '09:00-18:00', closed_days = '國定假日' WHERE user_id = 11");
-    $base = ['title' => '商家清單測試', 'description' => '使用說明', 'category' => 'discount', 'stock' => null];
+    $base = ['title' => '商家清單測試', 'description' => '使用說明', 'category' => 'discount', 'stock' => null, 'retail_price' => 100];
     $direct = $model->createDonorReward(11, array_replace($base, ['title' => '搜尋測試直換']) + ['rule_type' => 'direct_exchange', 'min_spend' => 0, 'cost_points' => 80]);
     $cash = $model->createDonorReward(11, array_replace($base, ['title' => '搜尋測試折抵']) + ['rule_type' => 'min_spend_discount', 'min_spend' => 100, 'discount_amount' => 20, 'cost_points' => 20]);
     $other = $model->createDonorReward(13, array_replace($base, ['title' => '搜尋測試打折']) + ['rule_type' => 'min_spend_percentage', 'min_spend' => 150, 'discount_rate' => '0.90', 'cost_points' => 15]);

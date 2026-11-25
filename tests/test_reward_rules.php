@@ -10,7 +10,7 @@ function ruleCheck($label, $ok) {
     if (!$ok) $GLOBALS['failed'] = true;
 }
 
-$base = ['title' => '規則測試', 'description' => '', 'category' => 'discount', 'stock' => null];
+$base = ['title' => '規則測試', 'description' => '', 'category' => 'discount', 'stock' => null, 'retail_price' => 100];
 Transaction::begin($db);
 try {
     $db->query("INSERT INTO point_transactions (user_id, points, transaction_type, description) VALUES (12, 1000, 'earned', '規則測試')");
@@ -18,8 +18,12 @@ try {
     ruleCheck('折抵金額必須等於點數', !$model->createDonorReward(11, array_replace($cash, ['cost_points' => 19])));
     ruleCheck('低消不能小於折抵', !$model->createDonorReward(11, array_replace($cash, ['min_spend' => 19])));
     ruleCheck('直換低消必須為零', !$model->createDonorReward(11, $base + ['rule_type' => 'direct_exchange', 'min_spend' => 1, 'cost_points' => 10]));
+    ruleCheck('直換點數不得高於商品售價', !$model->createDonorReward(11, array_replace($base, ['rule_type' => 'direct_exchange', 'min_spend' => 0, 'cost_points' => 101])));
+    ruleCheck('直換必須登記商品售價', !$model->createDonorReward(11, array_replace($base, ['rule_type' => 'direct_exchange', 'min_spend' => 0, 'cost_points' => 10, 'retail_price' => null])));
     $percent = $base + ['rule_type' => 'min_spend_percentage', 'min_spend' => 150, 'discount_rate' => '0.90', 'cost_points' => 15];
     ruleCheck('折扣比例不能為 1', !$model->createDonorReward(11, array_replace($percent, ['discount_rate' => '1.00'])));
+    ruleCheck('折扣比例不得低於七折', !$model->createDonorReward(11, array_replace($percent, ['discount_rate' => '0.69'])));
+    ruleCheck('折扣比例不得高於九五折', !$model->createDonorReward(11, array_replace($percent, ['discount_rate' => '0.96'])));
     ruleCheck('打折必須有低消', !$model->createDonorReward(11, array_replace($percent, ['min_spend' => 0])));
     $item = $model->createDonorReward(11, $cash);
     $otherItem = $model->createDonorReward(13, $percent);
@@ -68,6 +72,8 @@ try {
     $direct = $base + ['rule_type' => 'direct_exchange', 'min_spend' => 0, 'cost_points' => 10];
     $item = $model->createDonorReward(11, $direct);
     $claim = $model->redeem(12, 'donor', $item);
+    $savedRetailPrice = $claim ? $db->query('SELECT retail_price FROM reward_claims WHERE claim_id = ' . (int) $claim['claim_id'])->fetch_assoc() : null;
+    ruleCheck('直換券保存領券時商品售價', $savedRetailPrice && (int) $savedRetailPrice['retail_price'] === 100);
     ruleCheck('直換無需帳單', $claim && $model->fulfillByToken($claim['token'], 11, 'member')['success']);
     $notice = $db->query("SELECT message FROM notifications WHERE user_id = 12 AND title = '心意幣兌換已核銷' ORDER BY notification_id DESC LIMIT 1")->fetch_assoc();
     ruleCheck('商家核銷通知標示愛心商家', $notice && strpos($notice['message'], '愛心商家') !== false);
@@ -77,10 +83,10 @@ try {
     ruleCheck('官辦禮品只能由職員核銷', $claim && !$model->fulfillByToken($claim['token'], 11, 'member')['success']);
     ruleCheck('官辦禮品無需帳單', $claim && $model->fulfillByToken($claim['token'], 3, 'foodbank_staff')['success']);
 
-    $item = $model->createDonorReward(11, array_replace($percent, ['min_spend' => 1, 'discount_rate' => '0.99']));
+    $item = $model->createDonorReward(11, array_replace($percent, ['min_spend' => 1, 'discount_rate' => '0.95']));
     $claim = $model->redeem(12, 'donor', $item, 11);
     ruleCheck('打折金額不超過原帳單', $claim && $model->fulfillByToken($claim['token'], 11, 'member', '1.52')['success']
-        && $db->query('SELECT final_cash_paid FROM reward_claims WHERE claim_id = ' . (int) $claim['claim_id'])->fetch_assoc()['final_cash_paid'] === '1.52');
+        && $db->query('SELECT final_cash_paid FROM reward_claims WHERE claim_id = ' . (int) $claim['claim_id'])->fetch_assoc()['final_cash_paid'] === '1.00');
     ruleCheck('掃碼商家不能兌換其他店家的方案', !$model->redeem(12, 'donor', $item, 13));
     $db->query("UPDATE users SET status = 'inactive' WHERE user_id = 11");
     $catalog = $model->getAvailableRewards();
@@ -128,6 +134,26 @@ try {
     ruleCheck('會員點數明細包含取消退點', (bool) array_filter($history, static function ($entry) {
         return $entry['transaction_type'] === 'adjusted' && (int) $entry['points'] === 10;
     }));
+
+    $db->query("UPDATE reward_claims SET redeemed_at = DATE_SUB(NOW(), INTERVAL 31 MINUTE) WHERE user_id = 12 AND source_type = 'donor' AND status = 'fulfilled'");
+    $rateLimitItem = $model->createDonorReward(11, array_replace($direct, ['stock' => null, 'cost_points' => 10]));
+    $rateLimitClaims = [];
+    for ($i = 0; $i < 4; $i++) {
+        $rateLimitClaims[] = $model->redeem(12, 'donor', $rateLimitItem, 11);
+    }
+    ruleCheck('建立同店 4 張待核銷券', count(array_filter($rateLimitClaims)) === 4);
+    $rateLimitResults = [];
+    for ($i = 0; $i < 3; $i++) {
+        $rateLimitResults[] = $model->fulfillByToken($rateLimitClaims[$i]['token'], 11, 'member');
+    }
+    ruleCheck('同店前 3 次核銷可完成', count(array_filter($rateLimitResults, static function ($result) {
+        return $result['success'];
+    })) === 3);
+    ruleCheck('第 3 次核銷後通知稽核並暫停後續兌換', strpos($rateLimitResults[2]['message'], '暫停') !== false
+        && $model->isStoreRedemptionLimited(12, $rateLimitItem));
+    ruleCheck('已達限制時不能再領取同店優惠', !$model->redeem(12, 'donor', $rateLimitItem, 11));
+    $fourthResult = $model->fulfillByToken($rateLimitClaims[3]['token'], 11, 'member');
+    ruleCheck('限制期間內不能核銷已領取的第 4 張券', !$fourthResult['success'] && strpos($fourthResult['message'], '暫停') !== false);
 } finally {
     Transaction::rollback($db);
 }

@@ -14,7 +14,28 @@ class ActivityModel extends BaseModel {
 
     public function __construct() {
         parent::__construct();
+        if (schemaChecksNeeded()) {
+            $this->ensureAttendanceColumns();
+        }
         $this->syncStatusesByTime();
+    }
+
+    private function ensureAttendanceColumns() {
+        foreach ([
+            'attendance_hours' => 'DECIMAL(5,2) DEFAULT NULL',
+            'attended_at' => 'DATETIME DEFAULT NULL',
+        ] as $column => $definition) {
+            $result = $this->db->query("SHOW COLUMNS FROM activity_assignments LIKE '{$column}'");
+            if (!$result) {
+                throw new RuntimeException("無法檢查 activity_assignments.{$column}: " . $this->db->error);
+            }
+            if ($result->num_rows === 0 && !$this->db->query("ALTER TABLE activity_assignments ADD COLUMN `{$column}` {$definition}")) {
+                throw new RuntimeException("無法新增 activity_assignments.{$column}: " . $this->db->error);
+            }
+        }
+        if (!$this->db->query("UPDATE activity_assignments SET points = 0 WHERE status = 'registered' AND points = 5")) {
+            throw new RuntimeException('無法清除尚未出席活動的預發點數: ' . $this->db->error);
+        }
     }
 
     /**
@@ -158,13 +179,82 @@ class ActivityModel extends BaseModel {
     public function getParticipants($activityId) {
         $activityId = (int) $activityId;
         return $this->query(
-            "SELECT aa.assignment_id, aa.user_id, aa.assignment_type, aa.organization_name, aa.participant_count, aa.status AS assignment_status,
+            "SELECT aa.assignment_id, aa.user_id, aa.assignment_type, aa.organization_name, aa.participant_count,
+                    aa.status AS assignment_status, aa.attendance_hours, aa.points AS awarded_points,
                     u.full_name, u.username, u.email, u.phone
              FROM activity_assignments aa
              JOIN users u ON u.user_id = aa.user_id
              WHERE aa.activity_id = {$activityId} AND aa.status <> 'cancelled'
              ORDER BY aa.created_at ASC"
         );
+    }
+
+    public function recordAttendance($assignmentId, $staffId, $hours) {
+        $assignmentId = (int) $assignmentId;
+        $staffId = (int) $staffId;
+        $hoursText = is_scalar($hours) ? trim((string) $hours) : '';
+        if ($assignmentId <= 0 || $staffId <= 0
+            || !preg_match('/^\d+(?:\.\d{1,2})?$/D', $hoursText)
+            || (float) $hoursText <= 0 || (float) $hoursText > 999.99) {
+            return false;
+        }
+
+        $staffResult = $this->db->query("SELECT 1 FROM users WHERE user_id = {$staffId} AND role = 'foodbank_staff' AND status = 'active' LIMIT 1");
+        if (!$staffResult || $staffResult->num_rows !== 1 || !Transaction::begin($this->db)) {
+            return false;
+        }
+
+        try {
+            $assignmentResult = $this->db->query(
+                "SELECT aa.user_id, aa.assignment_type, aa.status, aa.points, a.title, a.status AS activity_status
+                 FROM activity_assignments aa
+                 JOIN activities a ON a.activity_id = aa.activity_id
+                 WHERE aa.assignment_id = {$assignmentId}
+                 LIMIT 1 FOR UPDATE"
+            );
+            $assignment = $assignmentResult ? $assignmentResult->fetch_assoc() : null;
+            if (!$assignment || $assignment['assignment_type'] !== 'individual'
+                || $assignment['status'] !== 'registered' || $assignment['activity_status'] !== 'completed') {
+                Transaction::rollback($this->db);
+                return false;
+            }
+
+            $hoursHundredths = (int) round((float) $hoursText * 100);
+            $points = intdiv($hoursHundredths * 196 * 15, 10000);
+            $update = $this->db->prepare(
+                "UPDATE activity_assignments
+                 SET status = 'attended', attendance_hours = ?, points = ?, attended_at = NOW()
+                 WHERE assignment_id = ? AND status = 'registered'"
+            );
+            if (!$update) {
+                throw new RuntimeException('無法準備活動出席更新: ' . $this->db->error);
+            }
+            $update->bind_param('dii', $hoursText, $points, $assignmentId);
+            if (!$update->execute() || $update->affected_rows !== 1) {
+                throw new RuntimeException('無法儲存活動出席資料: ' . $update->error);
+            }
+
+            if ($points > 0) {
+                $description = $this->db->real_escape_string(
+                    '公益活動「' . $assignment['title'] . '」出席 ' . number_format($hoursHundredths / 100, 2, '.', '') . ' 小時獎勵'
+                );
+                if (!$this->db->query(
+                    "INSERT INTO point_transactions (user_id, points, transaction_type, description)
+                     VALUES (" . (int) $assignment['user_id'] . ", {$points}, 'earned', '{$description}')"
+                )) {
+                    throw new RuntimeException('無法寫入活動出席點數: ' . $this->db->error);
+                }
+            }
+
+            if (!Transaction::commit($this->db)) {
+                throw new RuntimeException('無法儲存活動出席交易: ' . $this->db->error);
+            }
+            return ['success' => true, 'points' => $points, 'hours' => (float) ($hoursHundredths / 100)];
+        } catch (Throwable $exception) {
+            Transaction::rollback($this->db);
+            error_log('記錄活動出席失敗: ' . $exception->getMessage());
+            return false;
+        }
     }
 
     public function canManageActivity($activityId, $userId, $userRole = null) {
@@ -342,7 +432,7 @@ class ActivityModel extends BaseModel {
                 return false;
             }
 
-            $points = $assignmentType === 'individual' ? 5 : 0;
+            $points = 0;
             $organizationNameEscaped = $organizationName !== null
                 ? "'" . $this->db->real_escape_string($organizationName) . "'"
                 : 'NULL';

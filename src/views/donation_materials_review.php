@@ -223,7 +223,14 @@ $estimateRewardPoints = static function ($donation, $deliveryOption, $splitCount
     $coldResult = $GLOBALS['connection']->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) ($donation['donation_id'] ?? 0) . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
     $isCold = $coldResult && $coldResult->num_rows > 0;
 
-    return DeliveryModel::calculatePoints($vehicleType, $distance, $weight, !empty($donation['is_urgent']) ? 'urgent' : 'normal', $isCold) * $splitCount;
+    $urgency = in_array(($donation['urgency'] ?? ''), ['normal', 'priority', 'urgent'], true)
+        ? $donation['urgency']
+        : (!empty($donation['is_urgent']) ? 'urgent' : 'normal');
+    try {
+        return DeliveryModel::calculatePoints($vehicleType, $distance, $weight, $urgency) * $splitCount;
+    } catch (InvalidArgumentException $exception) {
+        return false;
+    }
 };
 
 $getProcessTime = static function ($donation) {
@@ -278,7 +285,7 @@ $renderPublishSummary = static function ($donation) use ($donationModel, $storag
         ['label' => '最短保存期限', 'value' => $earliestExpiry ?: '未填寫'],
         ['label' => '取貨時間', 'value' => !empty($donation['pickup_deadline']) ? $formatDateTime($donation['pickup_deadline']) : '未填寫'],
         ['label' => '送達地址', 'value' => trim((string) ($donation['delivery_address'] ?? '')) !== '' ? $donation['delivery_address'] : '未填寫', 'wide' => true],
-        ['label' => '緊急運送', 'value' => !empty($donation['is_urgent']) ? '商家申請緊急' : '否'],
+        ['label' => '配送緊急度', 'value' => ['normal' => '一般', 'priority' => '優先', 'urgent' => '緊急'][$donation['urgency'] ?? ''] ?? (!empty($donation['is_urgent']) ? '緊急' : '一般')],
     ]);
     renderDonationPhotos($donation['photo_path'] ?? '', '商家上傳的物資照片');
     ?>
@@ -341,8 +348,8 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
         $info[] = ['label' => '商家備註', 'value' => $donation['notes'], 'wide' => true];
     }
     ?>
-    <?php if (!empty($donation['is_urgent'])): ?>
-        <p class="detail-urgent-badge"><i class="fas fa-bolt"></i> 商家申請緊急運送</p>
+    <?php if (($donation['urgency'] ?? '') === 'urgent' || !empty($donation['is_urgent'])): ?>
+        <p class="detail-urgent-badge"><i class="fas fa-bolt"></i> 商家標示緊急運送</p>
     <?php endif; ?>
     <?php renderDetailInfoGrid($info); ?>
     <?php if (($donation['status'] ?? '') === 'assessed' && $isRejected): ?>
@@ -562,9 +569,7 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                                 <div class="grid-2">
                                 <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                             </div>
-                            <?php if (!empty($viewingDonation['is_urgent'])): ?>
-                            <p class="form-hint"><label><input type="checkbox" name="urgent_approved" value="1" checked> 商家申請緊急運送，同意給予緊急加成（取消勾選則依一般單發放）</label></p>
-                            <?php endif; ?>
+                            <p class="form-hint">商家標示配送緊急度：<?php echo htmlspecialchars(['normal' => '一般', 'priority' => '優先', 'urgent' => '緊急'][$viewingDonation['urgency'] ?? ''] ?? (!empty($viewingDonation['is_urgent']) ? '緊急' : '一般')); ?>。此標示會納入點數稽核。</p>
                             <?php $vehicleDefault = !empty($coldForView) ? 'refrigerated_truck' : 'small_truck'; ?>
                         <div class="publish-options" data-foodbank-only hidden>
                             <strong>忠信派車車種</strong>
@@ -575,8 +580,8 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                             </select></label>
                             <?php if (!empty($coldForView)): ?><span class="form-hint">含冷藏／冷凍物資，建議派冷藏車或冷凍車。</span><?php endif; ?>
                         </div>
-                        <p class="form-hint" data-volunteer-only data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="" data-urgent="<?php echo !empty($viewingDonation['is_urgent']) ? 1 : 0; ?>" data-cold="<?php echo !empty($coldForView) ? 1 : 0; ?>">
-                                預估心意幣：<span data-points-total>請先由食物銀行選擇配送方式</span>（依車型、重量、距離、緊急與冷藏冷凍計算；準時、順路、首次配送加給於完成後另計）
+                        <p class="form-hint" data-volunteer-only data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="" data-urgency="<?php echo htmlspecialchars($viewingDonation['urgency'] ?? (!empty($viewingDonation['is_urgent']) ? 'urgent' : 'normal'), ENT_QUOTES); ?>">
+                                預估心意幣：<span data-points-total>請先由食物銀行選擇配送方式</span>（依減碳公式、車種、物資重量及緊急度計算；Google Maps 預估時間僅用於防弊）
                             </p>
                             <div class="publish-options" data-volunteer-only>
                                 <strong>是否需協助檢查物資</strong>
@@ -608,9 +613,7 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                             <div class="grid-2">
                             <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                         </div>
-                        <?php if (!empty($viewingDonation['is_urgent'])): ?>
-                        <p class="form-hint"><label><input type="checkbox" name="urgent_approved" value="1" checked> 商家申請緊急運送，同意給予緊急加成（取消勾選則依一般單發放）</label></p>
-                        <?php endif; ?>
+                        <p class="form-hint">商家標示配送緊急度：<?php echo htmlspecialchars(['normal' => '一般', 'priority' => '優先', 'urgent' => '緊急'][$viewingDonation['urgency'] ?? ''] ?? (!empty($viewingDonation['is_urgent']) ? '緊急' : '一般')); ?>。此標示會納入點數稽核。</p>
                         <?php $vehicleDefault = !empty($coldForView) ? 'refrigerated_truck' : 'small_truck'; ?>
                         <div class="publish-options" data-foodbank-only hidden>
                             <strong>忠信派車車種</strong>
@@ -621,8 +624,9 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                             </select></label>
                             <?php if (!empty($coldForView)): ?><span class="form-hint">含冷藏／冷凍物資，建議派冷藏車或冷凍車。</span><?php endif; ?>
                         </div>
-                        <p class="form-hint" data-volunteer-only data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-urgent="<?php echo !empty($viewingDonation['is_urgent']) ? 1 : 0; ?>" data-cold="<?php echo !empty($coldForView) ? 1 : 0; ?>" data-default-option="<?php echo htmlspecialchars((string) ($viewingDonation['delivery_option'] ?? ''), ENT_QUOTES); ?>">
-                            預估心意幣：<span data-points-total><?php echo (int) $estimateRewardPoints($viewingDonation, $viewingDonation['delivery_option'] ?? ''); ?> 枚</span>（依車型、重量、距離、緊急與冷藏冷凍計算；準時、順路、首次配送加給於完成後另計）
+                        <?php $pointsEstimate = $estimateRewardPoints($viewingDonation, $viewingDonation['delivery_option'] ?? ''); ?>
+                        <p class="form-hint" data-volunteer-only data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-urgency="<?php echo htmlspecialchars($viewingDonation['urgency'] ?? (!empty($viewingDonation['is_urgent']) ? 'urgent' : 'normal'), ENT_QUOTES); ?>" data-default-option="<?php echo htmlspecialchars((string) ($viewingDonation['delivery_option'] ?? ''), ENT_QUOTES); ?>">
+                            預估心意幣：<span data-points-total><?php echo $pointsEstimate === false ? '重量超過所選車種安全上限，請調整重量或拆單' : (int) $pointsEstimate . ' 枚'; ?></span>（依減碳公式、車種、物資重量及緊急度計算；Google Maps 預估時間僅用於防弊）
                         </p>
                         <div class="publish-options" data-volunteer-only>
                             <strong>是否需協助檢查物資</strong>
@@ -771,17 +775,11 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                 return;
             }
 
-            const calculateTaskPoints = function (vehicle, distance, weight, urgent, cold) {
-                let points = vehicle === 'car' ? 5 : 3;
-                points += weight > 0 ? Math.min(15, 3 * Math.ceil(weight / 5)) : 0;
-                if (distance > 10) {
-                    points += 6;
-                } else if (distance > 5) {
-                    points += 4;
-                } else if (distance > 2) {
-                    points += 2;
-                }
-                return points + (urgent ? 4 : 0) + (cold ? 2 : 0);
+            const calculateTaskPoints = function (vehicle, distance, weight, urgency) {
+                const base = vehicle === 'car' ? 7 : 5;
+                const emissionFactor = vehicle === 'car' ? 0.115 : 0.095;
+                const multiplier = { normal: 1, priority: 1.2, urgent: 1.5 }[urgency];
+                return Math.min(60, Math.floor((base + (weight * 0.34 + distance * emissionFactor) * 3) * multiplier + 1e-9));
             };
             const updatePreview = function () {
                 const selectedOption = form.querySelector('input[name="foodbank_delivery_option"]:checked');
@@ -808,14 +806,18 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                 const vehicle = vehicleInput && vehicleInput.value === 'car' ? 'car' : 'motorcycle';
                 const weightPerTask = Math.max(0, weightInput ? (Number.parseFloat(weightInput.value) || 0) : totalItemWeight) / splitCount;
                 const distance = Math.max(0, Number.parseFloat(preview.dataset.distanceKm || '0') || 0);
-                const urgentApproved = form.querySelector('input[name="urgent_approved"]');
-                const perTask = calculateTaskPoints(vehicle, distance, weightPerTask, preview.dataset.urgent === '1' && (!urgentApproved || urgentApproved.checked), preview.dataset.cold === '1');
+                const maxWeight = vehicle === 'car' ? 50 : 20;
+                if (weightPerTask > maxWeight) {
+                    totalLabel.textContent = `每筆重量 ${weightPerTask.toFixed(2)} kg 超過${vehicle === 'car' ? '汽車' : '機車'} ${maxWeight} kg 安全上限，請拆單`;
+                    return;
+                }
+                const perTask = calculateTaskPoints(vehicle, distance, weightPerTask, preview.dataset.urgency || 'normal');
                 totalLabel.textContent = splitCount > 1
                     ? `每筆約 ${perTask} 枚，共 ${perTask * splitCount} 枚`
                     : `約 ${perTask} 枚`;
             };
 
-            form.querySelectorAll('input[name="urgent_approved"], input[name="foodbank_delivery_option"], input[name="weight_kg"], input[name$="[item_weight_kg]"], input[name="split_count"], input[name="split_enabled"], input[name="vehicle_type"]').forEach(function (input) {
+            form.querySelectorAll('input[name="foodbank_delivery_option"], input[name="weight_kg"], input[name$="[item_weight_kg]"], input[name="split_count"], input[name="split_enabled"], input[name="vehicle_type"]').forEach(function (input) {
                 input.addEventListener('input', updatePreview);
                 input.addEventListener('change', updatePreview);
             });

@@ -44,11 +44,16 @@ try {
     check('別的騎手不能回報送達', !$deliveryModel->markArrivedAtDropoff($deliveryId, $riderId + 99));
     check('回報已送達食物銀行', $deliveryModel->markArrivedAtDropoff($deliveryId, $riderId));
     check('送達不能重複回報', !$deliveryModel->markArrivedAtDropoff($deliveryId, $riderId));
-    // 騎手在預估時間內送到，但食物銀行晚了才確認：仍算準時
+    // 騎手回報時間超出預估時段，送達仍照常確認並留下稽核紀錄。
     $db->query("UPDATE deliveries SET arrived_dropoff_at = NOW() - INTERVAL 2 HOUR, estimated_arrival_end = NOW() - INTERVAL 1 HOUR WHERE delivery_id = {$deliveryId}");
     check('食物銀行確認收貨', $deliveryModel->completeDelivery($deliveryId, $staffId));
-    $earned = $db->query("SELECT description FROM point_transactions WHERE delivery_id = {$deliveryId} AND transaction_type = 'earned' LIMIT 1")->fetch_assoc();
-    check('準時與否看騎手回報送達的時間', $earned && strpos($earned['description'], '準時送達') !== false);
+    $earned = $db->query("SELECT points, description FROM point_transactions WHERE delivery_id = {$deliveryId} AND transaction_type = 'earned' LIMIT 1")->fetch_assoc();
+    $delivery = $db->query("SELECT points FROM deliveries WHERE delivery_id = {$deliveryId}")->fetch_assoc();
+    check('配送點數按發布時計算且於確認收貨後入帳', $earned && $delivery && (int) $earned['points'] === (int) $delivery['points']
+        && strpos($earned['description'], '減碳貢獻公式') !== false);
+    $audit = $db->query("SELECT new_values FROM audit_logs WHERE action_type = 'policy_delivery_anomaly' AND record_id = {$deliveryId} LIMIT 1")->fetch_assoc();
+    check('抵達時間及缺少近期 GPS 會建立待複核稽核紀錄', $audit && strpos($audit['new_values'], '抵達時間超出預估時段') !== false
+        && strpos($audit['new_values'], '沒有有效的近期 GPS') !== false);
     check('已配達的單不能再編輯或刪除', !$deliveryModel->canManageDelivery($deliveryId, $staffId, 'foodbank_staff'));
 
     $row = $db->query("SELECT status, received_confirmed_by FROM deliveries WHERE delivery_id = {$deliveryId}")->fetch_assoc();

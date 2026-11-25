@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/BaseModel.php';
+require_once __DIR__ . '/../helpers/RiderLocationHelper.php';
 
 class DeliveryModel extends BaseModel {
     protected $table = 'deliveries';
@@ -282,13 +283,18 @@ class DeliveryModel extends BaseModel {
         if ($deliveryMethod === 'food_bank') {
             $data['volunteer_id'] = (int) ($data['created_by'] ?? 0);
         }
-        $data['points'] = max(0, $this->calculatePoints(
-            $data['vehicle_type'],
-            (float) $data['total_distance_km'],
-            (float) $data['weight_kg'],
-            $data['urgency'],
-            !empty($data['is_cold_storage'])
-        ));
+        try {
+            $data['points'] = $deliveryMethod === 'volunteer'
+                ? $this->calculatePoints(
+                    $data['vehicle_type'] ?? 'motorcycle',
+                    (float) ($data['total_distance_km'] ?? 0),
+                    (float) ($data['weight_kg'] ?? 0),
+                    $data['urgency'] ?? 'normal'
+                )
+                : 0;
+        } catch (InvalidArgumentException $exception) {
+            return false;
+        }
         $deliveryId = $this->insert($data);
         if (!$deliveryId) {
             return false;
@@ -476,10 +482,10 @@ class DeliveryModel extends BaseModel {
         }
 
         $deliveryId = (int) $deliveryId;
-        $vehicleType = in_array(($data['vehicle_type'] ?? 'motorcycle'), ['car', 'motorcycle'], true) ? $data['vehicle_type'] : 'motorcycle';
+        $vehicleType = $data['vehicle_type'] ?? 'motorcycle';
         $distance = (float) ($data['total_distance_km'] ?? 0);
         $weight = (float) ($data['weight_kg'] ?? 0);
-        $urgency = in_array(($data['urgency'] ?? 'normal'), ['normal', 'priority', 'urgent'], true) ? $data['urgency'] : 'normal';
+        $urgency = $data['urgency'] ?? 'normal';
         $status = in_array(($data['status'] ?? 'open'), ['open', 'claimed', 'arrived_pickup', 'picked_up', 'exception', 'cancelled'], true)
             ? $data['status']
             : 'open';
@@ -494,7 +500,16 @@ class DeliveryModel extends BaseModel {
             return false;
         }
         $donationValue = $donationId === null ? 'NULL' : (string) $donationId;
-        $points = max(0, $this->calculatePoints($vehicleType, $distance, $weight, $urgency));
+        if ($distance < 0 || !is_finite($distance)) {
+            return false;
+        }
+        try {
+            $points = $deliveryMethod === 'volunteer'
+                ? $this->calculatePoints($vehicleType, $distance, $weight, $urgency)
+                : 0;
+        } catch (InvalidArgumentException $exception) {
+            return false;
+        }
         if ($pickupAddress === '' || $deliveryAddress === '') {
             return false;
         }
@@ -564,10 +579,7 @@ class DeliveryModel extends BaseModel {
     public function claimDelivery($deliveryId, $volunteerId) {
         $deliveryId = (int) $deliveryId;
         $volunteerId = (int) $volunteerId;
-        // 順路加給：接單時手上已有幾張進行中的配送單，每多一站 +1 心意幣（最多 +3）
-        $activeResult = $this->db->query("SELECT COUNT(*) AS active_count FROM deliveries WHERE volunteer_id = {$volunteerId} AND delivery_method = 'volunteer' AND status IN ('claimed', 'arrived_pickup', 'picked_up')");
-        $stopBonus = min(3, (int) ($activeResult ? ($activeResult->fetch_assoc()['active_count'] ?? 0) : 0));
-        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed', multi_stop_bonus = {$stopBonus} WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'open'");
+        $updated = $this->db->query("UPDATE deliveries SET volunteer_id = {$volunteerId}, status = 'claimed' WHERE delivery_id = {$deliveryId} AND delivery_method = 'volunteer' AND status = 'open'");
         if ($updated && $this->db->affected_rows > 0) {
             $notifiedCount = $this->notifyUsersByRoles(
                 ['foodbank_staff'],
@@ -741,7 +753,7 @@ class DeliveryModel extends BaseModel {
         $deliveryId = (int) $deliveryId;
         $ownerCondition = ' AND ' . self::COMPLETABLE_CONDITION;
 
-        $result = $this->db->query("SELECT volunteer_id, points, multi_stop_bonus, delivery_method, estimated_arrival_end, arrived_dropoff_at FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
+        $result = $this->db->query("SELECT volunteer_id, points, delivery_method FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} LIMIT 1");
         $delivery = $result ? $result->fetch_assoc() : null;
 
         if (!$delivery) {
@@ -760,7 +772,11 @@ class DeliveryModel extends BaseModel {
                     throw new RuntimeException('無法鎖定配送員帳號。');
                 }
             }
-            $lockedResult = $this->db->query("SELECT volunteer_id, points, multi_stop_bonus, delivery_method, estimated_arrival_end, arrived_dropoff_at FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} FOR UPDATE");
+            $lockedResult = $this->db->query(
+                "SELECT volunteer_id, points, delivery_method, delivery_address, arrived_dropoff_at,
+                        estimated_arrival_start, estimated_arrival_end, pickup_confirmed_at
+                 FROM deliveries WHERE delivery_id = {$deliveryId}{$ownerCondition} FOR UPDATE"
+            );
             $lockedDelivery = $lockedResult ? $lockedResult->fetch_assoc() : null;
             if (!$lockedResult || !$lockedDelivery || (int) $lockedDelivery['volunteer_id'] !== $volunteerId) {
                 throw new RuntimeException('配送任務狀態或配送員已變更。');
@@ -773,33 +789,12 @@ class DeliveryModel extends BaseModel {
                 throw new RuntimeException('配送任務狀態已變更，無法完成行程。');
             }
             $points = (int) $delivery['points'];
-            $bonusNotes = [];
-            // 加給只發給 GO Rider（食物銀行自行配送的單 points 為 0，不發幣）
-            if ($volunteerId > 0 && $points > 0) {
-                // 準時與否看騎手回報送達的時間；騎手沒按「我已送達」時，才用食物銀行確認的時間
-                $arrivedAt = !empty($delivery['arrived_dropoff_at']) ? strtotime($delivery['arrived_dropoff_at']) : time();
-                if (!empty($delivery['estimated_arrival_end']) && strtotime($delivery['estimated_arrival_end']) >= $arrivedAt) {
-                    $points += 1;
-                    $bonusNotes[] = '準時送達 +1';
-                }
-                if ((int) $delivery['multi_stop_bonus'] > 0) {
-                    $points += (int) $delivery['multi_stop_bonus'];
-                    $bonusNotes[] = '順路配送 +' . (int) $delivery['multi_stop_bonus'];
-                }
-                $earnedBefore = $this->db->query("SELECT 1 FROM point_transactions WHERE user_id = {$volunteerId} AND transaction_type = 'earned' AND delivery_id <> {$deliveryId} LIMIT 1 FOR UPDATE");
-                if (!$earnedBefore) {
-                    throw new RuntimeException('無法檢查首次配送加給。');
-                }
-                if ($earnedBefore->num_rows === 0) {
-                    $points += 3;
-                    $bonusNotes[] = '首次配送 +3';
-                }
-            }
-            if ($volunteerId > 0) {
-                $description = $this->db->real_escape_string('完成惜食配送' . ($bonusNotes ? '（' . implode('、', $bonusNotes) . '）' : ''));
+            if ($delivery['delivery_method'] === 'volunteer' && $volunteerId > 0) {
+                $description = $this->db->real_escape_string('完成惜食配送（依減碳貢獻公式計算）');
                 if (!$this->db->query("INSERT INTO point_transactions (user_id, delivery_id, points, transaction_type, description) VALUES ({$volunteerId}, {$deliveryId}, {$points}, 'earned', '{$description}')")) {
                     throw new RuntimeException('無法記錄配送點數。');
                 }
+                $this->auditDeliveryAnomalies($deliveryId, $delivery, $confirmedBy);
             }
             if (!Transaction::commit($this->db)) {
                 throw new RuntimeException('無法儲存配送完成交易。');
@@ -811,9 +806,89 @@ class DeliveryModel extends BaseModel {
         }
         $this->notifyDonorDelivered($deliveryId);
         if ($volunteerId > 0) {
-            $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚心意幣。", 'success');
+            if ($delivery['delivery_method'] === 'volunteer') {
+                $this->notifyUser($volunteerId, '配送已完成', "配送任務 #{$deliveryId} 已確認收貨，獲得 {$points} 枚心意幣。", 'success');
+            }
         }
         return true;
+    }
+
+    private function auditDeliveryAnomalies($deliveryId, array $delivery, $confirmedBy) {
+        $reasons = [];
+        $arrivalTime = !empty($delivery['arrived_dropoff_at']) ? strtotime($delivery['arrived_dropoff_at']) : false;
+        if ($arrivalTime === false) {
+            $reasons[] = '未回報抵達時間';
+        } else {
+            $pickupTime = !empty($delivery['pickup_confirmed_at']) ? strtotime($delivery['pickup_confirmed_at']) : false;
+            if ($pickupTime !== false && $arrivalTime < $pickupTime) {
+                $reasons[] = '抵達時間早於取貨時間';
+            }
+            $arrivalStart = !empty($delivery['estimated_arrival_start']) ? strtotime($delivery['estimated_arrival_start']) : false;
+            $arrivalEnd = !empty($delivery['estimated_arrival_end']) ? strtotime($delivery['estimated_arrival_end']) : false;
+            if ($arrivalStart !== false && $arrivalEnd !== false && ($arrivalTime < $arrivalStart || $arrivalTime > $arrivalEnd)) {
+                $reasons[] = '抵達時間超出預估時段';
+            }
+        }
+
+        $locationTable = $this->db->query("SHOW TABLES LIKE 'rider_locations'");
+        $locationResult = $locationTable && $locationTable->num_rows > 0
+            ? $this->db->query(
+                "SELECT lat, lon, updated_at FROM rider_locations
+                 WHERE volunteer_id = " . (int) $delivery['volunteer_id'] . "
+                   AND updated_at >= DATE_SUB(NOW(), INTERVAL " . RiderLocationHelper::FRESH_SECONDS . " SECOND)
+                 LIMIT 1"
+            )
+            : false;
+        $location = $locationResult ? $locationResult->fetch_assoc() : null;
+        if (!$location) {
+            $reasons[] = '完成配送時沒有有效的近期 GPS 位置';
+        } else {
+            $addressHash = md5(trim((string) $delivery['delivery_address']));
+            $cacheTable = $this->db->query("SHOW TABLES LIKE 'geocode_cache'");
+            $destinationResult = $cacheTable && $cacheTable->num_rows > 0
+                ? $this->db->query(
+                    "SELECT lat, lon FROM geocode_cache WHERE address_hash = '" . $this->db->real_escape_string($addressHash) . "' LIMIT 1"
+                )
+                : false;
+            $destination = $destinationResult ? $destinationResult->fetch_assoc() : null;
+            if ($destination) {
+                $distance = straightLineKm(
+                    ['lat' => (float) $location['lat'], 'lon' => (float) $location['lon']],
+                    ['lat' => (float) $destination['lat'], 'lon' => (float) $destination['lon']]
+                );
+                if ($distance > 1.0) {
+                    $reasons[] = '完成配送時 GPS 距離送達地點超過 1 公里';
+                }
+            }
+        }
+
+        if (!$reasons) {
+            return;
+        }
+        $details = json_encode([
+            'reasons' => $reasons,
+            'arrived_dropoff_at' => $delivery['arrived_dropoff_at'],
+            'estimated_arrival_start' => $delivery['estimated_arrival_start'],
+            'estimated_arrival_end' => $delivery['estimated_arrival_end'],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $actorId = $confirmedBy ? (int) $confirmedBy : null;
+        $stmt = $this->db->prepare(
+            "INSERT INTO audit_logs (user_id, action_type, table_name, record_id, new_values)
+             VALUES (?, 'policy_delivery_anomaly', 'deliveries', ?, ?)"
+        );
+        if (!$stmt) {
+            throw new RuntimeException('無法準備配送異常稽核紀錄: ' . $this->db->error);
+        }
+        $stmt->bind_param('iis', $actorId, $deliveryId, $details);
+        if (!$stmt->execute()) {
+            throw new RuntimeException('無法儲存配送異常稽核紀錄: ' . $stmt->error);
+        }
+        $this->notifyUsersByRoles(
+            ['foodbank_staff'],
+            '配送異常待稽核',
+            '配送任務 #' . (int) $deliveryId . ' 偵測到時間或 GPS 異常，已記錄供食物銀行人員複核。',
+            'warning'
+        );
     }
 
     private function notifyUser($userId, $title, $message, $type) {
@@ -852,27 +927,28 @@ class DeliveryModel extends BaseModel {
         return $notifiedCount;
     }
 
+    public static function maximumWeightForVehicle($vehicle) {
+        return ['motorcycle' => 20.0, 'car' => 50.0][$vehicle] ?? null;
+    }
+
     /**
-     * 心意幣 = 基本（車型）+ 重量 + 距離 + 緊急 + 冷藏冷凍。
-     * 準時、新手、順路加給在接單／完成配送時另外計算（見 finalizeDeliveryCompletion）。
+     * 心意幣 = floor(min(60, [B + (W × 0.34 + D × E) × 3] × U)).
      */
     public static function calculatePoints($vehicle, $distance, $weight, $urgency, $coldStorage = false) {
-        $points = $vehicle === 'car' ? 5 : 3;
-
-        // 重量：每 5 公斤一級，每級 +3，最多 +15
-        $points += $weight > 0 ? min(15, 3 * (int) ceil($weight / 5)) : 0;
-
-        if ($distance > 10) {
-            $points += 6;
-        } elseif ($distance > 5) {
-            $points += 4;
-        } elseif ($distance > 2) {
-            $points += 2;
+        $maximumWeight = self::maximumWeightForVehicle($vehicle);
+        $urgencyMultipliers = ['normal' => 1.0, 'priority' => 1.2, 'urgent' => 1.5];
+        if ($maximumWeight === null
+            || !is_numeric($distance) || !is_finite((float) $distance) || (float) $distance < 0
+            || !is_numeric($weight) || !is_finite((float) $weight)
+            || (float) $weight < 0 || (float) $weight > $maximumWeight
+            || !isset($urgencyMultipliers[$urgency])) {
+            throw new InvalidArgumentException('配送車種、距離、重量或緊急度不符合心意幣計算規範。');
         }
 
-        $points += ['urgent' => 4, 'priority' => 2][$urgency] ?? 0;
-        $points += $coldStorage ? 2 : 0;
-
-        return $points;
+        $basePoints = $vehicle === 'car' ? 7 : 5;
+        $emissionFactor = $vehicle === 'car' ? 0.115 : 0.095;
+        $points = ($basePoints + ((float) $weight * 0.34 + (float) $distance * $emissionFactor) * 3)
+            * $urgencyMultipliers[$urgency];
+        return min(60, (int) floor($points + 1e-9));
     }
 }

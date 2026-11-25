@@ -15,7 +15,7 @@ class RewardEditorTestModel {
             ['source_type' => 'donor', 'source_id' => 2, 'source_owner_id' => 13,
              'title' => '其他店家', 'description' => '', 'category' => 'discount', 'stock' => null,
              'cost_points' => 15, 'rule_type' => 'min_spend_percentage', 'min_spend' => 150,
-             'discount_amount' => null, 'discount_rate' => '0.90'],
+             'retail_price' => null, 'discount_amount' => null, 'discount_rate' => '0.90'],
         ];
     }
 }
@@ -41,13 +41,13 @@ $checks['新增時先顯示三種模板，未選擇前不顯示表單'] =
 foreach (['direct_exchange', 'min_spend_discount', 'min_spend_percentage'] as $template) {
     $html = renderEditor('create', ['template' => $template]);
     $expected = [
-        'direct_exchange' => ['cost_points'],
+        'direct_exchange' => ['cost_points', 'retail_price'],
         'min_spend_discount' => ['min_spend', 'discount_amount'],
         'min_spend_percentage' => ['min_spend', 'cost_points', 'discount_rate'],
     ][$template];
     $ok = strpos($html, 'name="csrf_token"') !== false
         && strpos($html, 'name="rule_type" value="' . $template . '"') !== false;
-    foreach (['cost_points', 'min_spend', 'discount_amount', 'discount_rate'] as $field) {
+    foreach (['cost_points', 'min_spend', 'retail_price', 'discount_amount', 'discount_rate'] as $field) {
         $ok = $ok && ((strpos($html, 'name="' . $field . '"') !== false) === in_array($field, $expected, true));
     }
     $checks[$template . ' 僅顯示對應欄位並包含 CSRF'] = $ok;

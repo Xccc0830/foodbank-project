@@ -117,10 +117,26 @@ function runAllSchemaChecks(mysqli $connection) {
     ensureLoginLockColumns($connection);
 
     $modelDir = dirname(__DIR__) . '/models';
-    foreach (['AdvertisementModel', 'DeliveryModel', 'DonationModel', 'FoodbankProfileModel', 'IdVerificationModel',
+    foreach (['ActivityModel', 'AdvertisementModel', 'DeliveryModel', 'DonationModel', 'FoodbankProfileModel', 'IdVerificationModel',
               'InventoryReceiptModel', 'ItemCategoryModel', 'NotificationModel', 'RewardModel', 'ThanksModel'] as $modelClass) {
         require_once $modelDir . '/' . $modelClass . '.php';
         new $modelClass();
+    }
+
+    if (!$connection->query(
+        "CREATE TABLE IF NOT EXISTS partner_esg_reviews (
+            review_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            donor_id INT NOT NULL,
+            quarter CHAR(7) NOT NULL,
+            status ENUM('certified','not_certified') NOT NULL,
+            review_note TEXT NOT NULL,
+            reviewed_by INT NOT NULL,
+            reviewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_partner_esg_quarter (donor_id, quarter),
+            KEY idx_partner_esg_quarter (quarter)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"
+    )) {
+        throw new RuntimeException('無法建立季度商家 ESG 評估資料表: ' . $connection->error);
     }
 
     $connection->query(

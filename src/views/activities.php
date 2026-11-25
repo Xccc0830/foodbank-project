@@ -77,6 +77,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if (($_POST['action'] ?? '') === 'record_activity_attendance') {
+        if ($currentRole !== 'foodbank_staff') {
+            $message = ['type' => 'error', 'text' => '只有食物銀行人員可以登記活動出席。'];
+        } else {
+            $attendance = $activityModel->recordAttendance(
+                (int) ($_POST['assignment_id'] ?? 0),
+                (int) $currentUser['user_id'],
+                $_POST['attendance_hours'] ?? ''
+            );
+            $message = $attendance
+                ? ['type' => 'success', 'text' => sprintf('已記錄 %.2f 小時出席，依公式獲得 %d 枚心意幣。', $attendance['hours'], $attendance['points'])]
+                : ['type' => 'error', 'text' => '登記失敗；請確認活動已結束、報名尚未簽到，且出席時數有效。'];
+        }
+    }
+
     if (($_POST['action'] ?? '') === 'register_activity') {
         $assignmentType = $isEnterpriseMember ? 'company' : 'individual';
         $organizationName = $assignmentType === 'company'
@@ -230,6 +245,7 @@ foreach ($activities as $index => $activity) {
     if ($activities[$index]['can_view_participants']) {
         $participantList = $activityModel->getParticipants((int) $activity['activity_id']);
         foreach ($participantList as &$participantRow) {
+            $participantRow['activity_status'] = $activity['status'];
             // 參加者資料（電話、遮罩後的身分證）只給食物銀行人員看；活動發起人可能是其他企業，只看得到人數
             $participantRow['employees'] = $currentRole === 'foodbank_staff'
                 ? $activityModel->getEmployees((int) $participantRow['assignment_id'])
@@ -617,6 +633,8 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
 (function () {
     const participantData = <?php echo json_encode($participantLists, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     const canExportRoster = <?php echo $currentRole === 'foodbank_staff' ? 'true' : 'false'; ?>;
+    const canRecordAttendance = <?php echo $currentRole === 'foodbank_staff' ? 'true' : 'false'; ?>;
+    const attendanceCsrfField = <?php echo json_encode(csrfField(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     const modal = document.getElementById('participants-modal');
     const title = document.getElementById('participants-modal-title');
     const body = document.getElementById('participants-modal-body');
@@ -663,7 +681,20 @@ document.querySelectorAll('.activity-type-select').forEach(function (select) {
                                 return '<tr><td>' + escapeHtml(employee.full_name) + '</td><td>' + escapeHtml(employee.phone) + '</td><td>' + escapeHtml(employee.id_number_masked) + '</td></tr>';
                             }).join('') + '</tbody></table>'
                         : '';
-                    return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + headcount + '</span>' + phone + employees + '</div>';
+                    let attendance = '';
+                    if (canRecordAttendance && participant.assignment_type === 'individual' && participant.activity_status === 'completed') {
+                        if (participant.assignment_status === 'registered') {
+                            attendance = '<form method="post" class="activity-attendance-form">' + attendanceCsrfField
+                                + '<input type="hidden" name="action" value="record_activity_attendance">'
+                                + '<input type="hidden" name="assignment_id" value="' + escapeHtml(participant.assignment_id) + '">'
+                                + '<label>實際出席時數（小時）<input type="number" name="attendance_hours" min="0.01" max="999.99" step="0.01" required></label>'
+                                + '<button type="submit" class="btn btn-primary btn-sm">簽到並發點</button></form>';
+                        } else if (participant.assignment_status === 'attended') {
+                            attendance = '<p>已簽到 ' + escapeHtml(participant.attendance_hours) + ' 小時，獲得 '
+                                + escapeHtml(participant.awarded_points) + ' 枚心意幣。</p>';
+                        }
+                    }
+                    return '<div class="participant-item"><strong>' + name + '</strong><span>' + type + organization + headcount + '</span>' + phone + employees + attendance + '</div>';
             }
             function renderGroup(titleText, group) {
                 return group.length
