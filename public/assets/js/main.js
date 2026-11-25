@@ -810,7 +810,9 @@
                 .then(function (response) {
                     return response.json().then(function (data) {
                         if (!response.ok) {
-                            throw new Error(data.error || '辨識失敗');
+                            var detail = data.detail ? '（' + data.detail + '）' : '';
+                            var model = data.model ? '［模型：' + data.model + '］' : '';
+                            throw new Error((data.error || '辨識失敗') + detail + model);
                         }
                         return data;
                     });

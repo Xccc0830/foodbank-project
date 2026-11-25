@@ -27,6 +27,7 @@ app = FastAPI(title="Foodbank Local Material Vision")
 OLLAMA_URL = os.getenv("FOODBANK_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
 VISION_MODEL = os.getenv("FOODBANK_VISION_MODEL", "gemma3:12b")
 FAST_VISION_MODEL = os.getenv("FOODBANK_FAST_VISION_MODEL", "gemma3:4b")
+DEFAULT_FAST_VISION_MODEL = "gemma3:4b"
 OLLAMA_TIMEOUT = float(os.getenv("FOODBANK_OLLAMA_TIMEOUT", "90"))
 FAST_OLLAMA_TIMEOUT = float(os.getenv("FOODBANK_FAST_OLLAMA_TIMEOUT", "45"))
 OLLAMA_KEEP_ALIVE = os.getenv("FOODBANK_OLLAMA_KEEP_ALIVE", "30m")
@@ -41,6 +42,32 @@ MAX_RESPONSE_ITEMS = 100
 OCR_ENABLED = os.getenv("FOODBANK_OCR_ENABLED", "true").lower() not in {"0", "false", "no"}
 _analysis_lock = threading.Lock()
 _detected_model = None
+_detected_fast_model = None
+
+
+def get_installed_vision_models():
+    try:
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
+        with urllib.request.urlopen(req, timeout=3) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict) or not isinstance(data.get("models"), list):
+        return []
+    return [model for model in data["models"] if isinstance(model, dict)]
+
+
+def find_installed_vision_model(candidates):
+    installed = get_installed_vision_models()
+    installed_names = [model.get("name") for model in installed]
+    for candidate in candidates:
+        if candidate in installed_names:
+            return candidate
+    for model in installed:
+        capabilities = model.get("capabilities")
+        if isinstance(capabilities, list) and "vision" in capabilities:
+            return model.get("name")
+    return None
 
 
 def get_preferred_vision_model():
@@ -50,23 +77,25 @@ def get_preferred_vision_model():
         return configured
     if _detected_model:
         return _detected_model
-    try:
-        req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
-        with urllib.request.urlopen(req, timeout=3) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            installed_names = [m.get("name") for m in data.get("models", [])]
-            for candidate in ["gemma3:12b", "gemma4:latest", "llava:7b"]:
-                if candidate in installed_names:
-                    _detected_model = candidate
-                    return candidate
-            for m in data.get("models", []):
-                if "vision" in m.get("capabilities", []):
-                    _detected_model = m.get("name")
-                    return _detected_model
-    except Exception:
-        pass
-    _detected_model = VISION_MODEL
-    return _detected_model
+    _detected_model = find_installed_vision_model(
+        ["gemma3:12b", "gemma4:latest", "llava:7b"]
+    )
+    return _detected_model or VISION_MODEL
+
+
+def get_preferred_fast_vision_model():
+    global _detected_fast_model
+    configured = os.getenv("FOODBANK_FAST_VISION_MODEL")
+    if configured:
+        return configured
+    if FAST_VISION_MODEL != DEFAULT_FAST_VISION_MODEL:
+        return FAST_VISION_MODEL
+    if _detected_fast_model:
+        return _detected_fast_model
+    _detected_fast_model = find_installed_vision_model(
+        ["gemma3:4b", "gemma4:latest", "llava:7b"]
+    )
+    return _detected_fast_model or FAST_VISION_MODEL
 
 
 if MAX_ANALYSIS_PASSES not in {2, 3}:
@@ -86,10 +115,11 @@ BASE_PROMPT = (
     "4) 遮擋與雜物排除：被完全遮蔽、模糊無法確認、反光倒影、包裝空袋、提袋、瓦楞紙箱本體等非食品，一律嚴格排除；"
     "5) 品名精確度：物資名稱請使用精準繁體中文（如「白米」、「燕麥片」、「鮪魚罐頭」、「麵條」、「保久乳」、「食用油」），若有文字標示，請提取其主要物資名稱；"
     "6) 信心度客觀評定：畫面清晰、數量輪廓完全明確時給予 0.95~1.00；若有輕度反光或角度遮擋但可確認物資時給予 0.85~0.94；難以確定者直接排除不猜測。"
-    "最後請回覆嚴格 JSON 格式："
-    '{"contains_donatable_food":布林值,'
-    '"items":[{"name":"中文品名","quantity":正整數,"unit":"標準單位"}],'
-    '"confidence":0到1的小數}。'
+    "最後只回覆一個符合 JSON schema 的 JSON 物件，不要輸出說明或 Markdown。"
+    "回覆範例："
+    '{"contains_donatable_food":true,"items":[{"name":"白米","quantity":2,"unit":"包"}],"confidence":0.97}'
+    "；沒有可確認食品時回覆："
+    '{"contains_donatable_food":false,"items":[],"confidence":0.0}。'
 )
 
 ANALYSIS_PROMPTS = (
@@ -151,6 +181,10 @@ PACKAGE_COUNT_SCHEMA = {
 
 
 class VisionModelError(RuntimeError):
+    pass
+
+
+class InvalidVisionResponseError(VisionModelError):
     pass
 
 
@@ -279,7 +313,17 @@ def _request_ollama(payload, timeout):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
-        raise VisionModelError(f"Ollama 回覆 HTTP {error.code}") from error
+        detail = ""
+        try:
+            error_result = json.loads(error.read().decode("utf-8"))
+            if isinstance(error_result, dict):
+                detail = str(error_result.get("error") or "")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            pass
+        message = f"Ollama 回覆 HTTP {error.code}"
+        if detail:
+            message += f"：{detail}"
+        raise VisionModelError(message) from error
     except urllib.error.URLError as error:
         raise VisionModelError("無法連線到本機 Ollama") from error
     except TimeoutError as error:
@@ -292,16 +336,16 @@ def _request_ollama(payload, timeout):
     if result.get("error"):
         raise VisionModelError(f"Ollama 模型錯誤：{result['error']}")
 
-    response_text = result.get("response") or ""
-    if not response_text.strip() and result.get("thinking"):
-        response_text = result["thinking"]
-    if not response_text.strip():
-        raise VisionModelError("Ollama 未回傳可解析的辨識文字")
+    response_text = result.get("response")
+    if not isinstance(response_text, str) or not response_text.strip():
+        raise InvalidVisionResponseError("Ollama 未回傳可解析的辨識文字")
 
     try:
         return _safe_parse_json(response_text)
     except (json.JSONDecodeError, ValueError) as error:
-        raise VisionModelError(f"視覺模型未回傳有效 JSON ({error})") from error
+        raise InvalidVisionResponseError(
+            f"視覺模型未回傳有效 JSON ({error})"
+        ) from error
 
 
 def analyze_with_ollama(
@@ -322,6 +366,7 @@ def analyze_with_ollama(
             for image_bytes in image_variants
         ],
         "stream": False,
+        "think": False,
         "keep_alive": OLLAMA_KEEP_ALIVE,
         "format": RESPONSE_SCHEMA,
         "options": {
@@ -332,10 +377,23 @@ def analyze_with_ollama(
             "top_p": 0.9,
         },
     }
-    try:
-        return normalize_analysis(_request_ollama(payload, timeout))
-    except ValueError as error:
-        raise VisionModelError(f"視覺模型未依要求回傳有效 JSON ({error})") from error
+    for attempt in range(2):
+        request_payload = payload
+        if attempt:
+            request_payload = {
+                **payload,
+                "prompt": payload["prompt"] + (
+                    "\n上一個回覆不是有效 JSON。請重新檢視圖片，只輸出一個符合 schema "
+                    "的 JSON 物件；布林值使用 true/false，數量使用整數，不要有任何其他文字。"
+                ),
+            }
+        try:
+            response = _request_ollama(request_payload, timeout)
+            return normalize_analysis(response)
+        except (InvalidVisionResponseError, ValueError) as error:
+            if attempt == 0:
+                continue
+            raise VisionModelError(f"格式修正重試後仍失敗：{error}") from error
 
 
 def count_item_packages(image_variants, item_name, vision_model=None, timeout=None):
@@ -359,6 +417,7 @@ def count_item_packages(image_variants, item_name, vision_model=None, timeout=No
             for image_bytes in image_variants
         ],
         "stream": False,
+        "think": False,
         "keep_alive": OLLAMA_KEEP_ALIVE,
         "format": PACKAGE_COUNT_SCHEMA,
         "options": {
@@ -367,15 +426,28 @@ def count_item_packages(image_variants, item_name, vision_model=None, timeout=No
         },
     }
 
-    try:
-        result = _request_ollama(payload, timeout or OLLAMA_TIMEOUT)
-    except VisionModelError:
-        raise
-
-    count = result.get("count") if isinstance(result, dict) else None
-    if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 10000:
-        raise VisionModelError("包裝數量複核未回傳有效整數")
-    return count
+    for attempt in range(2):
+        request_payload = payload
+        if attempt:
+            request_payload = {
+                **payload,
+                "prompt": payload["prompt"] + (
+                    " The previous response was invalid. Recheck the image and return "
+                    "only one JSON object with a non-negative integer count; no reasoning or markdown."
+                ),
+            }
+        try:
+            result = _request_ollama(request_payload, timeout or OLLAMA_TIMEOUT)
+            count = result.get("count") if isinstance(result, dict) else None
+            if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 10000:
+                raise InvalidVisionResponseError(
+                    "包裝數量複核未回傳有效整數"
+                )
+            return count
+        except InvalidVisionResponseError as error:
+            if attempt == 0:
+                continue
+            raise VisionModelError(f"包裝數量複核格式修正重試後失敗：{error}") from error
 
 
 def _is_milk_variant(item_name):
@@ -399,7 +471,7 @@ def _safe_parse_json(text):
 def _analysis_profile(profile):
     if profile == "fast":
         return {
-            "model": FAST_VISION_MODEL,
+            "model": get_preferred_fast_vision_model(),
             "timeout": FAST_OLLAMA_TIMEOUT,
             "max_passes": FAST_ANALYSIS_PASSES,
             "ocr_enabled": False,
@@ -477,7 +549,7 @@ def analyze_batch(prepared_images, profile="strict"):
                     count_checks.append(count_item_packages(
                         image_variant,
                         item["name"],
-                        vision_model=get_preferred_vision_model(),
+                        vision_model=config["model"],
                     ))
             except VisionModelError as error:
                 errors.append(f"物資數量複核失敗：{error}")
@@ -517,7 +589,7 @@ def health():
     return {
         "status": "ok",
         "model": get_preferred_vision_model(),
-        "fast_model": FAST_VISION_MODEL,
+        "fast_model": get_preferred_fast_vision_model(),
         "max_images": MAX_IMAGES,
         "max_passes": MAX_ANALYSIS_PASSES,
         "minimum_confidence": MIN_RESULT_CONFIDENCE,

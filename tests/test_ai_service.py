@@ -1,4 +1,5 @@
 import io
+import json
 import unittest
 from unittest.mock import patch
 
@@ -64,7 +65,7 @@ class ImageAnalysisTests(unittest.TestCase):
         }]
         with patch.object(app, "analyze_with_ollama", side_effect=analyses), \
                 patch.object(app, "count_item_packages", side_effect=[8, 8]), \
-                patch.object(app, "get_preferred_vision_model", return_value="gemma3:test"):
+                patch.object(app, "get_preferred_fast_vision_model", return_value="gemma3:test"):
             accepted, uncertain, _, _ = app.analyze_batch(prepared, profile="fast")
 
         self.assertEqual(len(accepted), 1)
@@ -88,7 +89,7 @@ class ImageAnalysisTests(unittest.TestCase):
         }]
         with patch.object(app, "analyze_with_ollama", side_effect=analyses), \
                 patch.object(app, "count_item_packages", side_effect=[8, 7]), \
-                patch.object(app, "get_preferred_vision_model", return_value="gemma3:test"):
+                patch.object(app, "get_preferred_fast_vision_model", return_value="gemma3:test"):
             accepted, uncertain, _, _ = app.analyze_batch(prepared, profile="fast")
 
         self.assertEqual(accepted, [])
@@ -249,6 +250,127 @@ class ImageAnalysisTests(unittest.TestCase):
             {"gemma3:test-fast"},
         )
         self.assertEqual(uncertain[0]["observed_quantities"], [1, 2])
+
+    def test_fast_profile_falls_back_to_an_installed_vision_model(self):
+        response = io.BytesIO(b'{"models":['
+                              b'{"name":"gemma4:latest","capabilities":["vision"]},'
+                              b'{"name":"llama3.1:8b","capabilities":["completion"]}'
+                              b']}')
+        with patch.object(app, "FAST_VISION_MODEL", "gemma3:4b"), \
+                patch.object(app, "_detected_fast_model", None), \
+                patch.object(app.urllib.request, "urlopen", return_value=response):
+            profile = app._analysis_profile("fast")
+
+        self.assertEqual(profile["model"], "gemma4:latest")
+
+    def test_fast_profile_honors_an_explicit_model(self):
+        with patch.dict("os.environ", {"FOODBANK_FAST_VISION_MODEL": "custom:vision"}), \
+                patch.object(app.urllib.request, "urlopen") as urlopen:
+            profile = app._analysis_profile("fast")
+
+        self.assertEqual(profile["model"], "custom:vision")
+        urlopen.assert_not_called()
+
+    def test_ollama_http_error_keeps_the_model_failure_detail(self):
+        http_error = app.urllib.error.HTTPError(
+            "http://127.0.0.1:11434/api/generate",
+            404,
+            "Not Found",
+            {},
+            io.BytesIO(b'{"error":"model gemma3:4b not found"}'),
+        )
+        with patch.object(app.urllib.request, "urlopen", side_effect=http_error):
+            with self.assertRaisesRegex(
+                app.VisionModelError,
+                "model gemma3:4b not found",
+            ):
+                app._request_ollama({}, 1)
+
+    def test_analysis_prompt_contains_valid_json_example(self):
+        example = app.BASE_PROMPT.split("回覆範例：", 1)[1].split("；", 1)[0]
+
+        parsed = json.loads(example)
+
+        self.assertIs(parsed["contains_donatable_food"], True)
+        self.assertEqual(parsed["items"][0]["quantity"], 2)
+
+    def test_invalid_ollama_json_is_classified_as_retryable(self):
+        response = io.BytesIO(b'{"response":"{not valid json"}')
+        with patch.object(app.urllib.request, "urlopen", return_value=response):
+            with self.assertRaises(app.InvalidVisionResponseError):
+                app._request_ollama({}, 1)
+
+    def test_analysis_retries_once_when_model_returns_invalid_json(self):
+        responses = [
+            app.InvalidVisionResponseError("格式錯誤"),
+            {
+                "contains_donatable_food": True,
+                "items": [{"name": "白米", "quantity": 2, "unit": "包"}],
+                "confidence": 0.97,
+            },
+        ]
+        with patch.object(app, "_request_ollama", side_effect=responses) as request:
+            analysis = app.analyze_with_ollama(
+                [b"prepared image"],
+                0,
+                [],
+                vision_model="gemma4:test",
+                timeout=20,
+            )
+
+        self.assertEqual(request.call_count, 2)
+        first_payload = request.call_args_list[0].args[0]
+        retry_payload = request.call_args_list[1].args[0]
+        self.assertIs(first_payload["think"], False)
+        self.assertIn("上一個回覆不是有效 JSON", retry_payload["prompt"])
+        self.assertEqual(analysis["items"], [
+            {"name": "白米", "quantity": 2, "unit": "包"},
+        ])
+
+    def test_analysis_retries_when_json_is_missing_required_fields(self):
+        valid_response = {
+            "contains_donatable_food": True,
+            "items": [{"name": "白米", "quantity": 2, "unit": "包"}],
+            "confidence": 0.97,
+        }
+        with patch.object(
+            app,
+            "_request_ollama",
+            side_effect=[{"confidence": 0.97}, valid_response],
+        ) as request:
+            analysis = app.analyze_with_ollama(
+                [b"prepared image"],
+                0,
+                [],
+                vision_model="gemma4:test",
+                timeout=20,
+            )
+
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(analysis["items"][0]["name"], "白米")
+
+    def test_package_count_disables_thinking_and_retries_bad_json(self):
+        with patch.object(
+            app,
+            "_request_ollama",
+            side_effect=[
+                app.InvalidVisionResponseError("沒有有效 JSON"),
+                {"count": 8},
+            ],
+        ) as request:
+            count = app.count_item_packages(
+                [b"prepared image"],
+                "牛奶",
+                vision_model="gemma4:test",
+                timeout=20,
+            )
+
+        self.assertEqual(count, 8)
+        self.assertEqual(request.call_count, 2)
+        first_payload = request.call_args_list[0].args[0]
+        retry_payload = request.call_args_list[1].args[0]
+        self.assertIs(first_payload["think"], False)
+        self.assertIn("previous response was invalid", retry_payload["prompt"])
 
     def test_strict_profile_keeps_third_audit_pass_on_disagreement(self):
         analyses = [

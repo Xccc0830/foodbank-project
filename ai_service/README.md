@@ -7,6 +7,14 @@
 
 ## 安裝
 
+macOS / Linux：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r ai_service/requirements.txt
+```
+
 Windows PowerShell：
 
 ```powershell
@@ -24,6 +32,15 @@ ollama pull gemma3:4b
 
 ## 啟動
 
+macOS / Linux：
+
+```bash
+source .venv/bin/activate
+uvicorn ai_service.app:app --host 127.0.0.1 --port 8001
+```
+
+Windows PowerShell：
+
 ```powershell
 .\.venv\Scripts\Activate.ps1
 uvicorn ai_service.app:app --host 127.0.0.1 --port 8001
@@ -34,6 +51,10 @@ uvicorn ai_service.app:app --host 127.0.0.1 --port 8001
 ```powershell
 curl.exe http://127.0.0.1:8001/health
 ```
+
+若 `gemma3:4b` 或 `gemma3:12b` 尚未安裝，服務會自動改用 Ollama
+已安裝的其他視覺模型；明確設定 `FOODBANK_FAST_VISION_MODEL` 或
+`FOODBANK_VISION_MODEL` 時則固定使用指定模型。
 
 ## 精準度策略
 

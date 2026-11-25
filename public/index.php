@@ -502,11 +502,29 @@ if ($action === 'material_image_analyze' && $_SERVER['REQUEST_METHOD'] === 'POST
     $curlError = curl_error($ch);
     curl_close($ch);
 
-    if ($response === false || $status !== 200) {
+    if ($response === false) {
         http_response_code(502);
         echo json_encode([
             'error' => '本地影像辨識服務未啟動或無法回應',
             'detail' => $curlError !== '' ? $curlError : null,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($status !== 200) {
+        $analysisError = json_decode($response, true);
+        $analysisErrors = is_array($analysisError) && is_array($analysisError['errors'] ?? null)
+            ? $analysisError['errors']
+            : [];
+        http_response_code($status >= 400 && $status <= 599 ? $status : 502);
+        echo json_encode([
+            'error' => is_array($analysisError) && !empty($analysisError['error'])
+                ? $analysisError['error']
+                : '本地影像辨識服務回傳錯誤',
+            'detail' => $analysisErrors !== []
+                ? implode('；', $analysisErrors)
+                : null,
+            'model' => is_array($analysisError) ? ($analysisError['model'] ?? null) : null,
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
