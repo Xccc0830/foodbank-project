@@ -18,6 +18,7 @@ from ai_service.analysis import (
     normalize_analysis,
     reconcile_analyses,
     refine_item_names_from_ocr,
+    suggest_donation_fields,
 )
 from ai_service.ocr import extract_text_hints
 
@@ -105,28 +106,32 @@ Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 BASE_PROMPT = (
     "你是食物銀行物資盤點的高精度品管主任。請以最嚴謹的盤點標準，將所有照片視為同一批捐贈物資進行精準識別。"
-    "【食品真確性檢驗】判斷 contains_donatable_food：只有照片中明確包含可食用的包裝食品、乾貨、罐頭、生鮮或飲品才為 true；"
+    "【食品真確性檢驗】判斷 contains_donatable_food：只要照片中明確包含可食用的包裝食品、乾貨、罐頭、生鮮食材、烘焙食品（如麵包、餐包、吐司）或飲品，即為 true；"
     "若為人物、車輛、建築、儀表、文件、螢幕、空容器或無可食用物資之場景，必須設為 false 且 items 保持空陣列 []。"
-    "【重要】雞蛋是可食用食材，蛋盒只是容器。只要能清楚看到蛋體，就列出「雞蛋」；"
-    "逐排、由左到右逐顆計數，後排露出一半以上的蛋也要算。沒有看到雞蛋時不可憑空列出。"
+    "【重要品類規範】"
+    "1) 雞蛋：蛋盒只是容器，只要看到蛋體就列出「雞蛋」，單位用「顆」；由左到右逐排（含前後排）逐顆計數，沒有看到雞蛋時不可憑空列出。"
+    "2) 麵包／餐包：烤盤或架上的散裝麵包／小餐包屬於可捐贈烘焙食品，品名請用「麵包」或「餐包」，單位用「顆」，逐排清點每顆實體（邊緣露出一半以上也計入）。"
+    "3) 鮮乳／牛奶：紙盒裝或塑膠瓶裝的液態鮮乳／牛奶／保久乳，請統一標記品名為「牛奶」（不可誤寫為「乳粉」或「奶粉」）；若整批皆為鮮乳（含盒裝與瓶裝），請合併計算總數量。"
+    "4) 多品項合照：請逐一讀取包裝上的繁體中文品名（如「白米」、「麵條」、「燕麥片」、「餅乾」、「肉醬罐頭」、「牛奶」），未在畫面中出現的品項嚴禁憑空猜測。"
     "【跨視角防重計】多張照片若為同一組物資之不同拍攝角度或局部特寫，必須合併判定，嚴禁重複疊加數量。"
     "【高精度計數與盤點規範】"
     "1) 空間定位盤點：由前向後、由左至右逐排清點實體物件，建立精確視覺定位，不遺漏、不虛報；"
     "2) 單位與包裝層級：封箱完整且標有箱裝數量的整箱物資單位請用「箱」；已開箱或散裝擺放的物資，請清點獨立實體（罐、瓶、包、盒、袋、顆）；不可同時計算外箱又累計箱內散裝；"
-    "3) 個體計數精度：罐頭（罐）、瓶裝水/油（瓶）、袋裝米/粉/麵（包或袋）、利樂包/紙盒食品（盒）、散裝雞蛋（顆，露出一半以上實體才計，嚴禁把空格、包裝圖案、倒影算入）；"
+    "3) 個體計數精度：罐頭（罐）、瓶裝水/油（瓶）、袋裝米/粉/麵（包或袋）、利樂包/紙盒食品（盒）、散裝雞蛋或餐包（顆，露出一半以上實體才計，嚴禁把空格、包裝圖案、倒影算入）；"
     "4) 遮擋與雜物排除：被完全遮蔽、模糊無法確認、反光倒影、包裝空袋、提袋、瓦楞紙箱本體等非食品，一律嚴格排除；"
-    "5) 品名精確度：物資名稱請使用精準繁體中文（如「白米」、「燕麥片」、「鮪魚罐頭」、「麵條」、「保久乳」、「食用油」），若有文字標示，請提取其主要物資名稱；"
-    "6) 信心度客觀評定：畫面清晰、數量輪廓完全明確時給予 0.95~1.00；若有輕度反光或角度遮擋但可確認物資時給予 0.85~0.94；難以確定者直接排除不猜測。"
+    "5) 品名精確度：物資名稱請使用精準繁體中文（如「白米」、「燕麥片」、「鮪魚罐頭」、「肉醬罐頭」、「麵條」、「牛奶」、「麵包」、「雞蛋」、「餅乾」），若有文字標示，請提取其主要物資名稱；"
+    "6) 保存與包裝建議：依物資特性提供 storage（room=常溫, chilled=冷藏, frozen=冷凍）與 package_status（sealed=原包裝未拆封, opened=已拆封或無包裝散裝）；"
+    "7) 信心度客觀評定：畫面清晰、數量輪廓完全明確時給予 0.95~1.00；若有輕度反光或角度遮擋但可確認物資時給予 0.85~0.94；難以確定者直接排除不猜測。"
     "最後只回覆一個符合 JSON schema 的 JSON 物件，不要輸出說明或 Markdown。"
     "回覆範例："
-    '{"contains_donatable_food":true,"items":[{"name":"白米","quantity":2,"unit":"包"}],"confidence":0.97}'
+    '{"contains_donatable_food":true,"items":[{"name":"白米","quantity":2,"unit":"包","storage":"room","package_status":"sealed"}],"confidence":0.97}'
     "；沒有可確認食品時回覆："
     '{"contains_donatable_food":false,"items":[],"confidence":0.0}。'
 )
 
 ANALYSIS_PROMPTS = (
-    BASE_PROMPT + "【第 1 輪：標準全景細緻盤點】請仔細清點每一項可見物資的正確名稱、數量與單位。",
-    BASE_PROMPT + "【第 2 輪：邊緣對比反向查核】請由不同視角/邊緣獨立重新查核，嚴格剔除陰影、反光、重疊與非食品物件。",
+    BASE_PROMPT + "【第 1 輪：標準全景細緻盤點】請仔細清點每一項可見物資的正確名稱、數量、單位與保存／包裝建議。",
+    BASE_PROMPT + "【第 2 輪：獨立複核計數】請獨立重新清點每項實體食品的名稱、數量與單位，確認沒有漏算（如後排雞蛋或邊緣品項）也沒有把倒影或空位算入。",
     BASE_PROMPT + "【第 3 輪：最保守一致性稽核】僅確認前兩輪完全吻合且邊界清晰無爭議的物資品項與最終數量。",
 )
 
@@ -150,6 +155,14 @@ RESPONSE_SCHEMA = {
                         "type": "string",
                         "enum": ["顆", "盒", "罐", "包", "袋", "瓶", "箱", "份", "件", "組"],
                     },
+                    "storage": {
+                        "type": "string",
+                        "enum": ["room", "chilled", "frozen"],
+                    },
+                    "package_status": {
+                        "type": "string",
+                        "enum": ["sealed", "opened"],
+                    },
                 },
             },
         },
@@ -170,6 +183,7 @@ PACKAGE_COUNT_LABELS = {
     "食用油": "cooking oil bottles",
     "醬油": "soy sauce bottles",
     "鮪魚罐頭": "cans of tuna",
+    "麵包": "bread buns or rolls",
 }
 
 PACKAGE_COUNT_SCHEMA = {
@@ -573,6 +587,17 @@ def analyze_batch(prepared_images, profile="strict"):
                     item["observed_quantities"] = count_checks
                     item["reason"] = "獨立物件計數結果不一致，請人工核對照片"
                     uncertain.append(item)
+
+        for entry in items + uncertain:
+            suggested_storage, suggested_package = suggest_donation_fields(
+                entry.get("name"),
+                entry.get("unit"),
+                entry.get("storage"),
+                entry.get("package_status"),
+            )
+            entry["storage"] = suggested_storage
+            entry["package_status"] = suggested_package
+
         return items, uncertain, len(passes), errors
 
 

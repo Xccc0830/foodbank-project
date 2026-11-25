@@ -23,10 +23,13 @@ NAME_ALIASES = {
     "rice": "白米",
     "白飯": "白米",
     "米": "白米",
+    "大米": "白米",
     "白米飯": "白米",
     "糙米": "白米",
     "noodles": "麵條",
     "麵": "麵條",
+    "乾麵": "麵條",
+    "蒸煮麵": "麵條",
     "意麵": "麵條",
     "拉麵": "麵條",
     "關廟麵": "麵條",
@@ -37,6 +40,8 @@ NAME_ALIASES = {
     "即食麵": "泡麵",
     "燕麥": "燕麥片",
     "麥片": "燕麥片",
+    "五穀粥": "燕麥片",
+    "山藥五穀粥": "燕麥片",
     "oats": "燕麥片",
     "oatmeal": "燕麥片",
     "食用油": "食用油",
@@ -49,15 +54,25 @@ NAME_ALIASES = {
     "砂糖": "砂糖",
     "糖": "砂糖",
     "鮪魚罐頭": "鮪魚罐頭",
+    "肉醬": "肉醬罐頭",
     "肉醬罐頭": "肉醬罐頭",
     "鯖魚罐頭": "鯖魚罐頭",
     "玉米罐頭": "玉米罐頭",
     "魚罐頭": "罐頭",
     "餅乾": "餅乾",
     "蘇打餅": "餅乾",
+    "蘇打餅乾": "餅乾",
+    "紫菜蘇打餅": "餅乾",
     "cookies": "餅乾",
     "biscuits": "餅乾",
     "奶粉": "奶粉",
+    "麵包": "麵包",
+    "餐包": "麵包",
+    "小餐包": "麵包",
+    "圓麵包": "麵包",
+    "bread": "麵包",
+    "buns": "麵包",
+    "bun": "麵包",
 }
 
 UNIT_ALIASES = {
@@ -96,6 +111,31 @@ UNIT_ALIASES = {
 }
 
 ALLOWED_UNITS = {"件", "包", "袋", "箱", "瓶", "盒", "份", "罐", "顆", "組"}
+ALLOWED_STORAGES = {"room", "chilled", "frozen"}
+ALLOWED_PACKAGE_STATUSES = {"sealed", "opened"}
+
+
+def suggest_donation_fields(name, unit="", storage=None, package_status=None):
+    """Return suggested (storage, package_status) for the merchant donation form."""
+    text = str(name or "").casefold()
+    resolved_storage = storage if storage in ALLOWED_STORAGES else None
+    resolved_package = package_status if package_status in ALLOWED_PACKAGE_STATUSES else None
+
+    if resolved_storage is None:
+        if any(k in text for k in ("冷凍", "水餃", "冰", "雪糕")):
+            resolved_storage = "frozen"
+        elif any(k in text for k in ("鮮乳", "鮮奶", "牛奶", "優酪乳", "雞蛋", "生鮮", "蔬菜", "水果", "豆腐")) and "保久乳" not in text and "奶粉" not in text:
+            resolved_storage = "chilled"
+        else:
+            resolved_storage = "room"
+
+    if resolved_package is None:
+        if any(k in text for k in ("麵包", "餐包", "吐司", "熟食", "便當")) and unit in {"顆", "份", "件"}:
+            resolved_package = "opened"
+        else:
+            resolved_package = "sealed"
+
+    return resolved_storage, resolved_package
 
 
 def _clean_text(value, limit=80):

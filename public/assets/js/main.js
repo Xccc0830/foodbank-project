@@ -850,17 +850,31 @@
                         row.appendChild(apply);
                     }
 
+                    const storageLabels = { room: '常溫', chilled: '冷藏', frozen: '冷凍' };
+                    const packageLabels = { sealed: '原包裝未拆封', opened: '已拆封／已分裝' };
+                    function formatFieldTags(item) {
+                        const tags = [];
+                        if (item.storage && storageLabels[item.storage]) {
+                            tags.push(storageLabels[item.storage]);
+                        }
+                        if (item.package_status && packageLabels[item.package_status]) {
+                            tags.push(packageLabels[item.package_status]);
+                        }
+                        return tags.length ? '｜' + tags.join('／') : '';
+                    }
+
                     if (data.items && data.items.length) {
                         data.items.forEach(function (item) {
                             const row = document.createElement('div');
                             row.style.marginTop = '8px';
 
                             const label = document.createElement('span');
+                            const extraTags = formatFieldTags(item);
                             if (item.count_verified) {
                                 const counts = Array.isArray(item.count_observations) ? item.count_observations.join('／') : '';
-                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（數量複核：' + counts + '）';
+                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + extraTags + '（數量複核：' + counts + '）';
                             } else {
-                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + '（各輪結果一致）';
+                                label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + extraTags + '（各輪結果一致）';
                             }
                             label.style.marginRight = '8px';
 
@@ -884,7 +898,7 @@
                                 ? item.observed_quantities.join('／')
                                 : '';
                             const label = document.createElement('span');
-                            label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit
+                            label.textContent = item.name + ' × ' + item.quantity + ' ' + item.unit + formatFieldTags(item)
                                 + '（各輪數量：' + observations + '；0 表示該輪未辨識）'
                                 + ' — ' + (item.reason || '請人工確認');
                             label.style.marginRight = '8px';
@@ -938,6 +952,8 @@
             const nameInput = target.querySelector('[name="item_name[]"]');
             const quantityInput = target.querySelector('[name="item_quantity[]"]');
             const unitSelect = target.querySelector('[name="item_unit[]"]');
+            const storageSelect = target.querySelector('[name="item_storage[]"]');
+            const packageSelect = target.querySelector('[name="item_package[]"]');
             if (nameInput) {
                 nameInput.value = item.name;
                 nameInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -953,6 +969,25 @@
                 });
                 if (option) {
                     unitSelect.value = unit;
+                }
+            }
+            if (storageSelect && item.storage) {
+                const storageOption = Array.prototype.find.call(storageSelect.options, function (option) {
+                    return option.value === item.storage;
+                });
+                if (storageOption) {
+                    storageSelect.value = item.storage;
+                    storageSelect.dataset.manual = '1';
+                    storageSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+            if (packageSelect && item.package_status) {
+                const packageOption = Array.prototype.find.call(packageSelect.options, function (option) {
+                    return option.value === item.package_status;
+                });
+                if (packageOption) {
+                    packageSelect.value = item.package_status;
+                    packageSelect.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }
             if (aiAppliedInput && aiConfirmation && aiConfirmationInput) {
