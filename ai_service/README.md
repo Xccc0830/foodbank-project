@@ -68,6 +68,9 @@ FOODBANK_WEB_AI_PROFILE=fast
 `POST /analyze?profile=strict` 也會使用嚴格模式；省略參數時預設為嚴格模式。
 PHP 網站入口預設傳入快速模式。
 
+嚴格模式預設使用 `gemma3:12b`；若未設定 `FOODBANK_VISION_MODEL`，服務會優先
+選擇已安裝的 `gemma3:12b`，再嘗試 `gemma4:latest` 或 `llava:7b`。
+
 快速模式仍會要求兩輪完全一致及 95% 信心，但品名核對能力與跨輪數量稽核
 低於嚴格模式。
 

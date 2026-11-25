@@ -189,5 +189,30 @@ class ImageAnalysisTests(unittest.TestCase):
         self.assertEqual(model.call_count, 3)
 
 
+    def test_refines_single_hint_ocr_package_text(self):
+        items = [{"name": "鮮奶", "quantity": 2, "unit": "盒"}]
+        hints = [{"text": "義美鮮奶", "confidence": 0.95, "image_index": 1}]
+
+        refined = refine_item_names_from_ocr(items, hints)
+
+        self.assertEqual(len(refined), 1)
+        self.assertEqual(refined[0]["name"], "義美鮮奶")
+
+    def test_normalizes_expanded_foodbank_aliases(self):
+        normalized = normalize_analysis(result([
+            {"name": "速食麵", "quantity": 5, "unit": "packet"},
+            {"name": "鮪魚罐頭", "quantity": 3, "unit": "tin"},
+            {"name": "沙拉油", "quantity": 2, "unit": "bottle"},
+            {"name": "oatmeal", "quantity": 1, "unit": "case"},
+        ]))
+
+        self.assertEqual(normalized["items"], [
+            {"name": "泡麵", "quantity": 5, "unit": "包"},
+            {"name": "鮪魚罐頭", "quantity": 3, "unit": "罐"},
+            {"name": "食用油", "quantity": 2, "unit": "瓶"},
+            {"name": "燕麥片", "quantity": 1, "unit": "箱"},
+        ])
+
+
 if __name__ == "__main__":
     unittest.main()
