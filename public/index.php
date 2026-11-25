@@ -895,5 +895,8 @@ ob_start();
 
     <script src="assets/js/google-map.js?v=<?php echo filemtime(__DIR__ . '/assets/js/google-map.js'); ?>"></script>
     <script src="assets/js/main.js?v=<?php echo filemtime(__DIR__ . '/assets/js/main.js'); ?>"></script>
+    <?php if ($page === 'dashboard'): ?>
+        <script src="assets/js/dashboard-animations.js?v=<?php echo filemtime(__DIR__ . '/assets/js/dashboard-animations.js'); ?>"></script>
+    <?php endif; ?>
 </body>
 </html>

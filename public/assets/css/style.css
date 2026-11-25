@@ -4595,3 +4595,264 @@ body {
     font-size: 14px;
     font-weight: 600;
 }
+
+/* 首頁動態：進場、微浮動與操作回饋皆保留內容可讀性 */
+.dashboard-hero {
+    animation: dashboard-surface-in 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dashboard-hero-copy > * {
+    animation: dashboard-copy-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dashboard-hero-copy > :nth-child(1) { animation-delay: 80ms; }
+.dashboard-hero-copy > :nth-child(2) { animation-delay: 140ms; }
+.dashboard-hero-copy > :nth-child(3) { animation-delay: 200ms; }
+.dashboard-hero-copy > :nth-child(4) { animation-delay: 260ms; }
+.dashboard-hero-copy > :nth-child(5) { animation-delay: 320ms; }
+
+.dashboard-hero::after {
+    animation: dashboard-orbit-drift 10s ease-in-out infinite alternate;
+}
+
+.dashboard-hero-visual {
+    animation: dashboard-visual-in 720ms 220ms cubic-bezier(0.22, 1, 0.36, 1) both,
+        dashboard-visual-float 6s 1.1s ease-in-out infinite;
+}
+
+.dashboard-hero-step-icon {
+    animation: dashboard-step-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+        dashboard-step-float 4.6s 1s ease-in-out infinite;
+}
+
+.dashboard-hero-steps li:nth-child(2) .dashboard-hero-step-icon {
+    animation-delay: 110ms, 1.35s;
+}
+
+.dashboard-hero-steps li:nth-child(3) .dashboard-hero-step-icon {
+    animation-delay: 220ms, 1.7s;
+}
+
+.dashboard-hero-note-icon {
+    animation: dashboard-heart-beat 3.6s ease-in-out infinite;
+}
+
+.dashboard-motion-ready .dashboard-reveal {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+    transition:
+        opacity 600ms cubic-bezier(0.22, 1, 0.36, 1),
+        transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--dashboard-reveal-delay, 0ms);
+}
+
+.dashboard-motion-ready .dashboard-reveal.is-visible {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+}
+
+.dashboard-insight-card {
+    transition: transform 200ms ease, border-color 200ms ease, opacity 600ms ease;
+}
+
+.dashboard-insight-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--gray-300);
+}
+
+.dashboard-motion-ready .dashboard-insight-card.dashboard-reveal.is-visible:hover {
+    transform: translateY(-4px);
+}
+
+.dashboard-card-icon {
+    transition: transform 200ms ease, background-color 200ms ease;
+}
+
+.dashboard-insight-card:hover .dashboard-card-icon,
+.dashboard-recent-card:hover .dashboard-card-icon,
+.dashboard-quick-card:hover .dashboard-card-icon {
+    transform: rotate(-5deg) scale(1.06);
+}
+
+.dashboard-insight-card.is-visible .fancy-ad,
+.dashboard-insight-card.is-visible .dashboard-feed-list li,
+.dashboard-insight-card.is-visible .dashboard-leaderboard-list li,
+.dashboard-impact-section.is-visible .dashboard-impact-stats > div,
+.dashboard-quick-card.is-visible .dashboard-quick-action {
+    animation: dashboard-list-in 480ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.dashboard-insight-card.is-visible .fancy-ad:nth-child(1),
+.dashboard-insight-card.is-visible .dashboard-feed-list li:nth-child(1),
+.dashboard-insight-card.is-visible .dashboard-leaderboard-list li:nth-child(1),
+.dashboard-impact-section.is-visible .dashboard-impact-stats > div:nth-child(1),
+.dashboard-quick-card.is-visible .dashboard-quick-action:nth-child(1) {
+    animation-delay: 70ms;
+}
+
+.dashboard-insight-card.is-visible .fancy-ad:nth-child(2),
+.dashboard-insight-card.is-visible .dashboard-feed-list li:nth-child(2),
+.dashboard-insight-card.is-visible .dashboard-leaderboard-list li:nth-child(2),
+.dashboard-impact-section.is-visible .dashboard-impact-stats > div:nth-child(2),
+.dashboard-quick-card.is-visible .dashboard-quick-action:nth-child(2) {
+    animation-delay: 130ms;
+}
+
+.dashboard-insight-card.is-visible .fancy-ad:nth-child(3),
+.dashboard-insight-card.is-visible .dashboard-feed-list li:nth-child(3),
+.dashboard-insight-card.is-visible .dashboard-leaderboard-list li:nth-child(3),
+.dashboard-impact-section.is-visible .dashboard-impact-stats > div:nth-child(3),
+.dashboard-quick-card.is-visible .dashboard-quick-action:nth-child(3) {
+    animation-delay: 190ms;
+}
+
+.dashboard-insight-card.is-visible .dashboard-feed-list li:nth-child(4),
+.dashboard-insight-card.is-visible .dashboard-leaderboard-list li:nth-child(4),
+.dashboard-impact-section.is-visible .dashboard-impact-stats > div:nth-child(4),
+.dashboard-quick-card.is-visible .dashboard-quick-action:nth-child(4) {
+    animation-delay: 250ms;
+}
+
+.dashboard-insight-card.is-visible .dashboard-feed-list li:nth-child(n+5),
+.dashboard-insight-card.is-visible .dashboard-leaderboard-list li:nth-child(n+5),
+.dashboard-quick-card.is-visible .dashboard-quick-action:nth-child(n+5) {
+    animation-delay: 310ms;
+}
+
+.dashboard-page .fancy-ad:hover .fancy-ad-icon {
+    transform: rotate(-6deg) scale(1.06);
+}
+
+.dashboard-page .fancy-ad-icon,
+.dashboard-feed-mark,
+.dashboard-rider-avatar {
+    transition: transform 200ms ease, background-color 200ms ease, color 200ms ease;
+}
+
+.dashboard-feed-list li,
+.dashboard-leaderboard-list li {
+    transition: background-color 200ms ease;
+}
+
+.dashboard-feed-list li:hover,
+.dashboard-leaderboard-list li:hover {
+    background: rgba(32, 59, 143, 0.035);
+}
+
+.dashboard-feed-list li:hover .dashboard-feed-mark,
+.dashboard-leaderboard-list li:hover .dashboard-rider-avatar {
+    transform: scale(1.08);
+}
+
+.dashboard-hero-actions .btn i {
+    transition: transform 200ms ease;
+}
+
+.dashboard-hero-actions .btn:hover i {
+    transform: translateX(3px);
+}
+
+.dashboard-motion-page .notification-badge:not([hidden]) {
+    animation: dashboard-badge-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes dashboard-surface-in {
+    from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.995);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes dashboard-copy-in {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes dashboard-visual-in {
+    from {
+        opacity: 0;
+        transform: translateY(22px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes dashboard-visual-float {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -7px; }
+}
+
+@keyframes dashboard-orbit-drift {
+    from {
+        transform: rotate(-4deg) scale(0.96);
+    }
+    to {
+        transform: rotate(5deg) scale(1.04);
+    }
+}
+
+@keyframes dashboard-step-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.72);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes dashboard-step-float {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -4px; }
+}
+
+@keyframes dashboard-heart-beat {
+    0%, 12%, 24%, 100% { transform: scale(1); }
+    6%, 18% { transform: scale(1.09); }
+}
+
+@keyframes dashboard-list-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes dashboard-badge-pulse {
+    0%, 72%, 100% { scale: 1; }
+    82% { scale: 1.14; }
+    90% { scale: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-motion-page .dashboard-page,
+    .dashboard-motion-page .dashboard-page *,
+    .dashboard-motion-page .dashboard-page *::before,
+    .dashboard-motion-page .dashboard-page *::after,
+    .dashboard-motion-page .notification-badge {
+        opacity: 1 !important;
+        transform: none !important;
+        translate: none !important;
+        scale: none !important;
+        animation: none !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+    }
+}

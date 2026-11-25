@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- 主機： 127.0.0.1
--- 產生時間： 2026-11-25 04:57:50
+-- 產生時間： 2026-11-25 05:31:50
 -- 伺服器版本： 10.4.32-MariaDB
 -- PHP 版本： 8.2.12
 
@@ -140,7 +140,7 @@ CREATE TABLE `app_meta` (
 --
 
 INSERT INTO `app_meta` (`meta_key`, `meta_value`, `updated_at`) VALUES
-('schema_fingerprint', 'f123233e930247bfc9a1e2f95b64cd53', '2026-11-25 03:33:43');
+('schema_fingerprint', '1f4f0e907a10c1c51c3f4a3c6235be60', '2026-11-25 04:31:34');
 
 -- --------------------------------------------------------
 
@@ -279,6 +279,13 @@ CREATE TABLE `donations` (
   `urgency` enum('normal','priority','urgent') NOT NULL DEFAULT 'normal'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- 傾印資料表的資料 `donations`
+--
+
+INSERT INTO `donations` (`donation_id`, `order_number`, `donor_id`, `donor_name`, `donation_type`, `quantity`, `unit`, `donation_date`, `received_by`, `status`, `evaluation_status`, `delivery_method`, `approval_notes`, `approved_at`, `approved_by`, `rejection_reason`, `rejected_at`, `published_at`, `current_status`, `status_updated_at`, `split_count`, `notes`, `created_at`, `updated_at`, `item_name`, `weight_kg`, `size_description`, `expiry_date`, `pickup_deadline`, `delivery_option`, `vehicle_type`, `photo_path`, `evaluation_notes`, `need_inspection`, `inspection_notes`, `donor_address`, `reward_options`, `delivery_date`, `delivery_time`, `delivery_address`, `estimated_distance_km`, `estimated_duration_minutes`, `beneficiary_id`, `dispatch_contact_name`, `dispatch_contact_phone`, `dispatch_vehicle_info`, `revision_no`, `is_urgent`, `rejected_fields`, `urgency`) VALUES
+(38, 'FB-20261125-E9A2F0E5', 11, '幸福超市', 'food', 8.00, '件', '2026-11-25 12:31:38', NULL, 'pending', 'pending', 'volunteer_assist', NULL, NULL, NULL, NULL, NULL, NULL, 'waiting_pickup', NULL, 1, '', '2026-11-25 04:31:38', '2026-11-25 04:31:38', '牛奶', 0.00, NULL, NULL, '2026-11-25 16:33:00', 'volunteer_delivery', 'none', 'uploads/donations/donation_20261125_123138_3edef0bb4757.jpg', NULL, 1, NULL, '242新北市新莊區三泰路60號', NULL, '2026-11-25', '16:33:00', '臺北市文山區明義里興隆路四段42巷3號1樓', NULL, NULL, NULL, NULL, NULL, NULL, 1, 0, NULL, 'normal');
+
 -- --------------------------------------------------------
 
 --
@@ -342,6 +349,14 @@ CREATE TABLE `donation_items` (
   `package_state` enum('sealed','opened') NOT NULL DEFAULT 'sealed'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- 傾印資料表的資料 `donation_items`
+--
+
+INSERT INTO `donation_items` (`item_id`, `donation_id`, `item_name`, `brand`, `specification`, `quantity`, `unit`, `length_cm`, `width_cm`, `height_cm`, `item_weight_kg`, `expiry_date`, `notes`, `created_at`, `category_id`, `storage_condition`, `package_state`) VALUES
+(17, 38, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, 0.00, NULL, NULL, '2026-11-25 04:31:38', NULL, 'room', 'sealed'),
+(18, 38, '牛奶', NULL, NULL, 8.00, '件', NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-25 04:31:38', 4, 'room', 'sealed');
+
 -- --------------------------------------------------------
 
 --
@@ -359,6 +374,13 @@ CREATE TABLE `donation_revisions` (
   `actor_id` int(11) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- 傾印資料表的資料 `donation_revisions`
+--
+
+INSERT INTO `donation_revisions` (`revision_id`, `donation_id`, `revision_no`, `event`, `snapshot`, `reason`, `rejected_fields`, `actor_id`, `created_at`) VALUES
+(21, 38, 1, 'submitted', '{\"item_name\":\"牛奶\",\"quantity\":\"8.00\",\"unit\":\"件\",\"weight_kg\":\"0.00\",\"size_description\":null,\"expiry_date\":null,\"pickup_deadline\":\"2026-11-25 16:33:00\",\"photo_path\":\"uploads\\/donations\\/donation_20261125_123138_3edef0bb4757.jpg\",\"donor_address\":\"242新北市新莊區三泰路60號\",\"notes\":\"\"}', NULL, NULL, 11, '2026-11-25 04:31:38');
 
 -- --------------------------------------------------------
 
@@ -528,7 +550,11 @@ CREATE TABLE `notifications` (
 --
 
 INSERT INTO `notifications` (`notification_id`, `user_id`, `title`, `message`, `type`, `read_at`, `created_at`, `channel`, `related_delivery_id`, `dedupe_key`) VALUES
-(26, 11, '新的心意幣兌換', 'GO Rider 已兌換「TEST1」，使用 5 枚心意幣，請至心意幣兌換頁面查看並核銷。', 'info', NULL, '2026-11-17 20:29:20', 'web', NULL, NULL);
+(26, 11, '新的心意幣兌換', 'GO Rider 已兌換「TEST1」，使用 5 枚心意幣，請至心意幣兌換頁面查看並核銷。', 'info', NULL, '2026-11-17 20:29:20', 'web', NULL, NULL),
+(399, 1, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL),
+(400, 2, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL),
+(401, 3, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL),
+(402, 7, '新的物資待評估', '商家 幸福超市 已送出物資「牛奶」，請至物資捐贈審查處理。', 'info', NULL, '2026-11-25 04:31:38', 'web', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -909,7 +935,7 @@ CREATE TABLE `user_permission_overrides` (
 INSERT INTO `user_permission_overrides` (`user_id`, `permission_key`, `granted`, `updated_at`) VALUES
 (6, 'page.deliveries', 1, '2026-11-17 20:13:37'),
 (6, 'page.material_transport', 1, '2026-11-17 20:13:37'),
-(6, 'rider.accept_task', 1, '2026-11-25 03:33:55'),
+(6, 'rider.accept_task', 1, '2026-11-25 04:24:47'),
 (12, 'page.deliveries', 1, '2026-11-17 20:13:37'),
 (12, 'page.material_transport', 1, '2026-11-17 20:13:37'),
 (12, 'rider.accept_task', 1, '2026-11-17 20:13:37');
@@ -1261,7 +1287,7 @@ ALTER TABLE `deliveries`
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donations`
 --
 ALTER TABLE `donations`
-  MODIFY `donation_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
+  MODIFY `donation_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donation_allocations`
@@ -1279,13 +1305,13 @@ ALTER TABLE `donation_allocation_items`
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donation_items`
 --
 ALTER TABLE `donation_items`
-  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donation_revisions`
 --
 ALTER TABLE `donation_revisions`
-  MODIFY `revision_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `revision_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `donor_reward_items`
@@ -1315,7 +1341,7 @@ ALTER TABLE `item_categories`
 -- 使用資料表自動遞增(AUTO_INCREMENT) `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=399;
+  MODIFY `notification_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=403;
 
 --
 -- 使用資料表自動遞增(AUTO_INCREMENT) `otp_codes`
