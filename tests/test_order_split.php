@@ -49,6 +49,26 @@ $donationModel = new class($conn) extends DonationModel {
     }
 };
 
+/**
+ * 依目前審核發布規則組出發布資料：捐贈要先選好配送方式（GO Rider 配送），
+ * 有物資明細時要逐項帶上名稱、數量、重量（等同審核人員在畫面上確認過）。
+ */
+function buildPublishData($conn, $donationId, array $extra) {
+    $donationId = (int) $donationId;
+    $conn->query("UPDATE donations SET delivery_option = 'volunteer_delivery' WHERE donation_id = {$donationId}");
+    $items = [];
+    $rows = $conn->query("SELECT item_id, item_name, quantity, item_weight_kg FROM donation_items WHERE donation_id = {$donationId}");
+    foreach ($rows ? $rows->fetch_all(MYSQLI_ASSOC) : [] as $row) {
+        $items[(int) $row['item_id']] = [
+            'item_name' => $row['item_name'],
+            'quantity' => (string) max(1, (int) $row['quantity']),
+            'item_weight_kg' => (string) ((float) $row['item_weight_kg'] > 0 ? (float) $row['item_weight_kg'] : 1),
+        ];
+    }
+    $base = $items ? ['items' => $items] : ['weight_kg' => '12'];
+    return array_merge($base, $extra);
+}
+
 // 正式資料庫可能沒有已核准的捐贈：此時只在複製出來的測試資料庫裡補兩筆假資料（測完整個測試庫會被刪除）。
 $approvedCountResult = $conn->query('SELECT COUNT(*) AS total FROM donations WHERE status = "approved"');
 $approvedCount = $approvedCountResult ? (int) $approvedCountResult->fetch_assoc()['total'] : 0;
@@ -86,7 +106,7 @@ $notificationCursor = $notificationCursorResult ? (int) $notificationCursorResul
 $deliveryCursorResult = $conn->query("SELECT COALESCE(MAX(delivery_id), 0) AS latest_id FROM deliveries");
 $deliveryCursor = $deliveryCursorResult ? (int) $deliveryCursorResult->fetch_assoc()['latest_id'] : 0;
 
-$published = $donationModel->publishDonation($donationId, ['split_count' => 3, 'delivery_method' => 'volunteer', 'urgency' => 'normal']);
+$published = $donationModel->publishDonation($donationId, buildPublishData($conn, $donationId, ['split_count' => 3, 'urgency' => 'normal']));
 
 if ($published) {
     echo "PASS publish-with-split (donation #{$donationId})\n";
@@ -200,7 +220,7 @@ $secondDonation = $secondRow ? $secondRow->fetch_assoc() : null;
 if ($secondDonation) {
     $secondDonationId = (int) $secondDonation['donation_id'];
     $conn->query("UPDATE donations SET status = 'assessed' WHERE donation_id = {$secondDonationId}");
-    $publishedNoSplit = $donationModel->publishDonation($secondDonationId, ['split_count' => 1, 'delivery_method' => 'volunteer', 'urgency' => 'normal']);
+    $publishedNoSplit = $donationModel->publishDonation($secondDonationId, buildPublishData($conn, $secondDonationId, ['split_count' => 1, 'urgency' => 'normal']));
     $noSplitAllocationCount = $conn->query("SELECT COUNT(*) AS total FROM donation_allocations WHERE donation_id = {$secondDonationId}")->fetch_assoc();
     if ($publishedNoSplit && (int) $noSplitAllocationCount['total'] <= 1) {
         echo "PASS legacy-non-split-publish-unaffected (donation #{$secondDonationId})\n";

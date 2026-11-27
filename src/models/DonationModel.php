@@ -804,6 +804,13 @@ class DonationModel extends BaseModel {
             ? $existingDonation['vehicle_type']
             : 'motorcycle';
         $weight = ((float) ($publishData['weight_kg'] ?? $existingDonation['weight_kg'] ?? 0)) / $splitCount;
+        // 點數不再看距離／急迫程度，但配送任務仍要記下這些資訊給 GO Rider 參考
+        $distance = max(0, (float) ($existingDonation['estimated_distance_km'] ?? 0));
+        $urgency = in_array(($existingDonation['urgency'] ?? ''), ['normal', 'priority', 'urgent'], true)
+            ? $existingDonation['urgency']
+            : (!empty($existingDonation['is_urgent']) ? 'urgent' : 'normal');
+        $coldResult = $this->db->query("SELECT 1 FROM donation_items WHERE donation_id = {$donation_id} AND storage_condition IN ('chilled','frozen') LIMIT 1");
+        $isCold = $coldResult && $coldResult->num_rows > 0;
         try {
             $points = $deliveryMethod === 'volunteer'
                 ? DeliveryModel::calculatePoints($vehicleType, $weight)

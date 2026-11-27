@@ -20,6 +20,8 @@ try {
     $id = $model->addDonation([
         'donor_id' => $donorId, 'donor_name' => '測試商家', 'donation_type' => 'food',
         'item_name' => '白米', 'quantity' => 5, 'unit' => '包', 'expiry_date' => '2020-01-01',
+        // 送出表單時重量必填；沒有重量的單子重送時會被要求補填，不是這裡要測的情境
+        'weight_kg' => 3,
     ]);
     check('建立後狀態為 submitted', DonationModel::lifecycleState($model->getDonationById($id)) === 'submitted');
 
