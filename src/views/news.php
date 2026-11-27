@@ -114,7 +114,6 @@ $categoryLabels = ['advertisement' => '廣告', 'activity' => '活動', 'message
 <?php include BASE_PATH . '/src/views/partials/marquee.php'; ?>
 
 <section class="news-section">
-    <h2 class="news-section-title"><i class="fas fa-bullhorn"></i> 訊息專區</h2>
 
     <?php if ($adMessage): ?>
         <div class="alert alert-<?php echo $adMessage['type'] === 'success' ? 'success' : 'error'; ?>"><?php echo htmlspecialchars($adMessage['text']); ?></div>
