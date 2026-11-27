@@ -111,17 +111,6 @@ $ownUnpublishedAds = $currentRole === 'foodbank_staff' ? [] : $adModel->listOwnU
 $categoryLabels = ['advertisement' => '廣告', 'activity' => '活動', 'message' => '訊息'];
 ?>
 
-<div class="view-header">
-    <div>
-        <h1 class="view-title">最新消息</h1>
-        <p class="view-subtitle">廣告、活動與平台訊息分類瀏覽</p>
-    </div>
-    <div class="toolbar-actions">
-        <a class="btn btn-secondary btn-sm" href="#news-feed">訊息專區</a>
-        <?php if ($canPublishAds): ?><a class="btn btn-primary btn-sm" href="#message-form">訊息發布</a><?php endif; ?>
-    </div>
-</div>
-
 <?php include BASE_PATH . '/src/views/partials/marquee.php'; ?>
 
 <section class="news-section">
