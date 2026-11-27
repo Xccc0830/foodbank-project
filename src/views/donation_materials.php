@@ -64,6 +64,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
         if ($itemName === '' && $rawQuantity === '') {
             continue;
         }
+        $rawWeight = trim((string) ($itemWeights[$index] ?? ''));
+        if ($rawWeight === '' && $numberError === null) {
+            $numberError = '第 ' . (count($items) + 1) . ' 筆物資：請填寫總重量。';
+        }
         $problems = SpecCheckHelper::numberProblems([
             'quantity' => $rawQuantity === '' ? '0' : $rawQuantity,
             'weight_kg' => $itemWeights[$index] ?? '',
@@ -85,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
             'length_cm' => is_numeric($itemLengths[$index] ?? null) ? round((float) $itemLengths[$index], 2) : null,
             'width_cm' => is_numeric($itemWidths[$index] ?? null) ? round((float) $itemWidths[$index], 2) : null,
             'height_cm' => is_numeric($itemHeights[$index] ?? null) ? round((float) $itemHeights[$index], 2) : null,
-            'item_weight_kg' => is_numeric($itemWeights[$index] ?? null) ? round((float) $itemWeights[$index], 2) : null,
+            'item_weight_kg' => is_numeric($rawWeight) ? round((float) $rawWeight, 2) : null,
             'expiry_date' => trim((string) ($itemExpiryDates[$index] ?? '')) ?: null,
             'notes' => trim((string) ($itemNotes[$index] ?? '')) ?: null,
         ];
@@ -99,9 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_m
     $quantity = (float) ($firstItem['quantity'] ?? 0);
     $unit = $firstItem['unit'] ?? '件';
     $donationType = 'food';
-    $normalizedWeight = 0;
+    $normalizedWeight = array_sum(array_map(static function ($item) {
+        return (float) ($item['item_weight_kg'] ?? 0);
+    }, $items));
     $sizeDescription = null;
-    $expiryDate = $firstItem['expiry_date'] ?? null;
+    $itemExpiryDatesWithValue = array_values(array_filter(array_column($items, 'expiry_date')));
+    $expiryDate = $itemExpiryDatesWithValue ? min($itemExpiryDatesWithValue) : null;
     $pickupDeadline = $deliveryDate && $deliveryTime ? $deliveryDate . ' ' . $deliveryTime . ':00' : null;
 
     $vehicleTypeValue = 'none';
@@ -505,7 +512,7 @@ $formatDateTime = static function ($value) {
                 <div id="materialItemRows">
                     <div class="material-item-row">
                         <div class="grid-2"><div class="form-group"><label>物資名稱 <span class="required-mark">*</span></label><input type="text" name="item_name[]" placeholder="例如：白米 5kg 裝" required></div><div class="form-group"><label>物資類別</label><select name="item_category[]"><option value="">請選擇</option><?php foreach ($itemCategoryOptions as $categoryOption): ?><option value="<?php echo (int) $categoryOption['category_id']; ?>" data-storage="<?php echo htmlspecialchars((string) ($categoryOption['default_storage'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($categoryOption['category_name']); ?></option><?php endforeach; ?></select></div></div>
-                        <div class="grid-3"><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="1" step="1" inputmode="numeric" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>袋</option><option>箱</option><option>瓶</option><option>盒</option><option>罐</option><option>顆</option><option>份</option><option>件</option><option>組</option></select></div><div class="form-group"><label>總重量 (kg)</label><input type="number" name="item_weight_kg[]" min="0.01" step="0.01" inputmode="decimal" placeholder="例如：4.8"></div></div>
+                        <div class="grid-3"><div class="form-group"><label>數量 <span class="required-mark">*</span></label><input type="number" name="item_quantity[]" min="1" step="1" inputmode="numeric" required></div><div class="form-group"><label>單位</label><select name="item_unit[]"><option>包</option><option>袋</option><option>箱</option><option>瓶</option><option>盒</option><option>罐</option><option>顆</option><option>份</option><option>件</option><option>組</option></select></div><div class="form-group"><label>總重量 (kg) <span class="required-mark">*</span></label><input type="number" name="item_weight_kg[]" min="0.01" step="0.01" inputmode="decimal" placeholder="例如：4.8" required></div></div>
                         <div class="grid-3"><div class="form-group"><label>保存方式</label><select name="item_storage[]"><option value="room">常溫</option><option value="chilled">冷藏</option><option value="frozen">冷凍</option></select></div><div class="form-group"><label>包裝狀態</label><select name="item_package[]"><option value="sealed">原包裝未拆封</option><option value="opened">已拆封／已分裝</option></select></div><div class="form-group"><label>保存期限</label><input type="date" name="item_expiry_date[]"></div></div>
                         <div class="grid-3"><div class="form-group"><label>長 (cm)</label><input type="number" name="item_length_cm[]" min="0.1" step="0.1" inputmode="decimal" placeholder="例如：30"></div><div class="form-group"><label>寬 (cm)</label><input type="number" name="item_width_cm[]" min="0.1" step="0.1" inputmode="decimal" placeholder="例如：20"></div><div class="form-group"><label>高 (cm)</label><input type="number" name="item_height_cm[]" min="0.1" step="0.1" inputmode="decimal" placeholder="例如：15"></div></div>
                         <div class="material-item-footer"><button type="button" class="btn btn-danger btn-sm" data-remove-item><i class="fas fa-trash"></i> 刪除此物資</button></div>
@@ -772,10 +779,13 @@ $formatDateTime = static function ($value) {
                         <p><strong>請修改<?php echo $flaggedFields ? '被標記的欄位（紅框）' : '有問題的欄位'; ?>後，直接重新送審：</strong></p>
                         <?php foreach ($resubmitInputs as $fieldKey => $inputType):
                             $isFlagged = in_array($fieldKey, $flaggedFields, true);
-                            $isEditable = !$flaggedFields || $isFlagged; ?>
+                            $isEditable = !$flaggedFields || $isFlagged || ($fieldKey === 'weight_kg' && (float) ($viewingDonation['weight_kg'] ?? 0) <= 0);
+                            $inputAttributes = $fieldKey === 'weight_kg'
+                                ? ' step="0.01" min="0.01" inputmode="decimal" required'
+                                : ($inputType === 'number' ? ' step="1" min="1" inputmode="numeric"' : ''); ?>
                             <div class="form-group<?php echo $isFlagged ? ' field-flagged' : ''; ?>">
                                 <label><?php echo htmlspecialchars(DonationModel::RESUBMIT_FIELD_LABELS[$fieldKey]); ?><?php echo $isFlagged ? '（需修改）' : ''; ?></label>
-                                <input type="<?php echo $inputType; ?>"<?php echo $inputType === 'number' ? ' step="1" min="1" inputmode="numeric"' : ''; ?> name="fields[<?php echo $fieldKey; ?>]" value="<?php echo htmlspecialchars($inputType === 'number' ? $trimNumber($viewingDonation[$fieldKey] ?? '') : (string) ($viewingDonation[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"<?php echo $isEditable ? '' : ' disabled'; ?>>
+                                <input type="<?php echo $inputType; ?>"<?php echo $inputAttributes; ?> name="fields[<?php echo $fieldKey; ?>]" value="<?php echo htmlspecialchars($inputType === 'number' ? $trimNumber($viewingDonation[$fieldKey] ?? '') : (string) ($viewingDonation[$fieldKey] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"<?php echo $isEditable ? '' : ' disabled'; ?>>
                             </div>
                         <?php endforeach; ?>
                         <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> 修改後重新送審</button>

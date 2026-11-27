@@ -723,7 +723,7 @@ $page = basename($page);
 // 菜單項配置
 $menu_items = [
     'dashboard' => ['label' => '主頁', 'icon' => 'fa-solid fa-chart-line', 'group' => ''],
-    'news' => ['label' => '最新消息公告', 'icon' => 'fa-solid fa-newspaper', 'group' => ''],
+    'news' => ['label' => '最新消息', 'icon' => 'fa-solid fa-newspaper', 'group' => ''],
     'activities' => ['label' => '公益活動', 'icon' => 'fa-solid fa-calendar-check', 'group' => ''],
     'notifications' => ['label' => '通知中心', 'icon' => 'fa-solid fa-bell', 'group' => ''],
     'donation_materials' => ['label' => '物資捐贈', 'icon' => 'fa-solid fa-box-open', 'group' => '物資與配送'],
@@ -824,13 +824,6 @@ ob_start();
             </script>
 
             <div class="sidebar-footer">
-                <div class="user-profile">
-                    <div class="avatar"><?php echo htmlspecialchars(strtoupper(mb_substr($currentUser['full_name'], 0, 2))); ?></div>
-                    <div class="user-info">
-                        <div class="user-name"><?php echo htmlspecialchars($currentUser['full_name']); ?></div>
-                        <div class="user-role"><?php echo htmlspecialchars($roleLabels[$role] ?? $role); ?></div>
-                    </div>
-                </div>
                 <a href="?action=logout" class="logout-btn">登出</a>
             </div>
         </aside>
@@ -853,6 +846,13 @@ ob_start();
                 </div>
                 
                 <div class="topbar-right">
+                    <div class="topbar-user">
+                        <div class="avatar"><?php echo htmlspecialchars(strtoupper(mb_substr($currentUser['full_name'], 0, 2))); ?></div>
+                        <span class="topbar-user-info">
+                            <strong class="topbar-user-name"><?php echo htmlspecialchars($currentUser['full_name']); ?></strong>
+                            <small class="topbar-user-role"><?php echo htmlspecialchars($roleLabels[$role] ?? $role); ?></small>
+                        </span>
+                    </div>
                     <div class="topbar-date">
                         <i class="fas fa-calendar-day" aria-hidden="true"></i>
                         <span><small>今日</small><strong><?php echo date('n 月 j 日'); ?></strong></span>

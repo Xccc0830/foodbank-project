@@ -4,6 +4,7 @@
  */
 
 require_once __DIR__ . '/BaseModel.php';
+require_once __DIR__ . '/../helpers/CarbonPointHelper.php';
 require_once __DIR__ . '/../helpers/RiderLocationHelper.php';
 
 class DeliveryModel extends BaseModel {
@@ -287,9 +288,7 @@ class DeliveryModel extends BaseModel {
             $data['points'] = $deliveryMethod === 'volunteer'
                 ? $this->calculatePoints(
                     $data['vehicle_type'] ?? 'motorcycle',
-                    (float) ($data['total_distance_km'] ?? 0),
-                    (float) ($data['weight_kg'] ?? 0),
-                    $data['urgency'] ?? 'normal'
+                    (float) ($data['weight_kg'] ?? 0)
                 )
                 : 0;
         } catch (InvalidArgumentException $exception) {
@@ -505,7 +504,7 @@ class DeliveryModel extends BaseModel {
         }
         try {
             $points = $deliveryMethod === 'volunteer'
-                ? $this->calculatePoints($vehicleType, $distance, $weight, $urgency)
+                ? $this->calculatePoints($vehicleType, $weight)
                 : 0;
         } catch (InvalidArgumentException $exception) {
             return false;
@@ -928,27 +927,11 @@ class DeliveryModel extends BaseModel {
     }
 
     public static function maximumWeightForVehicle($vehicle) {
-        return ['motorcycle' => 20.0, 'car' => 50.0][$vehicle] ?? null;
+        return CarbonPointHelper::maximumWeightForVehicle($vehicle);
     }
 
-    /**
-     * 心意幣 = floor(min(60, [B + (W × 0.34 + D × E) × 3] × U)).
-     */
-    public static function calculatePoints($vehicle, $distance, $weight, $urgency, $coldStorage = false) {
-        $maximumWeight = self::maximumWeightForVehicle($vehicle);
-        $urgencyMultipliers = ['normal' => 1.0, 'priority' => 1.2, 'urgent' => 1.5];
-        if ($maximumWeight === null
-            || !is_numeric($distance) || !is_finite((float) $distance) || (float) $distance < 0
-            || !is_numeric($weight) || !is_finite((float) $weight)
-            || (float) $weight < 0 || (float) $weight > $maximumWeight
-            || !isset($urgencyMultipliers[$urgency])) {
-            throw new InvalidArgumentException('配送車種、距離、重量或緊急度不符合心意幣計算規範。');
-        }
-
-        $basePoints = $vehicle === 'car' ? 7 : 5;
-        $emissionFactor = $vehicle === 'car' ? 0.115 : 0.095;
-        $points = ($basePoints + ((float) $weight * 0.34 + (float) $distance * $emissionFactor) * 3)
-            * $urgencyMultipliers[$urgency];
-        return min(60, (int) floor($points + 1e-9));
+    /** 文山區版：保底 1 點，每減碳 1 kgCO2e 再得 1 點。 */
+    public static function calculatePoints($vehicle, $weight) {
+        return CarbonPointHelper::calculate($vehicle, $weight);
     }
 }

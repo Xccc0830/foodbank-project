@@ -43,16 +43,15 @@ if (!function_exists('detailNumber')) {
                 <h3 class="detail-section-title"><?php echo htmlspecialchars($title); ?> <span>共 <?php echo count($items); ?> 項</span></h3>
             <?php endif; ?>
             <?php foreach (array_values($items) as $index => $item):
-                $dims = array_filter([$item['length_cm'] ?? null, $item['width_cm'] ?? null, $item['height_cm'] ?? null], static function ($v) {
-                    return $v !== null && $v !== '';
-                });
                 $storage = in_array($item['storage_condition'] ?? '', ['room', 'chilled', 'frozen'], true) ? $item['storage_condition'] : 'room';
                 $facts = [
                     '數量' => detailNumber($item['quantity'] ?? '') . ' ' . ($item['unit'] ?? ''),
                     '重量' => isset($item['item_weight_kg']) && $item['item_weight_kg'] !== '' ? detailNumber($item['item_weight_kg']) . ' kg' : '未填寫',
                     '保存期限' => $item['expiry_date'] ?? '未填寫',
                     '包裝' => ($item['package_state'] ?? 'sealed') === 'opened' ? '已拆封／分裝' : '原包裝未拆封',
-                    '長寬高' => count($dims) === 3 ? implode(' × ', array_map('detailNumber', $dims)) . ' cm' : '未填寫',
+                    '長' => isset($item['length_cm']) && $item['length_cm'] !== '' ? detailNumber($item['length_cm']) . ' cm' : '未填寫',
+                    '寬' => isset($item['width_cm']) && $item['width_cm'] !== '' ? detailNumber($item['width_cm']) . ' cm' : '未填寫',
+                    '高' => isset($item['height_cm']) && $item['height_cm'] !== '' ? detailNumber($item['height_cm']) . ' cm' : '未填寫',
                 ];
             ?>
                 <div class="detail-item-card">

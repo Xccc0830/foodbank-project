@@ -301,13 +301,6 @@ if ($isVolunteer) {
             </div>
             <?php
                 $tripItemCount = (int) ($activeDriverTrip['item_count'] ?? 0);
-                $tripDimensionParts = array_filter([
-                    $activeDriverTrip['max_length_cm'] ?? null,
-                    $activeDriverTrip['max_width_cm'] ?? null,
-                    $activeDriverTrip['max_height_cm'] ?? null,
-                ], static function ($value) {
-                    return $value !== null && $value !== '';
-                });
             ?>
             <?php if ($tripItemCount > 0): ?>
                 <div class="driver-trip-stop">
@@ -315,7 +308,9 @@ if ($isVolunteer) {
                     <div>
                         <strong>物資規格</strong>
                         <span><?php echo $tripItemCount; ?> 項物資</span>
-                        <span>長寬高：<?php echo count($tripDimensionParts) === 3 ? htmlspecialchars(implode(' × ', $tripDimensionParts)) . ' cm' : '未填寫'; ?></span>
+                        <span>長：<?php echo !empty($activeDriverTrip['max_length_cm']) ? htmlspecialchars((string) $activeDriverTrip['max_length_cm']) . ' cm' : '未填寫'; ?></span>
+                        <span>寬：<?php echo !empty($activeDriverTrip['max_width_cm']) ? htmlspecialchars((string) $activeDriverTrip['max_width_cm']) . ' cm' : '未填寫'; ?></span>
+                        <span>高：<?php echo !empty($activeDriverTrip['max_height_cm']) ? htmlspecialchars((string) $activeDriverTrip['max_height_cm']) . ' cm' : '未填寫'; ?></span>
                     </div>
                 </div>
             <?php endif; ?>
@@ -639,16 +634,10 @@ if ($isVolunteer) {
                     <td>
                         <?php
                             $rowItemCount = (int) ($delivery['item_count'] ?? 0);
-                            $rowDimensionParts = array_filter([
-                                $delivery['max_length_cm'] ?? null,
-                                $delivery['max_width_cm'] ?? null,
-                                $delivery['max_height_cm'] ?? null,
-                            ], static function ($value) {
-                                return $value !== null && $value !== '';
-                            });
                         ?>
                         <?php if ($rowItemCount > 0): ?>
-                            <?php echo $rowItemCount; ?> 項<?php if (count($rowDimensionParts) === 3): ?><br><small><?php echo htmlspecialchars(implode(' × ', $rowDimensionParts)); ?> cm</small><?php endif; ?>
+                            <?php echo $rowItemCount; ?> 項<br>
+                            <small>長 <?php echo !empty($delivery['max_length_cm']) ? htmlspecialchars((string) $delivery['max_length_cm']) . ' cm' : '未填寫'; ?> · 寬 <?php echo !empty($delivery['max_width_cm']) ? htmlspecialchars((string) $delivery['max_width_cm']) . ' cm' : '未填寫'; ?> · 高 <?php echo !empty($delivery['max_height_cm']) ? htmlspecialchars((string) $delivery['max_height_cm']) . ' cm' : '未填寫'; ?></small>
                         <?php else: ?>
                             -
                         <?php endif; ?>

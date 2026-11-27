@@ -106,12 +106,7 @@ $pointsRowResult = $conn->query(
 $pointsRow = $pointsRowResult ? $pointsRowResult->fetch_assoc() : null;
 if ($pointsRow) {
     $expectedPoints = $pointsRow['delivery_method'] === 'volunteer'
-        ? DeliveryModel::calculatePoints(
-            $pointsRow['vehicle_type'],
-            (float) ($pointsRow['estimated_distance_km'] ?? 0),
-            (float) $pointsRow['weight_kg'],
-            $pointsRow['urgency']
-        )
+        ? DeliveryModel::calculatePoints($pointsRow['vehicle_type'], (float) $pointsRow['weight_kg'])
         : 0;
     $hasCalculatedPoints = (int) $pointsRow['points'] === $expectedPoints
         && abs((float) $pointsRow['total_distance_km'] - (float) ($pointsRow['estimated_distance_km'] ?? 0)) < 0.01;

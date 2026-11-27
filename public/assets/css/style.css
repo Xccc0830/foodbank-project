@@ -380,6 +380,47 @@ body {
     justify-self: end;
 }
 
+.topbar-user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.topbar-user .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #0f766e;
+    border-color: #0f766e;
+    color: #fff;
+}
+
+.topbar-user-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.topbar-user-name,
+.topbar-user-role {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topbar-user-name {
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.topbar-user-role {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
 .search-box {
     display: flex;
     align-items: center;
@@ -2522,6 +2563,15 @@ form {
 
     .topbar-right {
         gap: 8px;
+    }
+
+    .topbar-date,
+    .topbar-user-role {
+        display: none;
+    }
+
+    .topbar-user-name {
+        max-width: 88px;
     }
 
     .icon-btn {

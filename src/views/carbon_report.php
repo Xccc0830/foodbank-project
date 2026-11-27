@@ -12,12 +12,12 @@ if (!$isOfficial && !$isEnterpriseMember) {
 
 $connection = $db->getConnection();
 
-// 假設係數：食物廢棄物避免掩埋排放 2.5 kgCO2e/kg；汽車運輸 0.192 kgCO2e/km；機車運輸 0.081 kgCO2e/km
-$foodWasteFactor = 2.5;
+// 文山區簡化估算採用物資分類的預設減碳係數。
+require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
+$foodWasteFactor = ItemCategoryModel::DEFAULT_CARBON_FACTOR;
 $carFactor = 0.192;
 $motorcycleFactor = 0.081;
 
-require_once BASE_PATH . '/src/models/ItemCategoryModel.php';
 new ItemCategoryModel(); // 確保分類的減碳係數欄位存在
 
 /**

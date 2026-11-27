@@ -5,12 +5,13 @@
 
 require_once __DIR__ . '/BaseModel.php';
 require_once __DIR__ . '/../helpers/CategorySuggestHelper.php';
+require_once __DIR__ . '/../helpers/CarbonPointHelper.php';
 
 class ItemCategoryModel extends BaseModel {
     protected $table = 'item_categories';
 
     /** 沒設定減碳係數時使用的預設值（kgCO2e／每公斤惜食，與永續報告一致） */
-    const DEFAULT_CARBON_FACTOR = 2.5;
+    const DEFAULT_CARBON_FACTOR = CarbonPointHelper::DEFAULT_CARBON_FACTOR;
     /** 沒設定即期提醒天數時使用的預設值 */
     const DEFAULT_EXPIRY_ALERT_DAYS = 7;
     const STORAGE_LABELS = ['room' => '常溫', 'chilled' => '冷藏', 'frozen' => '冷凍'];

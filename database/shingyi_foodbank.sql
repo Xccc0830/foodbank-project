@@ -120,7 +120,8 @@ CREATE TABLE `advertisements` (
   `reviewed_at` datetime DEFAULT NULL,
   `fee_amount` decimal(10,2) DEFAULT NULL,
   `policy_agreed_at` datetime DEFAULT NULL COMMENT '刊登者同意廣告刊登規範的時間',
-  `policy_flags` text DEFAULT NULL COMMENT '自動檢查出需審核人員注意的項目（JSON）'
+  `policy_flags` text DEFAULT NULL COMMENT '自動檢查出需審核人員注意的項目（JSON）',
+  `content_type` enum('advertisement','message') NOT NULL DEFAULT 'advertisement' COMMENT '最新消息分類'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -644,7 +645,7 @@ INSERT INTO `permissions` (`permission_key`, `label`, `category`) VALUES
 ('page.inventory', '物資盤點', 'page'),
 ('page.item_categories', '物資分類', 'page'),
 ('page.material_transport', '物資運送', 'page'),
-('page.news', '最新消息公告', 'page'),
+('page.news', '最新消息', 'page'),
 ('page.notifications', '通知中心', 'page'),
 ('page.order_tracking', '訂單追蹤', 'page'),
 ('page.reports', '數據分析／榮譽榜', 'page'),

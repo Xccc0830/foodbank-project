@@ -579,6 +579,9 @@ class DonationModel extends BaseModel {
         if (is_array($flagged) && $flagged) {
             $allowed = array_values(array_intersect($allowed, $flagged));
         }
+        if ((float) ($donation['weight_kg'] ?? 0) <= 0 && !in_array('weight_kg', $allowed, true)) {
+            $allowed[] = 'weight_kg';
+        }
         $changes = array_intersect_key($changes, array_flip($allowed));
         if (!$changes) {
             return '請修改被標記的欄位後再送審。';
@@ -586,6 +589,11 @@ class DonationModel extends BaseModel {
         $numberProblems = SpecCheckHelper::numberProblems(array_intersect_key($changes, ['quantity' => 1, 'weight_kg' => 1]));
         if ($numberProblems) {
             return reset($numberProblems);
+        }
+        if ((float) ($donation['weight_kg'] ?? 0) <= 0
+            && (!array_key_exists('weight_kg', $changes)
+                || !SpecCheckHelper::isPositiveTwoDecimal((string) $changes['weight_kg']))) {
+            return '請填寫大於 0 的物資重量。';
         }
 
         $sets = [];
@@ -646,7 +654,7 @@ class DonationModel extends BaseModel {
         }
 
         $firstItemResult = $this->db->query(
-            "SELECT quantity, unit, LEFT(specification, 100) AS specification, length_cm, width_cm, height_cm
+            "SELECT quantity, unit
              FROM donation_items WHERE donation_id = {$donation_id}
              ORDER BY item_id ASC LIMIT 1"
         );
@@ -657,23 +665,7 @@ class DonationModel extends BaseModel {
                 $donation['unit'] = $firstItem['unit'];
             }
 
-            if (trim((string) ($donation['size_description'] ?? '')) === '') {
-                $sizeDescription = trim((string) ($firstItem['specification'] ?? ''));
-                if ($sizeDescription === '' && $firstItem['length_cm'] !== null
-                    && $firstItem['width_cm'] !== null && $firstItem['height_cm'] !== null) {
-                    $sizeDescription = sprintf(
-                        '長寬高：%s × %s × %s cm',
-                        number_format((float) $firstItem['length_cm'], 2),
-                        number_format((float) $firstItem['width_cm'], 2),
-                        number_format((float) $firstItem['height_cm'], 2)
-                    );
-                }
-                if ($sizeDescription !== '') {
-                    $donation['size_description'] = $sizeDescription;
-                }
-            }
         }
-
         return $donation;
     }
 
@@ -701,6 +693,12 @@ class DonationModel extends BaseModel {
         $existingResult = $this->db->query("SELECT * FROM {$this->table} WHERE donation_id = {$donation_id} AND status = 'assessed' LIMIT 1");
         $existingDonation = $existingResult ? $existingResult->fetch_assoc() : null;
         if (!$existingDonation) {
+            return false;
+        }
+        $existingItemsForWeightCheck = $this->getDonationItems($donation_id);
+        if (!$existingItemsForWeightCheck
+            && (!array_key_exists('weight_kg', $publishData)
+                || !SpecCheckHelper::isPositiveTwoDecimal((string) $publishData['weight_kg']))) {
             return false;
         }
 
@@ -738,18 +736,21 @@ class DonationModel extends BaseModel {
 
         // 一次填多項物資時，審核人員可逐項修改；主單的名稱／重量改由各項物資彙總。
         $itemEdits = [];
-        if (isset($publishData['items']) && is_array($publishData['items'])) {
-            $existingItems = $this->getDonationItems($donation_id);
-            $existingIds = array_map('intval', array_column($existingItems, 'item_id'));
-            foreach ($publishData['items'] as $itemId => $edit) {
-                if (!in_array((int) $itemId, $existingIds, true) || !is_array($edit)) {
-                    continue;
+        if ($existingItemsForWeightCheck) {
+            if (!isset($publishData['items']) || !is_array($publishData['items'])) {
+                return false;
+            }
+            foreach ($existingItemsForWeightCheck as $existingItem) {
+                $itemId = (int) $existingItem['item_id'];
+                $edit = $publishData['items'][$itemId] ?? null;
+                if (!is_array($edit)) {
+                    return false;
                 }
                 $name = trim((string) ($edit['item_name'] ?? ''));
                 $rawQuantity = trim((string) ($edit['quantity'] ?? ''));
                 $rawWeight = trim((string) ($edit['item_weight_kg'] ?? ''));
                 // 數量只能是 1 以上的整數；重量大於 0、最多兩位小數（與商家填寫時的規則相同）
-                if ($name === '' || !SpecCheckHelper::isWholeNumber($rawQuantity) || ($rawWeight !== '' && !SpecCheckHelper::isPositiveTwoDecimal($rawWeight))) {
+                if ($name === '' || !SpecCheckHelper::isWholeNumber($rawQuantity) || !SpecCheckHelper::isPositiveTwoDecimal($rawWeight)) {
                     return false;
                 }
                 $itemEdits[(int) $itemId] = [
@@ -803,15 +804,9 @@ class DonationModel extends BaseModel {
             ? $existingDonation['vehicle_type']
             : 'motorcycle';
         $weight = ((float) ($publishData['weight_kg'] ?? $existingDonation['weight_kg'] ?? 0)) / $splitCount;
-        $distance = max(0, (float) ($existingDonation['estimated_distance_km'] ?? 0));
-        $urgency = in_array(($existingDonation['urgency'] ?? ''), ['normal', 'priority', 'urgent'], true)
-            ? $existingDonation['urgency']
-            : (!empty($existingDonation['is_urgent']) ? 'urgent' : 'normal');
-        $coldResult = $this->db->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) $donation_id . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
-        $isCold = $coldResult && $coldResult->num_rows > 0;
         try {
             $points = $deliveryMethod === 'volunteer'
-                ? DeliveryModel::calculatePoints($vehicleType, $distance, $weight, $urgency)
+                ? DeliveryModel::calculatePoints($vehicleType, $weight)
                 : 0;
         } catch (InvalidArgumentException $exception) {
             Transaction::rollback($this->db);

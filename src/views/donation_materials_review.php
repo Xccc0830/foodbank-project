@@ -218,16 +218,8 @@ $estimateRewardPoints = static function ($donation, $deliveryOption, $splitCount
     $vehicleType = in_array(($donation['vehicle_type'] ?? ''), ['car', 'motorcycle'], true)
         ? $donation['vehicle_type']
         : 'motorcycle';
-    $distance = max(0, (float) ($donation['estimated_distance_km'] ?? 0));
-
-    $coldResult = $GLOBALS['connection']->query("SELECT 1 FROM donation_items WHERE donation_id = " . (int) ($donation['donation_id'] ?? 0) . " AND storage_condition IN ('chilled','frozen') LIMIT 1");
-    $isCold = $coldResult && $coldResult->num_rows > 0;
-
-    $urgency = in_array(($donation['urgency'] ?? ''), ['normal', 'priority', 'urgent'], true)
-        ? $donation['urgency']
-        : (!empty($donation['is_urgent']) ? 'urgent' : 'normal');
     try {
-        return DeliveryModel::calculatePoints($vehicleType, $distance, $weight, $urgency) * $splitCount;
+        return DeliveryModel::calculatePoints($vehicleType, $weight) * $splitCount;
     } catch (InvalidArgumentException $exception) {
         return false;
     }
@@ -307,7 +299,7 @@ $renderPublishItemFields = static function ($donation) use ($donationModel) {
                         <td><input type="text" name="items[<?php echo $itemId; ?>][item_name]" value="<?php echo htmlspecialchars($item['item_name'], ENT_QUOTES); ?>" required></td>
                         <td><input type="number" step="1" min="1" inputmode="numeric" name="items[<?php echo $itemId; ?>][quantity]" value="<?php echo htmlspecialchars((string) ($item['quantity'] + 0), ENT_QUOTES); ?>" required></td>
                         <td><?php echo htmlspecialchars($item['unit']); ?></td>
-                        <td><input type="number" step="0.01" min="0.01" inputmode="decimal" name="items[<?php echo $itemId; ?>][item_weight_kg]" value="<?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? (string) ($item['item_weight_kg'] + 0) : '', ENT_QUOTES); ?>"></td>
+                        <td><input type="number" step="0.01" min="0.01" inputmode="decimal" name="items[<?php echo $itemId; ?>][item_weight_kg]" value="<?php echo htmlspecialchars($item['item_weight_kg'] !== null && $item['item_weight_kg'] !== '' ? (string) ($item['item_weight_kg'] + 0) : '', ENT_QUOTES); ?>" required></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -320,7 +312,7 @@ $renderPublishItemFields = static function ($donation) use ($donationModel) {
     <div class="grid-2">
         <label>物資名稱<input type="text" name="item_name" value="<?php echo htmlspecialchars($donation['item_name'] ?? '', ENT_QUOTES); ?>" required></label>
         <label>數量<input type="number" step="0.01" min="0.01" name="quantity" value="<?php echo htmlspecialchars($donation['quantity'] ?? '', ENT_QUOTES); ?>" required></label>
-        <label>重量（公斤）<input type="number" step="0.01" min="0" name="weight_kg" value="<?php echo htmlspecialchars($donation['weight_kg'] ?? '', ENT_QUOTES); ?>"></label>
+        <label>重量（公斤）<input type="number" step="0.01" min="0.01" name="weight_kg" value="<?php echo htmlspecialchars($donation['weight_kg'] ?? '', ENT_QUOTES); ?>" required></label>
         <label>大小<input type="text" name="size_description" value="<?php echo htmlspecialchars($donation['size_description'] ?? '', ENT_QUOTES); ?>"></label>
     </div>
     <?php
@@ -569,7 +561,7 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                                 <div class="grid-2">
                                 <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                             </div>
-                            <p class="form-hint">商家標示配送緊急度：<?php echo htmlspecialchars(['normal' => '一般', 'priority' => '優先', 'urgent' => '緊急'][$viewingDonation['urgency'] ?? ''] ?? (!empty($viewingDonation['is_urgent']) ? '緊急' : '一般')); ?>。此標示會納入點數稽核。</p>
+                            <p class="form-hint">商家標示配送緊急度：<?php echo htmlspecialchars(['normal' => '一般', 'priority' => '優先', 'urgent' => '緊急'][$viewingDonation['urgency'] ?? ''] ?? (!empty($viewingDonation['is_urgent']) ? '緊急' : '一般')); ?>；僅供配送安排與管理，不影響心意幣計算。</p>
                             <?php $vehicleDefault = !empty($coldForView) ? 'refrigerated_truck' : 'small_truck'; ?>
                         <div class="publish-options" data-foodbank-only hidden>
                             <strong>忠信派車車種</strong>
@@ -580,8 +572,8 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                             </select></label>
                             <?php if (!empty($coldForView)): ?><span class="form-hint">含冷藏／冷凍物資，建議派冷藏車或冷凍車。</span><?php endif; ?>
                         </div>
-                        <p class="form-hint" data-volunteer-only data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-default-option="" data-urgency="<?php echo htmlspecialchars($viewingDonation['urgency'] ?? (!empty($viewingDonation['is_urgent']) ? 'urgent' : 'normal'), ENT_QUOTES); ?>">
-                                預估心意幣：<span data-points-total>請先由食物銀行選擇配送方式</span>（依減碳公式、車種、物資重量及緊急度計算；Google Maps 預估時間僅用於防弊）
+                        <p class="form-hint" data-volunteer-only data-points-preview data-default-option="">
+                                預估心意幣：<span data-points-total>請先由食物銀行選擇配送方式</span>（文山區版：保底 1 點，每減碳 1 kgCO2e 得 1 點；減碳估算係數 2.5 kgCO2e/kg，<a href="https://www.epa.gov/waste-reduction-model/documentation-waste-reduction-model" target="_blank" rel="noopener noreferrer">參考 EPA WARM 方法說明</a>）
                             </p>
                             <div class="publish-options" data-volunteer-only>
                                 <strong>是否需協助檢查物資</strong>
@@ -613,7 +605,7 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                             <div class="grid-2">
                             <label>領取期限<input type="datetime-local" name="pickup_deadline" value="<?php echo !empty($viewingDonation['pickup_deadline']) ? date('Y-m-d\TH:i', strtotime($viewingDonation['pickup_deadline'])) : ''; ?>"></label>
                         </div>
-                        <p class="form-hint">商家標示配送緊急度：<?php echo htmlspecialchars(['normal' => '一般', 'priority' => '優先', 'urgent' => '緊急'][$viewingDonation['urgency'] ?? ''] ?? (!empty($viewingDonation['is_urgent']) ? '緊急' : '一般')); ?>。此標示會納入點數稽核。</p>
+                        <p class="form-hint">商家標示配送緊急度：<?php echo htmlspecialchars(['normal' => '一般', 'priority' => '優先', 'urgent' => '緊急'][$viewingDonation['urgency'] ?? ''] ?? (!empty($viewingDonation['is_urgent']) ? '緊急' : '一般')); ?>；僅供配送安排與管理，不影響心意幣計算。</p>
                         <?php $vehicleDefault = !empty($coldForView) ? 'refrigerated_truck' : 'small_truck'; ?>
                         <div class="publish-options" data-foodbank-only hidden>
                             <strong>忠信派車車種</strong>
@@ -625,8 +617,8 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                             <?php if (!empty($coldForView)): ?><span class="form-hint">含冷藏／冷凍物資，建議派冷藏車或冷凍車。</span><?php endif; ?>
                         </div>
                         <?php $pointsEstimate = $estimateRewardPoints($viewingDonation, $viewingDonation['delivery_option'] ?? ''); ?>
-                        <p class="form-hint" data-volunteer-only data-points-preview data-distance-km="<?php echo htmlspecialchars((string) ($viewingDonation['estimated_distance_km'] ?? 0), ENT_QUOTES); ?>" data-urgency="<?php echo htmlspecialchars($viewingDonation['urgency'] ?? (!empty($viewingDonation['is_urgent']) ? 'urgent' : 'normal'), ENT_QUOTES); ?>" data-default-option="<?php echo htmlspecialchars((string) ($viewingDonation['delivery_option'] ?? ''), ENT_QUOTES); ?>">
-                            預估心意幣：<span data-points-total><?php echo $pointsEstimate === false ? '重量超過所選車種安全上限，請調整重量或拆單' : (int) $pointsEstimate . ' 枚'; ?></span>（依減碳公式、車種、物資重量及緊急度計算；Google Maps 預估時間僅用於防弊）
+                        <p class="form-hint" data-volunteer-only data-points-preview data-default-option="<?php echo htmlspecialchars((string) ($viewingDonation['delivery_option'] ?? ''), ENT_QUOTES); ?>">
+                            預估心意幣：<span data-points-total><?php echo $pointsEstimate === false ? '重量超過所選車種安全上限，請調整重量或拆單' : (int) $pointsEstimate . ' 枚'; ?></span>（文山區版：保底 1 點，每減碳 1 kgCO2e 得 1 點；減碳估算係數 2.5 kgCO2e/kg，<a href="https://www.epa.gov/waste-reduction-model/documentation-waste-reduction-model" target="_blank" rel="noopener noreferrer">參考 EPA WARM 方法說明</a>）
                         </p>
                         <div class="publish-options" data-volunteer-only>
                             <strong>是否需協助檢查物資</strong>
@@ -775,11 +767,8 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                 return;
             }
 
-            const calculateTaskPoints = function (vehicle, distance, weight, urgency) {
-                const base = vehicle === 'car' ? 7 : 5;
-                const emissionFactor = vehicle === 'car' ? 0.115 : 0.095;
-                const multiplier = { normal: 1, priority: 1.2, urgent: 1.5 }[urgency];
-                return Math.min(60, Math.floor((base + (weight * 0.34 + distance * emissionFactor) * 3) * multiplier + 1e-9));
+            const calculateTaskPoints = function (weight) {
+                return 1 + Math.floor(weight * 2.5 + 1e-9);
             };
             const updatePreview = function () {
                 const selectedOption = form.querySelector('input[name="foodbank_delivery_option"]:checked');
@@ -805,13 +794,12 @@ $renderDetails = static function ($donation) use ($donationModel, $deliveryOptio
                 const vehicleInput = form.querySelector('input[name="vehicle_type"]');
                 const vehicle = vehicleInput && vehicleInput.value === 'car' ? 'car' : 'motorcycle';
                 const weightPerTask = Math.max(0, weightInput ? (Number.parseFloat(weightInput.value) || 0) : totalItemWeight) / splitCount;
-                const distance = Math.max(0, Number.parseFloat(preview.dataset.distanceKm || '0') || 0);
                 const maxWeight = vehicle === 'car' ? 50 : 20;
                 if (weightPerTask > maxWeight) {
                     totalLabel.textContent = `每筆重量 ${weightPerTask.toFixed(2)} kg 超過${vehicle === 'car' ? '汽車' : '機車'} ${maxWeight} kg 安全上限，請拆單`;
                     return;
                 }
-                const perTask = calculateTaskPoints(vehicle, distance, weightPerTask, preview.dataset.urgency || 'normal');
+                const perTask = calculateTaskPoints(weightPerTask);
                 totalLabel.textContent = splitCount > 1
                     ? `每筆約 ${perTask} 枚，共 ${perTask * splitCount} 枚`
                     : `約 ${perTask} 枚`;

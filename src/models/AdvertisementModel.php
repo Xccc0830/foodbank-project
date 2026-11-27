@@ -1,6 +1,6 @@
 <?php
 /**
- * 廣告專區模型（最新消息公告）
+ * 最新消息發布模型（廣告與一般訊息共用審核流程）
  */
 
 require_once __DIR__ . '/BaseModel.php';
@@ -28,6 +28,7 @@ class AdvertisementModel extends BaseModel {
             'fee_amount' => "ALTER TABLE advertisements ADD fee_amount DECIMAL(10,2) DEFAULT NULL",
             'policy_agreed_at' => "ALTER TABLE advertisements ADD policy_agreed_at DATETIME DEFAULT NULL COMMENT '刊登者同意廣告刊登規範的時間'",
             'policy_flags' => "ALTER TABLE advertisements ADD policy_flags TEXT DEFAULT NULL COMMENT '自動檢查出需審核人員注意的項目（JSON）'",
+            'content_type' => "ALTER TABLE advertisements ADD content_type ENUM('advertisement','message') NOT NULL DEFAULT 'advertisement' COMMENT '最新消息分類'",
         ];
         foreach ($columns as $column => $alterSql) {
             $result = $this->db->query("SHOW COLUMNS FROM advertisements LIKE '{$column}'");
@@ -65,7 +66,7 @@ class AdvertisementModel extends BaseModel {
         );
         $stmt->bind_param('idi', $reviewerId, $fee, $adId);
         $stmt->execute();
-        return $stmt->affected_rows === 1 && $this->notifyAdvertiser($adId, '廣告審核通過', '您的廣告已通過審核並開始刊登。', 'success');
+        return $stmt->affected_rows === 1 && $this->notifyAdvertiser($adId, '發布內容審核通過', '您的發布內容已通過審核並開始顯示。', 'success');
     }
 
     public function reject($adId, $reviewerId, $reason) {
@@ -82,7 +83,7 @@ class AdvertisementModel extends BaseModel {
         );
         $stmt->bind_param('isi', $reviewerId, $reason, $adId);
         $stmt->execute();
-        return $stmt->affected_rows === 1 && $this->notifyAdvertiser($adId, '廣告審核未通過', '您的廣告未通過審核，原因：' . $reason, 'warning');
+        return $stmt->affected_rows === 1 && $this->notifyAdvertiser($adId, '發布內容審核未通過', '您的發布內容未通過審核，原因：' . $reason, 'warning');
     }
 
     private function notifyAdvertiser($adId, $title, $message, $type) {
@@ -102,9 +103,9 @@ class AdvertisementModel extends BaseModel {
      */
     public static function demoAds() {
         return [
-            ['title' => '愛心米糧大特惠', 'content' => '每購買一包白米，同步捐出一包給食物銀行，讓溫暖送進每個家庭。', 'advertiser_name' => '好鄰居超市（Demo）', 'is_demo' => true],
-            ['title' => '企業志工日招募', 'content' => '帶著同事一起參與物資分裝，打造有溫度的企業文化，歡迎團體報名。', 'advertiser_name' => '暖陽科技（Demo）', 'is_demo' => true],
-            ['title' => '冷鏈運輸合作夥伴', 'content' => '提供冷藏車隊支援生鮮物資配送，讓食材新鮮抵達。', 'advertiser_name' => '快捷物流（Demo）', 'is_demo' => true],
+            ['title' => '愛心米糧大特惠', 'content' => '每購買一包白米，同步捐出一包給食物銀行，讓溫暖送進每個家庭。', 'advertiser_name' => '好鄰居超市（Demo）', 'content_type' => 'advertisement', 'is_demo' => true],
+            ['title' => '企業志工日招募', 'content' => '帶著同事一起參與物資分裝，打造有溫度的企業文化，歡迎團體報名。', 'advertiser_name' => '暖陽科技（Demo）', 'content_type' => 'message', 'is_demo' => true],
+            ['title' => '冷鏈運輸合作夥伴', 'content' => '提供冷藏車隊支援生鮮物資配送，讓食材新鮮抵達。', 'advertiser_name' => '快捷物流（Demo）', 'content_type' => 'message', 'is_demo' => true],
         ];
     }
 
@@ -126,17 +127,20 @@ class AdvertisementModel extends BaseModel {
      * 刊登廣告：先依「廣告刊登規範」（AdPolicyHelper）檢查，違規直接擋下；需要注意的項目記在 policy_flags 給審核人員看。
      * @return array{success: bool, message: string, ad_id?: int, warnings?: string[]}
      */
-    public function create($advertiserId, $title, $content, $linkUrl = null, $imagePath = null, $startDate = null, $endDate = null, $autoApprove = false, $policyAgreed = false) {
+    public function create($advertiserId, $title, $content, $linkUrl = null, $imagePath = null, $startDate = null, $endDate = null, $autoApprove = false, $policyAgreed = false, $contentType = 'advertisement') {
         require_once __DIR__ . '/../helpers/AdPolicyHelper.php';
+        if (!in_array($contentType, ['advertisement', 'message'], true)) {
+            return ['success' => false, 'message' => '發布類別無效。'];
+        }
         if (!$policyAgreed) {
-            return ['success' => false, 'message' => '請先閱讀並勾選同意「廣告刊登規範」。'];
+            return ['success' => false, 'message' => '請先閱讀並勾選同意「發布內容規範」。'];
         }
         $title = trim((string) $title);
         $content = trim((string) $content);
         $linkUrl = trim((string) $linkUrl);
         $check = AdPolicyHelper::check($title, $content, $linkUrl, $startDate, $endDate);
         if ($check['errors']) {
-            return ['success' => false, 'message' => '不符合廣告刊登規範：' . implode(' ', $check['errors'])];
+            return ['success' => false, 'message' => '不符合發布內容規範：' . implode(' ', $check['errors'])];
         }
 
         $advertiserId = (int) $advertiserId;
@@ -153,10 +157,10 @@ class AdvertisementModel extends BaseModel {
         $link = $linkUrl !== '' ? $linkUrl : null;
         $status = $autoApprove ? 'active' : 'pending';
         $stmt = $this->db->prepare(
-            "INSERT INTO advertisements (advertiser_id, title, content, link_url, image_path, start_date, end_date, status, policy_agreed_at, policy_flags)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)"
+            "INSERT INTO advertisements (advertiser_id, title, content, link_url, image_path, start_date, end_date, status, policy_agreed_at, policy_flags, content_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)"
         );
-        $stmt->bind_param('issssssss', $advertiserId, $title, $content, $link, $imagePath, $start, $end, $status, $flags);
+        $stmt->bind_param('isssssssss', $advertiserId, $title, $content, $link, $imagePath, $start, $end, $status, $flags, $contentType);
         if (!$stmt->execute()) {
             return ['success' => false, 'message' => '刊登失敗，請稍後再試。'];
         }

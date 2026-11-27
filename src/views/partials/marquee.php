@@ -1,14 +1,17 @@
 <?php
 /**
- * 跑馬燈：輪播最新廣告與即將舉辦的公益活動。
+ * 跑馬燈：輪播最新廣告、訊息與即將舉辦的公益活動。
  * 使用前需先載入 AdvertisementModel 與 ActivityModel。
  */
 
 $marqueeItems = [];
-foreach ((new AdvertisementModel())->getActiveAds(8) as $marqueeAd) {
-    $marqueeItems[] = '廣告｜' . $marqueeAd['title'];
+$marqueeAds = isset($activeAds) ? array_slice($activeAds, 0, 8) : (new AdvertisementModel())->getActiveAds(8);
+$marqueeActivities = isset($newsActivities) ? $newsActivities : (new ActivityModel())->getAllActivities();
+foreach ($marqueeAds as $marqueeAd) {
+    $category = ($marqueeAd['content_type'] ?? 'advertisement') === 'message' ? '訊息' : '廣告';
+    $marqueeItems[] = $category . '｜' . $marqueeAd['title'];
 }
-foreach ((new ActivityModel())->getAllActivities() as $marqueeActivity) {
+foreach ($marqueeActivities as $marqueeActivity) {
     if (in_array($marqueeActivity['status'], ['planned', 'ongoing'], true) && strtotime($marqueeActivity['start_at']) >= strtotime('today')) {
         $marqueeItems[] = '活動｜' . $marqueeActivity['title'] . '（' . date('m/d H:i', strtotime($marqueeActivity['start_at'])) . '）';
     }

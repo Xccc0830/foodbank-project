@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/../src/models/DeliveryModel.php';
+require __DIR__ . '/../src/helpers/CarbonPointHelper.php';
 
 $failures = 0;
 function check($name, $actual, $expected) {
@@ -12,33 +12,33 @@ function check($name, $actual, $expected) {
     }
 }
 
-check('motorcycle normal carbon formula rounds down', DeliveryModel::calculatePoints('motorcycle', 5, 10, 'normal'), 16);
-check('motorcycle urgent carbon formula', DeliveryModel::calculatePoints('motorcycle', 10, 20, 'urgent'), 42);
-check('car normal carbon formula', DeliveryModel::calculatePoints('car', 5, 10, 'normal'), 18);
-check('car urgent formula is capped at 60', DeliveryModel::calculatePoints('car', 15, 50, 'urgent'), 60);
-check('priority multiplier', DeliveryModel::calculatePoints('motorcycle', 0, 0, 'priority'), 6);
-check('motorcycle weight limit', DeliveryModel::maximumWeightForVehicle('motorcycle'), 20.0);
-check('car weight limit', DeliveryModel::maximumWeightForVehicle('car'), 50.0);
+check('one point baseline plus avoided carbon for 10 kg', CarbonPointHelper::calculate('motorcycle', 10), 26);
+check('vehicle does not change carbon points', CarbonPointHelper::calculate('car', 10), 26);
+check('baseline applies when there is no avoided carbon', CarbonPointHelper::calculate('motorcycle', 0), 1);
+check('fractional carbon is rounded down after baseline', CarbonPointHelper::calculate('motorcycle', 0.2), 1);
+check('one kg CO2e maps to one point in addition to baseline', CarbonPointHelper::calculate('motorcycle', 0.4), 2);
+check('motorcycle weight limit', CarbonPointHelper::maximumWeightForVehicle('motorcycle'), 20.0);
+check('car weight limit', CarbonPointHelper::maximumWeightForVehicle('car'), 50.0);
 
 try {
-    DeliveryModel::calculatePoints('motorcycle', 1, 20.01, 'normal');
+    CarbonPointHelper::calculate('motorcycle', 20.01);
     check('motorcycle over-limit weight rejected', false, true);
 } catch (InvalidArgumentException $exception) {
     check('motorcycle over-limit weight rejected', true, true);
 }
 
 try {
-    DeliveryModel::calculatePoints('car', 1, 50.01, 'normal');
+    CarbonPointHelper::calculate('car', 50.01);
     check('car over-limit weight rejected', false, true);
 } catch (InvalidArgumentException $exception) {
     check('car over-limit weight rejected', true, true);
 }
 
 try {
-    DeliveryModel::calculatePoints('motorcycle', 1, 1, 'unknown');
-    check('unknown urgency rejected', false, true);
+    CarbonPointHelper::calculate('bicycle', 1);
+    check('unknown vehicle rejected', false, true);
 } catch (InvalidArgumentException $exception) {
-    check('unknown urgency rejected', true, true);
+    check('unknown vehicle rejected', true, true);
 }
 
 if ($failures > 0) {
